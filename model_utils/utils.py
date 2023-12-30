@@ -385,8 +385,12 @@ def extract_index_splits(
 ) -> Tuple[pd.DataFrame, Dict[DatasetType, List[str]]]:
     if (
         not Path(f"{pw.cc_prefix}/index_splits_{q_type}.pkl").exists()
-        or not Path(f"{pw.cc_prefix}/df_{q_type}.pkl").exists()
+        or not Path(f"{pw.cc_prefix}/df_{q_type}.parquet").exists()
     ):
+        logger.info(
+            f"not found index_splits_{q_type}.pkl or df_{q_type}.parquet "
+            f"under {pw.cc_prefix}, start magic setup..."
+        )
         magic_setup(pw, seed)
     else:
         logger.info(f"found {pw.cc_prefix}/df_{q_type}.pkl, loading...")
