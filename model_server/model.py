@@ -1,3 +1,4 @@
+import os.path
 from typing import Dict, List, Tuple
 
 import lightning.pytorch as pl
@@ -13,6 +14,8 @@ from udao.model.module import LearningParams
 from udao.model.utils.losses import WMAPELoss
 from udao.model.utils.schedulers import UdaoLRScheduler, setup_cosine_annealing_lr
 from udao.utils.logging import logger
+
+from udao_trace.utils import PickleHandler
 
 from .params import GraphAverageMLPParams, MyLearningParams
 from .utils import checkpoint_learning_params, weights_found
@@ -106,3 +109,34 @@ def get_tuned_trainer(
     )
     checkpoint_learning_params(ckp_header, params)
     return trainer, module
+
+
+# Model serving
+
+
+class ModelServer:
+    @classmethod
+    def from_ckp_path(cls, model_params_path: str, weights_path: str) -> "ModelServer":
+        model_params = PickleHandler.load(
+            os.path.dirname(model_params_path), model_params_path.split("/")[-1]
+        )
+        if isinstance(model_params, GraphAverageMLPParams):
+            model = get_graph_avg_mlp(model_params)
+            model_sign = "graph_avg"
+        else:
+            raise ValueError(f"Unknown model params type: {type(model_params)}")
+        objectives = model_params.iterator_shape.output_names
+        module = UdaoModule.load_from_checkpoint(
+            weights_path,
+            model=model,
+            objectives=objectives,
+            loss=WMAPELoss(),
+            metrics=[WeightedMeanAbsolutePercentageError],
+        )
+        return cls(model_sign, module)
+
+    def __init__(self, model_sign: str, module: UdaoModule):
+        self.model_sign = model_sign
+        self.module = module
+        self.objectives = module.objectives
+        self.model = module.model
