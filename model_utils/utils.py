@@ -27,80 +27,22 @@ from udao_trace.configuration import SparkConf
 from udao_trace.utils import BenchmarkType, JsonHandler, ParquetHandler, PickleHandler
 from udao_trace.workload import Benchmark
 
-from .params import ExtractParams
+from .constants import (
+    ALPHA_LQP_RAW,
+    ALPHA_QS_RAW,
+    BETA,
+    BETA_RAW,
+    EPS,
+    GAMMA,
+    TABULAR_LQP,
+    TABULAR_QS,
+    TABULAR_QS_COMPILE,
+    THETA,
+    THETA_RAW,
+)
+from .params import ExtractParams, QType
 
 tensor_dtypes = th.float32
-
-THETA_RAW = [
-    "theta_c-spark.executor.cores",
-    "theta_c-spark.executor.memory",
-    "theta_c-spark.executor.instances",
-    "theta_c-spark.default.parallelism",
-    "theta_c-spark.reducer.maxSizeInFlight",
-    "theta_c-spark.shuffle.sort.bypassMergeThreshold",
-    "theta_c-spark.shuffle.compress",
-    "theta_c-spark.memory.fraction",
-    "theta_p-spark.sql.adaptive.advisoryPartitionSizeInBytes",
-    "theta_p-spark.sql.adaptive.nonEmptyPartitionRatioForBroadcastJoin",
-    "theta_p-spark.sql.adaptive.maxShuffledHashJoinLocalMapThreshold",
-    "theta_p-spark.sql.adaptive.autoBroadcastJoinThreshold",
-    "theta_p-spark.sql.shuffle.partitions",
-    "theta_p-spark.sql.adaptive.skewJoin.skewedPartitionThresholdInBytes",
-    "theta_p-spark.sql.adaptive.skewJoin.skewedPartitionFactor",
-    "theta_p-spark.sql.files.maxPartitionBytes",
-    "theta_p-spark.sql.files.openCostInBytes",
-    "theta_s-spark.sql.adaptive.rebalancePartitionsSmallPartitionFactor",
-    "theta_s-spark.sql.adaptive.coalescePartitions.minPartitionSize",
-]
-ALPHA_LQP_RAW = [
-    "IM-inputSizeInBytes",
-    "IM-inputRowCount",
-]
-ALPHA_QS_RAW = ["InitialPartitionNum"] + ALPHA_LQP_RAW
-BETA_RAW = ["PD"]
-THETA = [
-    "k1",
-    "k2",
-    "k3",
-    "k4",
-    "k5",
-    "k6",
-    "k7",
-    "k8",
-    "s1",
-    "s2",
-    "s3",
-    "s4",
-    "s5",
-    "s6",
-    "s7",
-    "s8",
-    "s9",
-    "s10",
-    "s11",
-]
-ALPHA_LQP = [
-    "IM-sizeInMB",
-    "IM-rowCount",
-    "IM-sizeInMB-log",
-    "IM-rowCount-log",
-]
-ALPHA_QS = ["IM-init-part-num", "IM-init-part-num-log"] + ALPHA_LQP
-BETA = ["PD-std-avg", "PD-skewness-ratio", "PD-range-avg-ratio"]
-GAMMA = [
-    "SS-RunningTasksNum",
-    "SS-FinishedTasksNum",
-    "SS-FinishedTasksTotalTimeInMs",
-    "SS-FinishedTasksDistributionInMs-0tile",
-    "SS-FinishedTasksDistributionInMs-25tile",
-    "SS-FinishedTasksDistributionInMs-50tile",
-    "SS-FinishedTasksDistributionInMs-75tile",
-    "SS-FinishedTasksDistributionInMs-100tile",
-]
-TABULAR_LQP = THETA + ALPHA_LQP + BETA + GAMMA
-TABULAR_QS = THETA + ALPHA_QS + BETA + GAMMA
-
-EPS = 1e-3
 
 
 class NoBenchmarkError(ValueError):
@@ -157,6 +99,80 @@ class PathWatcher:
         return f"{self.data_prefix}/{q_type}_{self.data_sign}.csv"
 
 
+class TypeAdvisor:
+    def __init__(self, q_type: QType):
+        self.q_type = q_type
+
+    def get_tabular_columns(self) -> List[str]:
+        if self.q_type in ["q_compile", "q_all"]:
+            return TABULAR_LQP
+        if self.q_type in ["qs_lqp_runtime", "qs_pqp_runtime"]:
+            return TABULAR_QS
+        if self.q_type in ["qs_lqp_compile"]:
+            return TABULAR_QS_COMPILE
+        raise NoQTypeError(self.q_type)
+
+    def get_objectives(self) -> List[str]:
+        if self.q_type in ["q_compile", "q_all"]:
+            return ["latency_s", "io_mb"]
+        if self.q_type in ["qs_lqp_compile", "qs_lqp_runtime", "qs_pqp_runtime"]:
+            return ["latency_s", "io_mb", "ana_latency_s"]
+        raise NoQTypeError(self.q_type)
+
+    def get_q_type_for_cache(self) -> str:
+        if self.q_type in ["q_compile", "q_all"]:
+            return self.q_type
+        if self.q_type in ["qs_lqp_compile", "qs_lqp_runtime", "qs_pqp_runtime"]:
+            return "qs"
+        raise NoQTypeError(self.q_type)
+
+    def get_graph_column(self) -> str:
+        if self.q_type in ["q_compile", "q_all"]:
+            return "lqp"
+        if self.q_type in ["qs_lqp_compile", "qs_lqp_runtime"]:
+            return "qs_lqp"
+        if self.q_type in ["qs_pqp_runtime"]:
+            return "qs_pqp"
+        raise NoQTypeError(self.q_type)
+
+    def get_extract_operations_from_serialized_json(self) -> Callable:
+        if self.q_type in ["q_compile", "q_all"]:
+            return extract_operations_from_serialized_lqp_json
+        if self.q_type in ["qs_lqp_compile", "qs_lqp_runtime"]:
+            return extract_operations_from_serialized_qs_lqp_json
+        if self.q_type in ["qs_pqp_runtime"]:
+            return extract_operations_from_serialized_qs_pqp_json
+        raise NoQTypeError(self.q_type)
+
+    def size_mb_in_log(self, operator: Dict) -> float:
+        if self.q_type in ["qs_lqp_compile"]:
+            x = operator["stats"]["compileTime"]["sizeInBytes"] / 1024.0 / 1024.0
+        elif self.q_type in ["qs_lqp_runtime"]:
+            x = operator["stats"]["runtime"]["sizeInBytes"] / 1024.0 / 1024.0
+        elif self.q_type in ["q_compile", "q_all", "qs_pqp_runtime"]:
+            x = operator["sizeInBytes"] / 1024.0 / 1024.0
+        else:
+            raise NoQTypeError(self.q_type)
+        return np.log(np.clip(x, a_min=EPS, a_max=None))
+
+    def rows_count_in_log(self, operator: Dict) -> float:
+        if self.q_type in ["qs_lqp_compile"]:
+            x = operator["stats"]["compileTime"]["rowCount"] * 1.0
+        elif self.q_type in ["qs_lqp_runtime"]:
+            x = operator["stats"]["runtime"]["rowCount"] * 1.0
+        elif self.q_type in ["q_compile", "q_all", "qs_pqp_runtime"]:
+            x = operator["rowCount"] * 1.0
+        else:
+            raise NoQTypeError(self.q_type)
+        return np.log(np.clip(x, a_min=EPS, a_max=None))
+
+    def get_op_name(self, operator: Dict) -> str:
+        if self.q_type.startswith("qs_pqp"):
+            # drop the suffix "Exec"
+            return operator["className"].split(".")[-1][:-4]
+        return operator["className"].split(".")[-1]
+
+
 # Data Processing
 def _im_process(df: pd.DataFrame) -> pd.DataFrame:
     df["IM-sizeInMB"] = df["IM-inputSizeInBytes"] / 1024 / 1024
@@ -165,6 +181,40 @@ def _im_process(df: pd.DataFrame) -> pd.DataFrame:
     df["IM-rowCount-log"] = np.log(df["IM-rowCount"].to_numpy().clip(min=EPS))
     for c in ALPHA_LQP_RAW:
         del df[c]
+    return df
+
+
+def _extract_compile_time_im(graph_json_str: str) -> Tuple[float, float]:
+    graph = JsonHandler.load_json_from_str(graph_json_str)
+    operators, links = graph["operators"], graph["links"]
+    outgoing_ids_set = set(link["toId"] for link in links)
+    input_ids_set = set(range(len(operators))) - outgoing_ids_set
+    im_size = sum(
+        [
+            operators[str(i)]["stats"]["compileTime"]["sizeInBytes"] / 1024.0 / 1024.0
+            for i in input_ids_set
+        ]
+    )
+    im_rows_count = sum(
+        [
+            operators[str(i)]["stats"]["compileTime"]["rowCount"] * 1.0
+            for i in input_ids_set
+        ]
+    )
+    return im_size, im_rows_count
+
+
+def _im_process_compile(df: pd.DataFrame) -> pd.DataFrame:
+    """a post-computation for compile-time input meta of each query stage"""
+    df[["IM-sizeInMB-compile", "IM-rowCount-compile"]] = np.array(
+        np.vectorize(_extract_compile_time_im)(df["qs_lqp"])
+    ).T
+    df["IM-sizeInMB-compile-log"] = np.log(
+        df["IM-sizeInMB-compile"].to_numpy().clip(min=EPS)
+    )
+    df["IM-rowCount-compile-log"] = np.log(
+        df["IM-rowCount-compile"].to_numpy().clip(min=EPS)
+    )
     return df
 
 
@@ -188,13 +238,14 @@ def prepare_data(
     elif q_type == "qs":
         df[ALPHA_QS_RAW] = df[ALPHA_QS_RAW].astype(float)
         df = _im_process(df)
+        df = _im_process_compile(df)
         df["IM-init-part-num"] = df["InitialPartitionNum"].astype(float)
         df["IM-init-part-num-log"] = np.log(
             df["IM-init-part-num"].to_numpy().clip(min=EPS)
         )
         del df["InitialPartitionNum"]
     else:
-        raise NoQTypeError
+        raise ValueError
 
     # extract beta
     df[BETA] = [
@@ -271,7 +322,7 @@ def magic_setup(pw: PathWatcher, seed: int) -> None:
         logger.info("No rare templates")
     # Compute the index for df_q_compile, df_q and df_qs
     save_and_log_df(df_q_compile, ["appid"], pw, "df_q_compile")
-    save_and_log_df(df_q, ["appid", "lqp_id"], pw, "df_q")
+    save_and_log_df(df_q, ["appid", "lqp_id"], pw, "df_q_all")
     save_and_log_df(df_qs, ["appid", "qs_id"], pw, "df_qs")
 
     # Split data for df_q_compile
@@ -295,34 +346,34 @@ def magic_setup(pw: PathWatcher, seed: int) -> None:
     }
     # Save the index_splits
     save_and_log_index(index_splits_q_compile, pw, "index_splits_q_compile.pkl")
-    save_and_log_index(index_splits_q, pw, "index_splits_q.pkl")
+    save_and_log_index(index_splits_q, pw, "index_splits_q_all.pkl")
     save_and_log_index(index_splits_qs, pw, "index_splits_qs.pkl")
 
 
 def define_data_processor(
+    ta: TypeAdvisor,
     lpe_size: int,
     vec_size: int,
-    tabular_columns: List[str],
-    objectives: List[str],
 ) -> DataProcessor:
     data_processor_getter = create_data_processor(QueryPlanIterator, "op_enc")
+
     return data_processor_getter(
         tensor_dtypes=tensor_dtypes,
         tabular_features=FeaturePipeline(
-            extractor=TabularFeatureExtractor(columns=tabular_columns),
+            extractor=TabularFeatureExtractor(columns=ta.get_tabular_columns()),
             preprocessors=[NormalizePreprocessor(MinMaxScaler())],
         ),
         objectives=FeaturePipeline(
-            extractor=TabularFeatureExtractor(columns=objectives),
+            extractor=TabularFeatureExtractor(columns=ta.get_objectives()),
         ),
         query_structure=FeaturePipeline(
-            extractor=LQPExtractor(positional_encoding_size=lpe_size),
+            extractor=GraphExtractor(ta=ta, positional_encoding_size=lpe_size),
             preprocessors=[NormalizePreprocessor(MinMaxScaler(), "graph_features")],
         ),
         op_enc=FeaturePipeline(
             extractor=PredicateEmbeddingExtractor(
                 Word2VecEmbedder(Word2VecParams(vec_size=vec_size)),
-                extract_operations=extract_operations_from_serialized_json,
+                extract_operations=ta.get_extract_operations_from_serialized_json(),
             ),
         ),
     )
@@ -355,11 +406,10 @@ def extract_index_splits(
 
 def extract_and_save_iterators(
     pw: PathWatcher,
-    params: ExtractParams,
-    tabular_columns: List[str],
-    objectives: List[str],
+    ta: TypeAdvisor,
     cache_file: str = "iterators.pkl",
 ) -> Dict[DatasetType, BaseIterator]:
+    params = pw.extract_params
     if Path(f"{pw.cc_extract_prefix}/{cache_file}").exists():
         raise FileExistsError(f"{pw.cc_extract_prefix}/{cache_file} already exists.")
     logger.info("start extracting iterators")
@@ -372,13 +422,12 @@ def extract_and_save_iterators(
     else:
         logger.info(f"not found {pw.cc_extract_prefix}/{cache_file_dh}, extracting...")
         df, index_splits = extract_index_splits(
-            pw=pw, seed=params.seed, q_type=params.q_type
+            pw=pw, seed=params.seed, q_type=ta.get_q_type_for_cache()
         )
         data_processor = define_data_processor(
+            ta=ta,
             lpe_size=params.lpe_size,
             vec_size=params.vec_size,
-            tabular_columns=tabular_columns,
-            objectives=objectives,
         )
         data_handler = DataHandler(
             df.reset_index(),
@@ -410,17 +459,13 @@ def extract_and_save_iterators(
 
 def get_split_iterators(
     pw: PathWatcher,
-    params: ExtractParams,
-    tabular_columns: List[str],
-    objectives: List[str],
+    ta: TypeAdvisor,
 ) -> Dict[DatasetType, BaseIterator]:
     cache_file = "iterators.pkl"
     if not Path(f"{pw.cc_extract_prefix}/{cache_file}").exists():
         split_iterators = extract_and_save_iterators(
             pw=pw,
-            params=params,
-            tabular_columns=tabular_columns,
-            objectives=objectives,
+            ta=ta,
             cache_file=cache_file,
         )
         return split_iterators
@@ -436,11 +481,13 @@ def get_split_iterators(
     return split_meta["split_iterators"]
 
 
-def extract_operations_from_serialized_json(
-    plan_df: pd.DataFrame, operation_processing: Callable[[str], str] = lambda x: x
+def extract_operations_from_serialized_json_base(
+    graph_column: str,
+    plan_df: pd.DataFrame,
+    operation_processing: Callable[[str], str] = lambda x: x,
 ) -> Tuple[Dict[int, List[int]], List[str]]:
-    df = plan_df[["id", "lqp"]].copy()
-    df["lqp"] = df["lqp"].apply(
+    df = plan_df[["id", graph_column]].copy()
+    df[graph_column] = df[graph_column].apply(
         lambda lqp_str: [
             operation_processing(op["predicate"])
             for op_id, op in JsonHandler.load_json_from_str(lqp_str)[
@@ -448,58 +495,88 @@ def extract_operations_from_serialized_json(
             ].items()
         ]  # type: ignore
     )
-    df = df.explode("lqp", ignore_index=True)
-    df.rename(columns={"lqp": "operation"}, inplace=True)
+    df = df.explode(graph_column, ignore_index=True)
+    df.rename(columns={graph_column: "operation"}, inplace=True)
     return build_unique_operations(df)
 
 
+def extract_operations_from_serialized_lqp_json(
+    plan_df: pd.DataFrame, operation_processing: Callable[[str], str] = lambda x: x
+) -> Tuple[Dict[int, List[int]], List[str]]:
+    return extract_operations_from_serialized_json_base(
+        "lqp", plan_df, operation_processing
+    )
+
+
+def extract_operations_from_serialized_qs_lqp_json(
+    plan_df: pd.DataFrame, operation_processing: Callable[[str], str] = lambda x: x
+) -> Tuple[Dict[int, List[int]], List[str]]:
+    return extract_operations_from_serialized_json_base(
+        "qs_lqp", plan_df, operation_processing
+    )
+
+
+def extract_operations_from_serialized_qs_pqp_json(
+    plan_df: pd.DataFrame, operation_processing: Callable[[str], str] = lambda x: x
+) -> Tuple[Dict[int, List[int]], List[str]]:
+    return extract_operations_from_serialized_json_base(
+        "qs_pqp", plan_df, operation_processing
+    )
+
+
 def extract_query_plan_features_from_serialized_json(
-    lqp_str: str,
+    ta: TypeAdvisor,
+    graph_json_str: str,
 ) -> Tuple[QueryPlanStructure, QueryPlanOperationFeatures]:
-    lqp = JsonHandler.load_json_from_str(lqp_str)
-    operators, links = lqp["operators"], lqp["links"]
+    graph = JsonHandler.load_json_from_str(graph_json_str)
+    operators, links = graph["operators"], graph["links"]
     num_operators = len(operators)
-    id2name = {
-        int(op_id): op["className"].split(".")[-1] for op_id, op in operators.items()
-    }
+    id2name = {int(op_id): ta.get_op_name(op) for op_id, op in operators.items()}
     incoming_ids: List[int] = []
     outgoing_ids: List[int] = []
     for link in links:
         from_id, to_id = link["fromId"], link["toId"]
-        if link["fromName"] != id2name[from_id] or link["toName"] != id2name[to_id]:
+        from_name, to_name = link["fromName"], link["toName"]
+        if from_name.startswith("Scan"):
+            from_name = "FileSourceScan"
+        if to_name.startswith("Scan"):
+            to_name = "FileSourceScan"
+        if from_name != id2name[from_id] or to_name != id2name[to_id]:
             raise OperatorMisMatchError
         incoming_ids.append(from_id)
         outgoing_ids.append(to_id)
-    node_names = [id2name[i] for i in range(num_operators)]
-    sizes = [
-        np.log(
-            np.clip(
-                operators[str(i)]["sizeInBytes"] / 1024.0 / 1024.0,
-                a_min=EPS,
-                a_max=None,
-            )
-        )
-        for i in range(num_operators)
-    ]
-    rows_counts = [
-        np.log(np.clip(operators[str(i)]["rowCount"] * 1.0, a_min=EPS, a_max=None))
-        for i in range(num_operators)
-    ]
-    op_features = QueryPlanOperationFeatures(rows_count=rows_counts, size=sizes)
+
+    ranges = range(num_operators)
+    node_names = [id2name[i] for i in ranges]
+    sizes = [ta.size_mb_in_log(operators[str(i)]) for i in ranges]
+    rows_count = [ta.rows_count_in_log(operators[str(i)]) for i in ranges]
+    op_features = QueryPlanOperationFeatures(rows_count=rows_count, size=sizes)
     structure = QueryPlanStructure(
         node_names=node_names, incoming_ids=incoming_ids, outgoing_ids=outgoing_ids
     )
     return structure, op_features
 
 
-class LQPExtractor(QueryStructureExtractor):
-    def __init__(self, positional_encoding_size: Optional[int] = None):
-        super(LQPExtractor, self).__init__(positional_encoding_size)
+class GraphExtractor(QueryStructureExtractor):
+    """A uniformed graph extract serving for
+    1. Query level logical query plan (q, q_compile)
+    2. QueryStage level logical query plan with
+        - estimated stats (qs_lqp)
+        - actual stats (qs_lqp_oracle)
+    3. QueryStage level physical query plan (qs_pqp)
+    """
+
+    def __init__(self, ta: TypeAdvisor, positional_encoding_size: Optional[int] = None):
+        super(GraphExtractor, self).__init__(positional_encoding_size)
+        self.ta = ta
+        self.graph_column = ta.get_graph_column()
 
     def _extract_structure_and_features(
-        self, idx: str, lqp: str, split: DatasetType
+        self, idx: str, graph_json_str: str, split: DatasetType
     ) -> Dict:
-        structure, op_features = extract_query_plan_features_from_serialized_json(lqp)
+        structure, op_features = extract_query_plan_features_from_serialized_json(
+            self.ta, graph_json_str
+        )
         operation_gids = self._extract_operation_types(structure, split)
         self.id_template_dict[idx] = self._extract_structure_template(structure, split)
         return {
@@ -511,8 +588,12 @@ class LQPExtractor(QueryStructureExtractor):
     def extract_features(
         self, df: pd.DataFrame, split: DatasetType
     ) -> QueryStructureContainer:
+        if self.graph_column not in df.columns:
+            raise ValueError(f"graph_column {self.graph_column} not found in df")
         df_op_features: pd.DataFrame = df.apply(
-            lambda row: self._extract_structure_and_features(row.id, row.lqp, split),
+            lambda row: self._extract_structure_and_features(
+                row.id, row[self.graph_column], split
+            ),
             axis=1,
         ).apply(pd.Series)
         df_op_features["plan_id"] = df["id"]

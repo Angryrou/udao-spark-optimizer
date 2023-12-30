@@ -3,7 +3,9 @@ from argparse import ArgumentParser, Namespace
 from dataclasses import dataclass
 from typing import Literal
 
-QType = Literal["q_compile", "q", "qs-logical", "qs-physical"]
+QType = Literal[
+    "q_compile", "q_all", "qs_lqp_compile", "qs_lqp_runtime", "qs_pqp_runtime"
+]
 
 
 @dataclass
@@ -36,7 +38,9 @@ def _get_base_parser() -> ArgumentParser:
     parser.add_argument("--benchmark", type=str, default="tpch",
                         help="Benchmark name")
     parser.add_argument("--q_type", type=str, default="q_compile",
-                        help="graph type, q_compile or q or qs")
+                        choices=["q_compile", "q_all", "qs_lqp_compile",
+                                 "qs_lqp_runtime", "qs_pqp_runtime"],
+                        help="graph type")
     # Learning parameters
     parser.add_argument("--init_lr", type=float, default=1e-1,
                         help="Initial learning rate")
