@@ -3,17 +3,17 @@ from pathlib import Path
 import torch as th
 from udao.utils.logging import logger
 
-from model_utils.model import (
+from model_server.model import (
     GraphAverageMLPParams,
     MyLearningParams,
-    checkpoint_model_structure,
     get_graph_avg_mlp,
     get_tuned_trainer,
 )
-from model_utils.params import ExtractParams, get_graph_avg_params
-from model_utils.utils import (
+from model_server.params import ExtractParams, get_graph_avg_params
+from model_server.utils import (
     PathWatcher,
     TypeAdvisor,
+    checkpoint_model_structure,
     get_split_iterators,
     tensor_dtypes,
 )

@@ -1,3 +1,4 @@
+import glob
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
@@ -40,7 +41,7 @@ from .constants import (
     THETA,
     THETA_RAW,
 )
-from .params import ExtractParams, QType
+from .params import ExtractParams, GraphAverageMLPParams, MyLearningParams, QType
 
 tensor_dtypes = th.float32
 
@@ -294,6 +295,55 @@ def save_and_log_df(
             raise e
         logger.warning(f"skip saving {name}.parquet")
     logger.info(f"prepared {name} shape: {df.shape}")
+
+
+def weights_found(ckp_learning_header: str) -> Optional[str]:
+    files = glob.glob(f"{ckp_learning_header}/*.ckpt")
+    if len(files) == 0:
+        return None
+    if len(files) == 1:
+        return files[0]
+    raise Exception(f"more than one checkpoints {files}")
+
+
+def checkpoint_learning_params(
+    ckp_header: str,
+    learning_params: MyLearningParams,
+) -> None:
+    ckp_header += f"/{learning_params.hash()}"
+    name = "hparams.pkl"
+    json_name = "hparams.json"
+    if not Path(f"{ckp_header}/{name}").exists():
+        PickleHandler.save(learning_params, ckp_header, name)
+        JsonHandler.dump_to_file(
+            learning_params.__dict__,
+            f"{ckp_header}/{json_name}",
+            indent=2,
+        )
+        logger.info(f"saved learning params to {ckp_header}/{name}")
+    else:
+        raise FileExistsError(f"{ckp_header}/{name} already exists")
+
+
+def checkpoint_model_structure(
+    pw: PathWatcher, model_params: GraphAverageMLPParams
+) -> str:
+    model_struct_hash = model_params.hash()
+    ckp_header = f"{pw.cc_extract_prefix}/{model_struct_hash}"
+    name = "model_struct_params.pkl"
+    json_name = "model_struct_params.json"
+    if not Path(f"{ckp_header}/{name}").exists():
+        Path(ckp_header).mkdir(parents=True, exist_ok=True)
+        PickleHandler.save(model_params, ckp_header, name)
+        JsonHandler.dump_to_file(
+            model_params.to_dict(),
+            f"{ckp_header}/{json_name}",
+            indent=2,
+        )
+        logger.info(f"saved model structure params to {ckp_header}")
+    else:
+        logger.info(f"found {ckp_header}/{name}")
+    return ckp_header
 
 
 def magic_setup(pw: PathWatcher, seed: int) -> None:
