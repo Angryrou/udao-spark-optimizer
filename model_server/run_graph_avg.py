@@ -3,7 +3,6 @@ from pathlib import Path
 import torch as th
 from udao.utils.logging import logger
 
-from model_utils.constants import TABULAR_LQP, TABULAR_QS
 from model_utils.model import (
     GraphAverageMLPParams,
     MyLearningParams,
@@ -12,7 +11,12 @@ from model_utils.model import (
     get_tuned_trainer,
 )
 from model_utils.params import ExtractParams, get_graph_avg_params
-from model_utils.utils import PathWatcher, get_split_iterators, tensor_dtypes
+from model_utils.utils import (
+    PathWatcher,
+    TypeAdvisor,
+    get_split_iterators,
+    tensor_dtypes,
+)
 
 logger.setLevel("INFO")
 if __name__ == "__main__":
@@ -21,12 +25,7 @@ if __name__ == "__main__":
     th.set_default_dtype(tensor_dtypes)  # type: ignore
 
     # Data definition
-    tabular_columns = TABULAR_LQP if params.q_type in ["q_compile", "q"] else TABULAR_QS
-    objectives = (
-        ["latency_s", "io_mb"]
-        if params.q_type in ["q_compile", "q"]
-        else ["latency_s", "io_mb", "ana_latency_s"]
-    )
+    ta = TypeAdvisor(q_type=params.q_type)
     extract_params = ExtractParams(
         lpe_size=params.lpe_size,
         vec_size=params.vec_size,
@@ -39,9 +38,7 @@ if __name__ == "__main__":
     )
     split_iterators = get_split_iterators(
         pw=pw,
-        params=extract_params,
-        tabular_columns=tabular_columns,
-        objectives=objectives,
+        ta=ta,
     )
     # Model definition and training
     model_params = GraphAverageMLPParams(
@@ -63,6 +60,11 @@ if __name__ == "__main__":
     )
     model = get_graph_avg_mlp(model_params)
     # prepare the model structure path
+    tabular_columns = ta.get_tabular_columns()
+    objectives = ta.get_objectives()
+    logger.info(f"Tabular columns: {tabular_columns}")
+    logger.info(f"Objectives: {objectives}")
+
     ckp_header = checkpoint_model_structure(pw=pw, model_params=model_params)
     trainer, module = get_tuned_trainer(
         ckp_header,

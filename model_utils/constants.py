@@ -46,13 +46,19 @@ THETA = [
     "s10",
     "s11",
 ]
-ALPHA_LQP = [
+_ALPHA = [
     "IM-sizeInMB",
     "IM-rowCount",
     "IM-sizeInMB-log",
     "IM-rowCount-log",
 ]
-ALPHA_QS = ["IM-init-part-num", "IM-init-part-num-log"] + ALPHA_LQP
+_ALPHA_COMPILE = [
+    "IM-sizeInMB-compile",
+    "IM-rowCount-compile",
+    "IM-sizeInMB-compile-log",
+    "IM-rowCount-compile-log",
+]
+_ALPHA_QS_PLUS = ["IM-init-part-num", "IM-init-part-num-log"]
 BETA = ["PD-std-avg", "PD-skewness-ratio", "PD-range-avg-ratio"]
 GAMMA = [
     "SS-RunningTasksNum",
@@ -64,7 +70,8 @@ GAMMA = [
     "SS-FinishedTasksDistributionInMs-75tile",
     "SS-FinishedTasksDistributionInMs-100tile",
 ]
-TABULAR_LQP = THETA + ALPHA_LQP + BETA + GAMMA
-TABULAR_QS = THETA + ALPHA_QS + BETA + GAMMA
+TABULAR_LQP = _ALPHA + BETA + GAMMA + THETA
+TABULAR_QS = _ALPHA + _ALPHA_QS_PLUS + BETA + GAMMA + THETA
+TABULAR_QS_COMPILE = _ALPHA_COMPILE + _ALPHA_QS_PLUS + BETA + GAMMA + THETA
 
 EPS = 1e-3
