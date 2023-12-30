@@ -3,6 +3,7 @@ from pathlib import Path
 import torch as th
 from udao.utils.logging import logger
 
+from model_utils.constants import TABULAR_LQP, TABULAR_QS
 from model_utils.model import (
     GraphAverageMLPParams,
     MyLearningParams,
@@ -11,13 +12,7 @@ from model_utils.model import (
     get_tuned_trainer,
 )
 from model_utils.params import ExtractParams, get_graph_avg_params
-from model_utils.utils import (
-    TABULAR_LQP,
-    TABULAR_QS,
-    PathWatcher,
-    get_split_iterators,
-    tensor_dtypes,
-)
+from model_utils.utils import PathWatcher, get_split_iterators, tensor_dtypes
 
 logger.setLevel("INFO")
 if __name__ == "__main__":
