@@ -187,12 +187,15 @@ def get_tuned_trainer(
         ),
         metrics=[WeightedMeanAbsolutePercentageError],
     )
-
+    filename_suffix = "-".join(
+        [
+            f"val_{obj}_WMAPE={{val_{obj}_WeightedMeanAbsolutePercentageError:.3f}}"
+            for obj in objectives
+        ]
+    )
     checkpoint_callback = ModelCheckpoint(
         dirpath=ckp_learning_header,
-        filename="{epoch}"
-        "-val_lat_WMAPE={val_latency_s_WeightedMeanAbsolutePercentageError:.3f}"
-        "-val_io_WMAPE={val_io_mb_WeightedMeanAbsolutePercentageError:.3f}",
+        filename="{epoch}-" + filename_suffix,
         auto_insert_metric_name=False,
     )
     scheduler = UdaoLRScheduler(setup_cosine_annealing_lr, warmup.UntunedLinearWarmup)
