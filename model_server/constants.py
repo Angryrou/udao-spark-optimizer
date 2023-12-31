@@ -19,46 +19,30 @@ THETA_RAW = [
     "theta_s-spark.sql.adaptive.rebalancePartitionsSmallPartitionFactor",
     "theta_s-spark.sql.adaptive.coalescePartitions.minPartitionSize",
 ]
+THETA_C = ["k1", "k2", "k3", "k4", "k5", "k6", "k7", "k8"]
+THETA_P = ["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9"]
+THETA_S = ["s10", "s11"]
+
 ALPHA_LQP_RAW = [
     "IM-inputSizeInBytes",
     "IM-inputRowCount",
 ]
 ALPHA_QS_RAW = ["InitialPartitionNum"] + ALPHA_LQP_RAW
 BETA_RAW = ["PD"]
-THETA = [
-    "k1",
-    "k2",
-    "k3",
-    "k4",
-    "k5",
-    "k6",
-    "k7",
-    "k8",
-    "s1",
-    "s2",
-    "s3",
-    "s4",
-    "s5",
-    "s6",
-    "s7",
-    "s8",
-    "s9",
-    "s10",
-    "s11",
-]
-_ALPHA = [
+
+ALPHA = [
     "IM-sizeInMB",
     "IM-rowCount",
     "IM-sizeInMB-log",
     "IM-rowCount-log",
 ]
-_ALPHA_COMPILE = [
+ALPHA_COMPILE = [
     "IM-sizeInMB-compile",
     "IM-rowCount-compile",
     "IM-sizeInMB-compile-log",
     "IM-rowCount-compile-log",
 ]
-_ALPHA_QS_PLUS = ["IM-init-part-num", "IM-init-part-num-log"]
+ALPHA_QS_PLUS = ["IM-init-part-num", "IM-init-part-num-log"]
 BETA = ["PD-std-avg", "PD-skewness-ratio", "PD-range-avg-ratio"]
 GAMMA = [
     "SS-RunningTasksNum",
@@ -70,8 +54,5 @@ GAMMA = [
     "SS-FinishedTasksDistributionInMs-75tile",
     "SS-FinishedTasksDistributionInMs-100tile",
 ]
-TABULAR_LQP = _ALPHA + BETA + GAMMA + THETA
-TABULAR_QS = _ALPHA + _ALPHA_QS_PLUS + BETA + GAMMA + THETA
-TABULAR_QS_COMPILE = _ALPHA_COMPILE + _ALPHA_QS_PLUS + BETA + GAMMA + THETA
 
 EPS = 1e-3
