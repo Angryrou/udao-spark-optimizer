@@ -22,7 +22,7 @@ from .utils import checkpoint_learning_params, weights_found
 
 
 def get_graph_avg_mlp(params: GraphAverageMLPParams) -> UdaoModel:
-    return UdaoModel.from_config(
+    model = UdaoModel.from_config(
         embedder_cls=GraphAverager,
         regressor_cls=MLP,
         iterator_shape=params.iterator_shape,
@@ -38,6 +38,9 @@ def get_graph_avg_mlp(params: GraphAverageMLPParams) -> UdaoModel:
             "dropout": params.dropout,  # 0.1
         },
     )
+    print("MODEL DETAILS:\n")
+    print(model)
+    return model
 
 
 # Model training
@@ -49,7 +52,7 @@ def get_tuned_trainer(
     params: MyLearningParams,
     device: str,
     num_workers: int = 0,
-) -> Tuple[Trainer, UdaoModule]:
+) -> Tuple[Trainer, UdaoModule, str]:
     ckp_learning_header = f"{ckp_header}/{params.hash()}"
     ckp_weight_path = weights_found(ckp_learning_header)
     tb_logger = TensorBoardLogger("tb_logs")
@@ -63,7 +66,7 @@ def get_tuned_trainer(
             metrics=[WeightedMeanAbsolutePercentageError],
         )
         trainer = pl.Trainer(accelerator=device, logger=tb_logger)
-        return trainer, module
+        return trainer, module, ckp_learning_header
     logger.info("Model weights not found, training...")
     module = UdaoModule(
         model,
@@ -107,8 +110,8 @@ def get_tuned_trainer(
             shuffle=False,
         ),
     )
-    checkpoint_learning_params(ckp_header, params)
-    return trainer, module
+    checkpoint_learning_params(ckp_learning_header, params)
+    return trainer, module, ckp_learning_header
 
 
 # Model serving

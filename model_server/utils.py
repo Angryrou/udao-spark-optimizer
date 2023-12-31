@@ -341,22 +341,21 @@ def weights_found(ckp_learning_header: str) -> Optional[str]:
 
 
 def checkpoint_learning_params(
-    ckp_header: str,
+    ckp_learning_header: str,
     learning_params: MyLearningParams,
 ) -> None:
-    ckp_header += f"/{learning_params.hash()}"
     name = "hparams.pkl"
     json_name = "hparams.json"
-    if not Path(f"{ckp_header}/{name}").exists():
-        PickleHandler.save(learning_params, ckp_header, name)
+    if not Path(f"{ckp_learning_header}/{name}").exists():
+        PickleHandler.save(learning_params, ckp_learning_header, name)
         JsonHandler.dump_to_file(
             learning_params.__dict__,
-            f"{ckp_header}/{json_name}",
+            f"{ckp_learning_header}/{json_name}",
             indent=2,
         )
-        logger.info(f"saved learning params to {ckp_header}/{name}")
+        logger.info(f"saved learning params to {ckp_learning_header}/{name}")
     else:
-        raise FileExistsError(f"{ckp_header}/{name} already exists")
+        raise FileExistsError(f"{ckp_learning_header}/{name} already exists")
 
 
 def checkpoint_model_structure(
