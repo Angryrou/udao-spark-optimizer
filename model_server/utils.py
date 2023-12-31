@@ -1,6 +1,6 @@
 import glob
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -20,6 +20,7 @@ from udao.data.handler.data_handler import DataHandler
 from udao.data.handler.data_processor import FeaturePipeline, create_data_processor
 from udao.data.predicate_embedders import Word2VecEmbedder, Word2VecParams
 from udao.data.predicate_embedders.utils import build_unique_operations
+from udao.data.preprocessors.normalize_preprocessor import FitTransformProtocol
 from udao.data.utils.query_plan import QueryPlanOperationFeatures, QueryPlanStructure
 from udao.data.utils.utils import DatasetType, train_test_val_split_on_column
 from udao.utils.logging import logger
@@ -172,6 +173,39 @@ class TypeAdvisor:
             # drop the suffix "Exec"
             return operator["className"].split(".")[-1][:-4]
         return operator["className"].split(".")[-1]
+
+
+class MinMaxScalerWithTrainedTheta(FitTransformProtocol):
+    def __init__(self, sc: SparkConf):
+        self.theta_cols = sc.knob_ids
+        self.non_theta_cols: Optional[List[str]] = None
+
+        knob_scaler = MinMaxScaler()
+        knob_scaler.fit([sc.knob_min, sc.knob_max])
+        self.theta_scaler = knob_scaler
+        self.non_theta_scaler = MinMaxScaler()
+
+    def fit(self, X: pd.DataFrame, y: Any = None) -> "MinMaxScalerWithTrainedTheta":
+        if self.non_theta_cols is None:
+            self.non_theta_cols = [c for c in X.columns if c not in self.theta_cols]
+        self.non_theta_scaler.fit(X[self.non_theta_cols])
+        return self
+
+    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
+        if self.non_theta_cols is None:
+            raise Exception("fit() must be called before transform()")
+        X[self.theta_cols] = self.theta_scaler.transform(X[self.theta_cols])
+        X[self.non_theta_cols] = self.non_theta_scaler.transform(X[self.non_theta_cols])
+        return X
+
+    def inverse_transform(self, X: pd.DataFrame) -> pd.DataFrame:
+        if self.non_theta_scaler is None:
+            raise Exception("fit() must be called before inverse_transform()")
+        X[self.theta_cols] = self.theta_scaler.inverse_transform(X[self.theta_cols])
+        X[self.non_theta_cols] = self.non_theta_scaler.inverse_transform(
+            X[self.non_theta_cols]
+        )
+        return X
 
 
 # Data Processing
@@ -402,6 +436,7 @@ def magic_setup(pw: PathWatcher, seed: int) -> None:
 
 def define_data_processor(
     ta: TypeAdvisor,
+    sc: SparkConf,
     lpe_size: int,
     vec_size: int,
 ) -> DataProcessor:
@@ -411,7 +446,7 @@ def define_data_processor(
         tensor_dtypes=tensor_dtypes,
         tabular_features=FeaturePipeline(
             extractor=TabularFeatureExtractor(columns=ta.get_tabular_columns()),
-            preprocessors=[NormalizePreprocessor(MinMaxScaler())],
+            preprocessors=[NormalizePreprocessor(MinMaxScalerWithTrainedTheta(sc))],
         ),
         objectives=FeaturePipeline(
             extractor=TabularFeatureExtractor(columns=ta.get_objectives()),
@@ -480,6 +515,7 @@ def extract_and_save_iterators(
         )
         data_processor = define_data_processor(
             ta=ta,
+            sc=SparkConf(str(pw.base_dir / "assets/spark_configuration_aqe_on.json")),
             lpe_size=params.lpe_size,
             vec_size=params.vec_size,
         )

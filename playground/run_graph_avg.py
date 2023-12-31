@@ -36,10 +36,7 @@ if __name__ == "__main__":
     pw = PathWatcher(
         Path(__file__).parent, params.benchmark, params.debug, extract_params
     )
-    split_iterators = get_split_iterators(
-        pw=pw,
-        ta=ta,
-    )
+    split_iterators = get_split_iterators(pw=pw, ta=ta)
     # Model definition and training
     model_params = GraphAverageMLPParams(
         iterator_shape=split_iterators["train"].shape,
