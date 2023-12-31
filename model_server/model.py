@@ -13,6 +13,7 @@ from udao.model import MLP, GraphAverager, UdaoModel, UdaoModule
 from udao.model.module import LearningParams
 from udao.model.utils.losses import WMAPELoss
 from udao.model.utils.schedulers import UdaoLRScheduler, setup_cosine_annealing_lr
+from udao.optimization.utils.moo_utils import get_default_device
 from udao.utils.logging import logger
 
 from udao_trace.utils import PickleHandler
@@ -131,6 +132,7 @@ class ModelServer:
         objectives = model_params.iterator_shape.output_names
         module = UdaoModule.load_from_checkpoint(
             weights_path,
+            map_location=get_default_device(),
             model=model,
             objectives=objectives,
             loss=WMAPELoss(),
@@ -141,5 +143,8 @@ class ModelServer:
     def __init__(self, model_sign: str, module: UdaoModule):
         self.model_sign = model_sign
         self.module = module
+        if not isinstance(module.model, UdaoModel):
+            raise TypeError(f"Unknown model type: {type(module.model)}")
+        self.model: UdaoModel = module.model
         self.objectives = module.objectives
-        self.model = module.model
+        logger.info(f"Model loaded with objectives: {self.objectives}")
