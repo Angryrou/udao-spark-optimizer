@@ -17,10 +17,12 @@ from model_server.utils import (
     get_split_iterators,
     tensor_dtypes,
 )
+from udao_trace.utils import JsonHandler
 
 logger.setLevel("INFO")
 if __name__ == "__main__":
     params = get_graph_avg_params()
+    print(params)
     device = "gpu" if th.cuda.is_available() else "cpu"
     th.set_default_dtype(tensor_dtypes)  # type: ignore
 
@@ -63,7 +65,7 @@ if __name__ == "__main__":
     logger.info(f"Objectives: {objectives}")
 
     ckp_header = checkpoint_model_structure(pw=pw, model_params=model_params)
-    trainer, module = get_tuned_trainer(
+    trainer, module, ckp_learning_header = get_tuned_trainer(
         ckp_header,
         model,
         split_iterators,
@@ -79,5 +81,17 @@ if __name__ == "__main__":
             num_workers=0 if params.debug else params.num_workers,
             shuffle=False,
         ),
+    )
+    JsonHandler.dump_to_file(
+        {
+            "test_results": test_results,
+            "extract_params": extract_params.__dict__,
+            "model_params": model_params.to_dict(),
+            "learning_params": learning_params.__dict__,
+            "tabular_columns": tabular_columns,
+            "objectives": objectives,
+        },
+        f"{ckp_learning_header}/test_results.json",
+        indent=2,
     )
     print(test_results)
