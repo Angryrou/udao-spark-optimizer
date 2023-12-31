@@ -30,17 +30,18 @@ from udao_trace.utils import BenchmarkType, JsonHandler, ParquetHandler, PickleH
 from udao_trace.workload import Benchmark
 
 from .constants import (
+    ALPHA,
     ALPHA_LQP_RAW,
+    ALPHA_QS_PLUS,
     ALPHA_QS_RAW,
     BETA,
     BETA_RAW,
     EPS,
     GAMMA,
-    TABULAR_LQP,
-    TABULAR_QS,
-    TABULAR_QS_COMPILE,
-    THETA,
+    THETA_C,
+    THETA_P,
     THETA_RAW,
+    THETA_S,
 )
 from .params import ExtractParams, GraphAverageMLPParams, MyLearningParams, QType
 
@@ -106,12 +107,16 @@ class TypeAdvisor:
         self.q_type = q_type
 
     def get_tabular_columns(self) -> List[str]:
-        if self.q_type in ["q_compile", "q_all"]:
-            return TABULAR_LQP
-        if self.q_type in ["qs_lqp_runtime", "qs_pqp_runtime"]:
-            return TABULAR_QS
-        if self.q_type in ["qs_lqp_compile"]:
-            return TABULAR_QS_COMPILE
+        if self.q_type == "q_compile":
+            return ALPHA + THETA_C + THETA_P + THETA_S
+        if self.q_type == "q_all":
+            return ALPHA + BETA + GAMMA + THETA_C + THETA_P + THETA_S
+        if self.q_type == "qs_lqp_compile":
+            return ALPHA + ALPHA_QS_PLUS + THETA_C + THETA_P + THETA_S
+        if self.q_type == "qs_lqp_runtime":
+            return ALPHA + ALPHA_QS_PLUS + BETA + GAMMA + THETA_C + THETA_P + THETA_S
+        if self.q_type in "qs_pqp_runtime":
+            return ALPHA + ALPHA_QS_PLUS + BETA + GAMMA + THETA_C + THETA_S
         raise NoQTypeError(self.q_type)
 
     def get_objectives(self) -> List[str]:
@@ -176,18 +181,27 @@ class TypeAdvisor:
 
 
 class MinMaxScalerWithTrainedTheta(FitTransformProtocol):
-    def __init__(self, sc: SparkConf):
-        self.theta_cols = sc.knob_ids
-        self.non_theta_cols: Optional[List[str]] = None
-
+    def __init__(self, tabular_columns: List[str], sc: SparkConf):
+        knob_selected_indices = [
+            i for i, k in enumerate(sc.knob_ids) if k in tabular_columns
+        ]
         knob_scaler = MinMaxScaler()
-        knob_scaler.fit([sc.knob_min, sc.knob_max])
+        knob_scaler.fit(
+            [
+                np.array(sc.knob_min)[knob_selected_indices],
+                np.array(sc.knob_max)[knob_selected_indices],
+            ]
+        )
+        self.theta_cols = np.array(sc.knob_ids)[knob_selected_indices].tolist()
         self.theta_scaler = knob_scaler
+        self.non_theta_cols: Optional[List[str]] = None
         self.non_theta_scaler = MinMaxScaler()
 
     def fit(self, X: pd.DataFrame, y: Any = None) -> "MinMaxScalerWithTrainedTheta":
         if self.non_theta_cols is None:
             self.non_theta_cols = [c for c in X.columns if c not in self.theta_cols]
+            if (len(self.theta_cols) + len(self.non_theta_cols)) != len(X.columns):
+                raise Exception("theta_cols + non_theta_cols != all_cols")
         self.non_theta_scaler.fit(X[self.non_theta_cols])
         return self
 
@@ -260,8 +274,9 @@ def prepare_data(
     df.rename(columns={p: kid for p, kid in zip(THETA_RAW, sc.knob_ids)}, inplace=True)
     df["tid"] = df["template"].apply(lambda x: bm.get_template_id(str(x)))
     variable_names = sc.knob_ids
-    if variable_names != THETA:
-        raise ValueError(f"variable_names != THETA: {variable_names} != {THETA}")
+    theta = THETA_C + THETA_P + THETA_S
+    if variable_names != theta:
+        raise ValueError(f"variable_names != theta: {variable_names} != {theta}")
     df[variable_names] = sc.deconstruct_configuration(
         df[variable_names].astype(str).values
     )
@@ -384,8 +399,8 @@ def magic_setup(pw: PathWatcher, seed: int) -> None:
     1. data has been properly processed and effectively saved.
     2. data split to make sure q_compile/q/qs share the same appid for tr/val/te.
     """
-    df_q_raw = pd.read_csv(pw.get_data_header("q"))
-    df_qs_raw = pd.read_csv(pw.get_data_header("qs"))
+    df_q_raw = pd.read_csv(pw.get_data_header("q"), low_memory=pw.debug)
+    df_qs_raw = pd.read_csv(pw.get_data_header("qs"), low_memory=pw.debug)
     logger.info(f"raw df_q shape: {df_q_raw.shape}")
     logger.info(f"raw df_qs shape: {df_qs_raw.shape}")
 
@@ -440,12 +455,13 @@ def define_data_processor(
     vec_size: int,
 ) -> DataProcessor:
     data_processor_getter = create_data_processor(QueryPlanIterator, "op_enc")
-
+    tabular_columns = ta.get_tabular_columns()
+    tabular_columns_scaler = MinMaxScalerWithTrainedTheta(tabular_columns, sc)
     return data_processor_getter(
         tensor_dtypes=tensor_dtypes,
         tabular_features=FeaturePipeline(
-            extractor=TabularFeatureExtractor(columns=ta.get_tabular_columns()),
-            preprocessors=[NormalizePreprocessor(MinMaxScalerWithTrainedTheta(sc))],
+            extractor=TabularFeatureExtractor(columns=tabular_columns),
+            preprocessors=[NormalizePreprocessor(tabular_columns_scaler)],
         ),
         objectives=FeaturePipeline(
             extractor=TabularFeatureExtractor(columns=ta.get_objectives()),
