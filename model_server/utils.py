@@ -107,12 +107,10 @@ class TypeAdvisor:
         self.q_type = q_type
 
     def get_tabular_columns(self) -> List[str]:
-        if self.q_type == "q_compile":
+        if self.q_type in ["q_compile", "qs_lqp_compile"]:
             return ALPHA + THETA_C + THETA_P + THETA_S
         if self.q_type == "q_all":
             return ALPHA + BETA + GAMMA + THETA_C + THETA_P + THETA_S
-        if self.q_type == "qs_lqp_compile":
-            return ALPHA + ALPHA_QS_PLUS + THETA_C + THETA_P + THETA_S
         if self.q_type == "qs_lqp_runtime":
             return ALPHA + ALPHA_QS_PLUS + BETA + GAMMA + THETA_C + THETA_P + THETA_S
         if self.q_type in "qs_pqp_runtime":
