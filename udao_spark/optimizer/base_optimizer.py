@@ -4,15 +4,20 @@ from abc import ABC
 import torch as th
 from udao.data.handler.data_handler import DataHandler
 
-from model_server.model import ModelServer
 from udao_trace.utils import PickleHandler
+
+from ..model.model_server import ModelServer
 
 
 class BaseOptimizer(ABC):
     def __init__(
-        self, model_params_path: str, weights_path: str, data_handler_path: str
+        self,
+        model_sign: str,
+        model_params_path: str,
+        weights_path: str,
+        data_handler_path: str,
     ) -> None:
-        self.ms = ModelServer.from_ckp_path(model_params_path, weights_path)
+        self.ms = ModelServer.from_ckp_path(model_sign, model_params_path, weights_path)
         self.data_handler = PickleHandler.load(
             os.path.dirname(data_handler_path), os.path.basename(data_handler_path)
         )
