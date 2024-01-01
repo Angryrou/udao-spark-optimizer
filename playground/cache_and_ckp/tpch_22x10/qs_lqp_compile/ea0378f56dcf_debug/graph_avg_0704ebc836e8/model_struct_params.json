@@ -1,0 +1,50 @@
+{
+  "iterator_shape": {
+    "feature_names": [
+      "IM-sizeInMB",
+      "IM-rowCount",
+      "IM-sizeInMB-log",
+      "IM-rowCount-log",
+      "k1",
+      "k2",
+      "k3",
+      "k4",
+      "k5",
+      "k6",
+      "k7",
+      "k8",
+      "s1",
+      "s2",
+      "s3",
+      "s4",
+      "s5",
+      "s6",
+      "s7",
+      "s8",
+      "s9",
+      "s10",
+      "s11"
+    ],
+    "output_names": [
+      "latency_s",
+      "io_mb",
+      "ana_latency_s"
+    ],
+    "embedding_input_shape": {
+      "cbo": 2,
+      "op_enc": 16,
+      "type": 9
+    }
+  },
+  "op_groups": [
+    "type",
+    "cbo",
+    "op_enc"
+  ],
+  "output_size": 32,
+  "type_embedding_dim": 8,
+  "embedding_normalizer": null,
+  "n_layers": 2,
+  "hidden_dim": 32,
+  "dropout": 0.1
+}
