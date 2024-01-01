@@ -37,8 +37,8 @@ classifiers = [
   "Programming Language :: Python :: 3 :: Only",
 ]
 dependencies = [
-  "udao=1.0.1",
-  "pyarrow=14.0.2"
+  "udao==1.0.1",
+  "pyarrow==14.0.2"
 ]
 
 [project.optional-dependencies] # Optional
