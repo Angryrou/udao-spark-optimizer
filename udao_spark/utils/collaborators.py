@@ -6,7 +6,7 @@ import numpy as np
 from udao_trace.utils import JsonHandler
 from udao_trace.utils.logging import logger
 
-from ..data.extractors.query_structure_extractor2 import (
+from ..data.extractors.query_structure_extractor import (
     extract_operations_from_serialized_lqp_json,
     extract_operations_from_serialized_qs_lqp_json,
     extract_operations_from_serialized_qs_pqp_json,

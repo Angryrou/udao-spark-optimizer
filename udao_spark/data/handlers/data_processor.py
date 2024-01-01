@@ -20,7 +20,7 @@ from udao.data.preprocessors.normalize_preprocessor import FitTransformProtocol
 from udao_trace.configuration import SparkConf
 
 from ...utils.collaborators import TypeAdvisor
-from ..extractors.query_structure_extractor2 import QueryStructureExtractor2
+from ..extractors.query_structure_extractor import QueryStructureExtractor2
 from ..utils import tensor_dtypes
 
 
