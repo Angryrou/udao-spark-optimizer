@@ -39,11 +39,13 @@ class GraphAverageMLPParams(UdaoParams):
     def from_dict(cls, data_dict: Dict[str, Any]) -> "GraphAverageMLPParams":
         if "iterator_shape" not in data_dict:
             raise ValueError("iterator_shape not found in data_dict")
-        data_dict["iterator_shape"] = UdaoEmbedItemShape(
-            embedding_input_shape=data_dict["iterator_shape"]["embedding_input_shape"],
-            feature_names=data_dict["iterator_shape"]["feature_names"],
-            output_names=data_dict["iterator_shape"]["output_names"],
-        )
+        if not isinstance(data_dict["iterator_shape"], UdaoEmbedItemShape):
+            iterator_shape_dict = data_dict["iterator_shape"]
+            data_dict["iterator_shape"] = UdaoEmbedItemShape(
+                embedding_input_shape=iterator_shape_dict["embedding_input_shape"],
+                feature_names=iterator_shape_dict["feature_names"],
+                output_names=iterator_shape_dict["output_names"],
+            )
         return cls(**data_dict)
 
     def to_dict(self) -> Dict[str, object]:

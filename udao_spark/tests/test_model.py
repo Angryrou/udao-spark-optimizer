@@ -7,13 +7,13 @@ from ..model.model_server import ModelServer
 
 @pytest.fixture
 def ms_graph_avg(ckp_path_qs_lqp_compile: Path) -> ModelServer:
-    ckp_path = ckp_path_qs_lqp_compile / "ea0378f56dcf_debug/graph_avg_8f52679461eb"
+    ckp_path = ckp_path_qs_lqp_compile / "ea0378f56dcf_debug/graph_avg_0704ebc836e8"
     model_params_path = str(ckp_path / "model_struct_params.json")
     weights_path = str(
         ckp_path
         / "learning_74b9b64f5030"
-        / "1-val_latency_s_WMAPE=0.929-val_io_mb_WMAPE=1.000"
-        "-val_ana_latency_s_WMAPE=0.996.ckpt"
+        / "1-val_latency_s_WMAPE=0.920-val_io_mb_WMAPE=1.000"
+        "-val_ana_latency_s_WMAPE=0.995.ckpt"
     )
     return ModelServer.from_ckp_path(
         model_sign="graph_avg",

@@ -9,6 +9,8 @@ from udao.data.utils.utils import DatasetType
 from udao_trace.utils import JsonHandler
 
 from ...utils.collaborators import TypeAdvisor
+from ...utils.exceptions import NoQTypeError
+from ...utils.params import QType
 
 
 class OperatorMisMatchError(BaseException):
@@ -56,6 +58,16 @@ def extract_operations_from_serialized_qs_pqp_json(
     return extract_operations_from_serialized_json_base(
         "qs_pqp", plan_df, operation_processing
     )
+
+
+def get_extract_operations_from_serialized_json(q_type: QType) -> Callable:
+    if q_type in ["q_compile", "q_all"]:
+        return extract_operations_from_serialized_lqp_json
+    if q_type in ["qs_lqp_compile", "qs_lqp_runtime"]:
+        return extract_operations_from_serialized_qs_lqp_json
+    if q_type in ["qs_pqp_runtime"]:
+        return extract_operations_from_serialized_qs_pqp_json
+    raise NoQTypeError(q_type)
 
 
 def extract_query_plan_features_from_serialized_json(

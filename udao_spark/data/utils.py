@@ -29,8 +29,6 @@ from ..model.utils import GraphAverageMLPParams
 from ..utils.collaborators import PathWatcher, TypeAdvisor
 from .handlers.data_processor import create_udao_data_processor
 
-tensor_dtypes = th.float32
-
 
 # Data Processing
 def _im_process(df: pd.DataFrame) -> pd.DataFrame:
@@ -260,53 +258,47 @@ def extract_index_splits(
 def extract_and_save_iterators(
     pw: PathWatcher,
     ta: TypeAdvisor,
-    cache_file: str = "iterators.pkl",
+    tensor_dtypes: th.dtype,
+    cache_file: str = "split_iterators.pkl",
 ) -> Dict[DatasetType, BaseIterator]:
     params = pw.extract_params
     if Path(f"{pw.cc_extract_prefix}/{cache_file}").exists():
         raise FileExistsError(f"{pw.cc_extract_prefix}/{cache_file} already exists.")
-    logger.info("start extracting iterators")
-    cache_file_dh = "handlers.pkl"
-    if Path(f"{pw.cc_extract_prefix}/{cache_file_dh}").exists():
-        logger.info(f"found {pw.cc_extract_prefix}/{cache_file_dh}, loading...")
-        data_handler = PickleHandler.load(pw.cc_extract_prefix, cache_file_dh)
-        if not isinstance(data_handler, DataHandler):
-            raise TypeError(f"handlers is not a DataHandler: {data_handler}")
-    else:
-        logger.info(f"not found {pw.cc_extract_prefix}/{cache_file_dh}, extracting...")
-        df, index_splits = extract_index_splits(
-            pw=pw, seed=params.seed, q_type=ta.get_q_type_for_cache()
-        )
-        data_processor = create_udao_data_processor(
-            ta=ta,
-            sc=SparkConf(str(pw.base_dir / "assets/spark_configuration_aqe_on.json")),
-            lpe_size=params.lpe_size,
-            vec_size=params.vec_size,
-        )
-        data_handler = DataHandler(
-            df.reset_index(),
-            DataHandler.Params(
-                index_column="id",
-                stratify_on="tid",
-                val_frac=0.2 if params.debug else 0.1,
-                test_frac=0.2 if params.debug else 0.1,
-                dryrun=False,
-                data_processor=data_processor,
-                random_state=params.seed,
-            ),
-        )
-        if not isinstance(data_handler, DataHandler):
-            raise TypeError(f"handlers is not a DataHandler: {data_handler}")
-        data_handler.index_splits = index_splits
-        PickleHandler.save(data_handler, pw.cc_extract_prefix, cache_file_dh)
-        logger.info(f"saved {pw.cc_extract_prefix}/{cache_file_dh}")
+    logger.info("start extracting split_iterators")
+    df, index_splits = extract_index_splits(
+        pw=pw, seed=params.seed, q_type=ta.get_q_type_for_cache()
+    )
+
+    cache_file_dp = "data_processor.pkl"
+    if Path(f"{pw.cc_extract_prefix}/{cache_file_dp}").exists():
+        raise FileExistsError(f"{pw.cc_extract_prefix}/{cache_file_dp} already exists.")
+    logger.info("start creating data_processor")
+    data_processor = create_udao_data_processor(
+        ta=ta,
+        sc=SparkConf(str(pw.base_dir / "assets/spark_configuration_aqe_on.json")),
+        lpe_size=params.lpe_size,
+        vec_size=params.vec_size,
+        tensor_dtypes=tensor_dtypes,
+    )
+    data_handler = DataHandler(
+        df.reset_index(),
+        DataHandler.Params(
+            index_column="id",
+            stratify_on="tid",
+            val_frac=0.2 if params.debug else 0.1,
+            test_frac=0.2 if params.debug else 0.1,
+            dryrun=False,
+            data_processor=data_processor,
+            random_state=params.seed,
+        ),
+    )
+    data_handler.index_splits = index_splits
     logger.info("extracting split_iterators...")
     split_iterators = data_handler.get_iterators()
-    PickleHandler.save(
-        {"desc": params.__dict__, "split_iterators": split_iterators},
-        pw.cc_extract_prefix,
-        cache_file,
-    )
+
+    PickleHandler.save(data_processor, pw.cc_extract_prefix, cache_file_dp)
+    logger.info(f"saved {pw.cc_extract_prefix}/{cache_file_dp} after fitting")
+    PickleHandler.save(split_iterators, pw.cc_extract_prefix, cache_file)
     logger.info(f"saved {pw.cc_extract_prefix}/{cache_file}")
     return split_iterators
 
@@ -314,22 +306,17 @@ def extract_and_save_iterators(
 def get_split_iterators(
     pw: PathWatcher,
     ta: TypeAdvisor,
+    tensor_dtypes: th.dtype,
 ) -> Dict[DatasetType, BaseIterator]:
-    cache_file = "iterators.pkl"
+    cache_file = "split_iterators.pkl"
     if not Path(f"{pw.cc_extract_prefix}/{cache_file}").exists():
-        split_iterators = extract_and_save_iterators(
+        return extract_and_save_iterators(
             pw=pw,
             ta=ta,
+            tensor_dtypes=tensor_dtypes,
             cache_file=cache_file,
         )
-        return split_iterators
-    split_meta = PickleHandler.load(pw.cc_extract_prefix, cache_file)
-    if (
-        not isinstance(split_meta, Dict)
-        or "split_iterators" not in split_meta
-        or "desc" not in split_meta
-        or not isinstance(split_meta["split_iterators"], Dict)
-    ):
+    split_iterators = PickleHandler.load(pw.cc_extract_prefix, cache_file)
+    if not isinstance(split_iterators, Dict):
         raise TypeError("split_iterators not found or not a desired type")
-    logger.info(split_meta["desc"])
-    return split_meta["split_iterators"]
+    return split_iterators

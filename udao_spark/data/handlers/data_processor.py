@@ -2,6 +2,7 @@ from typing import Any, List, Optional
 
 import numpy as np
 import pandas as pd
+import torch as th
 from sklearn.preprocessing import MinMaxScaler
 from udao.data import (
     NormalizePreprocessor,
@@ -20,8 +21,10 @@ from udao.data.preprocessors.normalize_preprocessor import FitTransformProtocol
 from udao_trace.configuration import SparkConf
 
 from ...utils.collaborators import TypeAdvisor
-from ..extractors.query_structure_extractor import QueryStructureExtractor2
-from ..utils import tensor_dtypes
+from ..extractors.query_structure_extractor import (
+    QueryStructureExtractor2,
+    get_extract_operations_from_serialized_json,
+)
 
 
 def create_udao_data_processor(
@@ -29,6 +32,7 @@ def create_udao_data_processor(
     sc: SparkConf,
     lpe_size: int,
     vec_size: int,
+    tensor_dtypes: th.dtype = th.float32,
 ) -> DataProcessor:
     data_processor_getter = create_data_processor(QueryPlanIterator, "op_enc")
     tabular_columns = ta.get_tabular_columns()
@@ -51,7 +55,9 @@ def create_udao_data_processor(
         op_enc=FeaturePipeline(
             extractor=PredicateEmbeddingExtractor(
                 Word2VecEmbedder(Word2VecParams(vec_size=vec_size)),
-                extract_operations=ta.get_extract_operations_from_serialized_json(),
+                extract_operations=get_extract_operations_from_serialized_json(
+                    ta.q_type
+                ),
             ),
         ),
     )
@@ -62,14 +68,18 @@ class MinMaxScalerWithTrainedTheta(FitTransformProtocol):
         knob_selected_indices = [
             i for i, k in enumerate(sc.knob_ids) if k in tabular_columns
         ]
+        knob_cols = np.array(sc.knob_ids)[knob_selected_indices]
         knob_scaler = MinMaxScaler()
         knob_scaler.fit(
-            [
-                np.array(sc.knob_min)[knob_selected_indices],
-                np.array(sc.knob_max)[knob_selected_indices],
-            ]
+            pd.DataFrame(
+                [
+                    np.array(sc.knob_min)[knob_selected_indices],
+                    np.array(sc.knob_max)[knob_selected_indices],
+                ],
+                columns=knob_cols,
+            )
         )
-        self.theta_cols = np.array(sc.knob_ids)[knob_selected_indices].tolist()
+        self.theta_cols = knob_cols
         self.theta_scaler = knob_scaler
         self.non_theta_cols: Optional[List[str]] = None
         self.non_theta_scaler = MinMaxScaler()

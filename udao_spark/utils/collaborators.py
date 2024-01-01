@@ -1,16 +1,11 @@
 from pathlib import Path
-from typing import Callable, Dict, List
+from typing import Dict, List
 
 import numpy as np
 
 from udao_trace.utils import JsonHandler
 from udao_trace.utils.logging import logger
 
-from ..data.extractors.query_structure_extractor import (
-    extract_operations_from_serialized_lqp_json,
-    extract_operations_from_serialized_qs_lqp_json,
-    extract_operations_from_serialized_qs_pqp_json,
-)
 from .constants import ALPHA, ALPHA_QS_PLUS, BETA, EPS, GAMMA, THETA_C, THETA_P, THETA_S
 from .exceptions import NoBenchmarkError, NoQTypeError
 from .params import ExtractParams, QType
@@ -21,9 +16,9 @@ class PathWatcher:
         self, base_dir: Path, benchmark: str, debug: bool, extract_params: ExtractParams
     ):
         self.base_dir = base_dir
-
         self.benchmark = benchmark
         self.debug = debug
+
         data_sign = self._get_data_sign()
         data_prefix = f"{str(base_dir)}/data/{benchmark}"
         cc_prefix = f"{str(base_dir)}/cache_and_ckp/{benchmark}_{data_sign}"
@@ -66,10 +61,8 @@ class TypeAdvisor:
     def get_tabular_columns(self) -> List[str]:
         if self.q_type in ["q_compile", "qs_lqp_compile"]:
             return ALPHA + THETA_C + THETA_P + THETA_S
-        if self.q_type == "q_all":
+        if self.q_type == ["q_all", "qs_lqp_runtime"]:
             return ALPHA + BETA + GAMMA + THETA_C + THETA_P + THETA_S
-        if self.q_type == "qs_lqp_runtime":
-            return ALPHA + ALPHA_QS_PLUS + BETA + GAMMA + THETA_C + THETA_P + THETA_S
         if self.q_type in "qs_pqp_runtime":
             return ALPHA + ALPHA_QS_PLUS + BETA + GAMMA + THETA_C + THETA_S
         raise NoQTypeError(self.q_type)
@@ -95,15 +88,6 @@ class TypeAdvisor:
             return "qs_lqp"
         if self.q_type in ["qs_pqp_runtime"]:
             return "qs_pqp"
-        raise NoQTypeError(self.q_type)
-
-    def get_extract_operations_from_serialized_json(self) -> Callable:
-        if self.q_type in ["q_compile", "q_all"]:
-            return extract_operations_from_serialized_lqp_json
-        if self.q_type in ["qs_lqp_compile", "qs_lqp_runtime"]:
-            return extract_operations_from_serialized_qs_lqp_json
-        if self.q_type in ["qs_pqp_runtime"]:
-            return extract_operations_from_serialized_qs_pqp_json
         raise NoQTypeError(self.q_type)
 
     def size_mb_in_log(self, operator: Dict) -> float:

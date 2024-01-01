@@ -3,11 +3,7 @@ from pathlib import Path
 import torch as th
 from udao.utils.logging import logger
 
-from udao_spark.data.utils import (
-    checkpoint_model_structure,
-    get_split_iterators,
-    tensor_dtypes,
-)
+from udao_spark.data.utils import checkpoint_model_structure, get_split_iterators
 from udao_spark.model.utils import (
     GraphAverageMLPParams,
     MyLearningParams,
@@ -23,6 +19,7 @@ if __name__ == "__main__":
     params = get_graph_avg_params()
     print(params)
     device = "gpu" if th.cuda.is_available() else "cpu"
+    tensor_dtypes = th.float32
     th.set_default_dtype(tensor_dtypes)  # type: ignore
 
     # Data definition
@@ -39,7 +36,7 @@ if __name__ == "__main__":
     pw = PathWatcher(
         Path(__file__).parent, params.benchmark, params.debug, extract_params
     )
-    split_iterators = get_split_iterators(pw=pw, ta=ta)
+    split_iterators = get_split_iterators(pw=pw, ta=ta, tensor_dtypes=tensor_dtypes)
     # Model definition and training
     model_params = GraphAverageMLPParams.from_dict(
         {
