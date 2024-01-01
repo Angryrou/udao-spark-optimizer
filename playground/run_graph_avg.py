@@ -3,20 +3,19 @@ from pathlib import Path
 import torch as th
 from udao.utils.logging import logger
 
-from model_server.model import (
+from udao_spark.data.utils import (
+    checkpoint_model_structure,
+    get_split_iterators,
+    tensor_dtypes,
+)
+from udao_spark.model.utils import (
     GraphAverageMLPParams,
     MyLearningParams,
     get_graph_avg_mlp,
     get_tuned_trainer,
 )
-from model_server.params import ExtractParams, get_graph_avg_params
-from model_server.utils import (
-    PathWatcher,
-    TypeAdvisor,
-    checkpoint_model_structure,
-    get_split_iterators,
-    tensor_dtypes,
-)
+from udao_spark.utils.collaborators import PathWatcher, TypeAdvisor
+from udao_spark.utils.params import ExtractParams, get_graph_avg_params
 from udao_trace.utils import JsonHandler
 
 logger.setLevel("INFO")
@@ -28,35 +27,42 @@ if __name__ == "__main__":
 
     # Data definition
     ta = TypeAdvisor(q_type=params.q_type)
-    extract_params = ExtractParams(
-        lpe_size=params.lpe_size,
-        vec_size=params.vec_size,
-        seed=params.seed,
-        q_type=params.q_type,
-        debug=params.debug,
+    extract_params = ExtractParams.from_dict(
+        {
+            "lpe_size": params.lpe_size,
+            "vec_size": params.vec_size,
+            "seed": params.seed,
+            "q_type": params.q_type,
+            "debug": params.debug,
+        }
     )
     pw = PathWatcher(
         Path(__file__).parent, params.benchmark, params.debug, extract_params
     )
     split_iterators = get_split_iterators(pw=pw, ta=ta)
     # Model definition and training
-    model_params = GraphAverageMLPParams(
-        iterator_shape=split_iterators["train"].shape,
-        output_size=params.output_size,
-        op_groups=params.op_groups,
-        type_embedding_dim=params.type_embedding_dim,
-        embedding_normalizer=params.embedding_normalizer,
-        n_layers=params.n_layers,
-        hidden_dim=params.hidden_dim,
-        dropout=params.dropout,
+    model_params = GraphAverageMLPParams.from_dict(
+        {
+            "iterator_shape": split_iterators["train"].shape,
+            "output_size": params.output_size,
+            "op_groups": params.op_groups,
+            "type_embedding_dim": params.type_embedding_dim,
+            "embedding_normalizer": params.embedding_normalizer,
+            "n_layers": params.n_layers,
+            "hidden_dim": params.hidden_dim,
+            "dropout": params.dropout,
+        }
     )
-    learning_params = MyLearningParams(
-        epochs=params.epochs,
-        batch_size=params.batch_size,
-        init_lr=params.init_lr,
-        min_lr=params.min_lr,
-        weight_decay=params.weight_decay,
+    learning_params = MyLearningParams.from_dict(
+        {
+            "epochs": params.epochs,
+            "batch_size": params.batch_size,
+            "init_lr": params.init_lr,
+            "min_lr": params.min_lr,
+            "weight_decay": params.weight_decay,
+        }
     )
+
     model = get_graph_avg_mlp(model_params)
     # prepare the model structure path
     tabular_columns = ta.get_tabular_columns()
