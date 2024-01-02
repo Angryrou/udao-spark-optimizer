@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import torch as th
+from udao.model.utils.utils import set_deterministic_torch
 from udao.utils.logging import logger
 
 from udao_spark.data.utils import checkpoint_model_structure, get_split_iterators
@@ -17,6 +18,7 @@ from udao_trace.utils import JsonHandler
 logger.setLevel("INFO")
 if __name__ == "__main__":
     params = get_graph_avg_params()
+    set_deterministic_torch(params.seed)
     print(params)
     device = "gpu" if th.cuda.is_available() else "cpu"
     tensor_dtypes = th.float32
