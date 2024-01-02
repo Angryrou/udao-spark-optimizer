@@ -6,7 +6,17 @@ import numpy as np
 from udao_trace.utils import JsonHandler
 from udao_trace.utils.logging import logger
 
-from .constants import ALPHA, ALPHA_QS_PLUS, BETA, EPS, GAMMA, THETA_C, THETA_P, THETA_S
+from .constants import (
+    ALPHA,
+    ALPHA_COMPILE,
+    ALPHA_QS_PLUS,
+    BETA,
+    EPS,
+    GAMMA,
+    THETA_C,
+    THETA_P,
+    THETA_S,
+)
 from .exceptions import NoBenchmarkError, NoQTypeError
 from .params import ExtractParams, QType
 
@@ -59,8 +69,10 @@ class TypeAdvisor:
         self.q_type = q_type
 
     def get_tabular_columns(self) -> List[str]:
-        if self.q_type in ["q_compile", "qs_lqp_compile"]:
+        if self.q_type in ["q_compile"]:
             return ALPHA + THETA_C + THETA_P + THETA_S
+        if self.q_type in ["qs_lqp_compile"]:
+            return ALPHA_COMPILE + THETA_C + THETA_P + THETA_S
         if self.q_type in ["q_all", "qs_lqp_runtime"]:
             return ALPHA + BETA + GAMMA + THETA_C + THETA_P + THETA_S
         if self.q_type in "qs_pqp_runtime":
