@@ -95,11 +95,11 @@ class SparkParser:
         return {**im, **{"PD": pd}, **ss_dict}, conf
 
     @staticmethod
-    def _drop_raw_plan(d: Dict, to_drop: str = "rawPlan") -> Dict:
+    def drop_raw_plan(d: Dict, to_drop: str = "rawPlan") -> Dict:
         return {k: v for k, v in d.items() if k != to_drop}
 
     def _parse_lqp_features(self, d: Dict) -> Tuple[Dict, Dict]:
-        lqp_str = JsonHandler.dump_to_string(self._drop_raw_plan(d["LQP"]), indent=None)
+        lqp_str = JsonHandler.dump_to_string(self.drop_raw_plan(d["LQP"]), indent=None)
         base, conf = self._parse_base(d)
         return {**{"lqp": lqp_str}, **base}, conf
 
@@ -130,10 +130,10 @@ class SparkParser:
 
     def _parse_qs(self, d: Dict, meta: Dict, theta_c: Dict) -> Dict:
         qs_lqp_str = JsonHandler.dump_to_string(
-            self._drop_raw_plan(d["QSLogical"]), indent=None
+            self.drop_raw_plan(d["QSLogical"]), indent=None
         )
         qs_pqp_str = JsonHandler.dump_to_string(
-            self._drop_raw_plan(d["QSPhysical"]), indent=None
+            self.drop_raw_plan(d["QSPhysical"]), indent=None
         )
         local = {
             "qs_lqp": qs_lqp_str,

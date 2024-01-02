@@ -1,11 +1,10 @@
-from itertools import chain
 from typing import Tuple
 
 import numpy as np
 import pandas as pd
 from scipy.stats import qmc
 
-from ..utils import JsonHandler, ScaleTypes, VarTypes
+from ..utils import ScaleTypes, VarTypes
 from ..utils.logging import logger
 from .conf import Conf
 from .knob_meta import KnobNumeric
@@ -126,20 +125,3 @@ class SparkConf(Conf):
         conf_df.set_index("conf_sign", inplace=True)
         logger.debug(f"finished generated {len(conf_df)} configurations via LHS")
         return conf_df
-
-    @staticmethod
-    def extract_partition_distribution(pd_raw: str) -> Tuple[float, float, float]:
-        pd = np.array(
-            list(
-                chain.from_iterable(
-                    JsonHandler.load_json_from_str(pd_raw.replace("'", '"')).values()
-                )
-            )
-        )
-        if pd.size == 0:
-            return 0.0, 0.0, 0.0
-        mu, std, max_val, min_val = np.mean(pd), np.std(pd), np.max(pd), np.min(pd)
-        ratio1 = std / mu
-        ratio2 = (max_val - mu) / mu
-        ratio3 = (max_val - min_val) / mu
-        return ratio1, ratio2, ratio3
