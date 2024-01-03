@@ -159,7 +159,8 @@ def get_tuned_trainer(
 ) -> Tuple[Trainer, UdaoModule, str]:
     ckp_learning_header = f"{ckp_header}/{params.hash()}"
     ckp_weight_path = weights_found(ckp_learning_header)
-    tb_logger = TensorBoardLogger("tb_logs")
+
+    tb_logger = TensorBoardLogger(f"tb_logs/{ckp_learning_header}")
     if ckp_weight_path is not None:
         logger.info(f"Model weights found at {ckp_weight_path}, loading...")
         module = UdaoModule.load_from_checkpoint(

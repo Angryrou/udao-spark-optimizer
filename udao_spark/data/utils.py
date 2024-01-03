@@ -1,3 +1,4 @@
+from itertools import chain
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -41,7 +42,7 @@ def _im_process(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def _extract_compile_time_im(graph_json_str: str) -> Tuple[float, float]:
+def extract_compile_time_im(graph_json_str: str) -> Tuple[float, float]:
     graph = JsonHandler.load_json_from_str(graph_json_str)
     operators, links = graph["operators"], graph["links"]
     outgoing_ids_set = set(link["toId"] for link in links)
@@ -64,7 +65,7 @@ def _extract_compile_time_im(graph_json_str: str) -> Tuple[float, float]:
 def _im_process_compile(df: pd.DataFrame) -> pd.DataFrame:
     """a post-computation for compile-time input meta of each query stage"""
     df[["IM-sizeInMB-compile", "IM-rowCount-compile"]] = np.array(
-        np.vectorize(_extract_compile_time_im)(df["qs_lqp"])
+        np.vectorize(extract_compile_time_im)(df["qs_lqp"])
     ).T
     df["IM-sizeInMB-compile-log"] = np.log(
         df["IM-sizeInMB-compile"].to_numpy().clip(min=EPS)
@@ -73,6 +74,23 @@ def _im_process_compile(df: pd.DataFrame) -> pd.DataFrame:
         df["IM-rowCount-compile"].to_numpy().clip(min=EPS)
     )
     return df
+
+
+def extract_partition_distribution(pd_raw: str) -> Tuple[float, float, float]:
+    pd = np.array(
+        list(
+            chain.from_iterable(
+                JsonHandler.load_json_from_str(pd_raw.replace("'", '"')).values()
+            )
+        )
+    )
+    if pd.size == 0:
+        return 0.0, 0.0, 0.0
+    mu, std, max_val, min_val = np.mean(pd), np.std(pd), np.max(pd), np.min(pd)
+    ratio1 = std / mu
+    ratio2 = (max_val - mu) / mu
+    ratio3 = (max_val - min_val) / mu
+    return ratio1, ratio2, ratio3
 
 
 def prepare_data(
@@ -107,7 +125,7 @@ def prepare_data(
 
     # extract beta
     df[BETA] = [
-        sc.extract_partition_distribution(pd_raw)
+        extract_partition_distribution(pd_raw)
         for pd_raw in df[BETA_RAW].values.squeeze()
     ]
     for c in BETA_RAW:
