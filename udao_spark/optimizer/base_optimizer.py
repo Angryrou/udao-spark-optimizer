@@ -1,7 +1,8 @@
 import os.path
 from abc import ABC, abstractmethod
-from typing import Dict, List, Tuple
+from typing import Dict, List, Literal, Optional, Tuple
 
+import numpy as np
 import pandas as pd
 import torch as th
 from udao.data.handler.data_processor import DataProcessor
@@ -12,6 +13,11 @@ from udao_trace.configuration import SparkConf
 from udao_trace.utils import PickleHandler
 
 from ..model.model_server import ModelServer
+from ..utils.constants import THETA_C, THETA_P, THETA_S
+
+ThetaType = Literal["c", "p", "s"]
+aws_cost_cpu_hour_ratio = 0.052624
+aws_cost_mem_hour_ratio = 0.0057785  # for GB*H
 
 
 class BaseOptimizer(ABC):
@@ -45,7 +51,31 @@ class BaseOptimizer(ABC):
                 "Decision variables must be the last columns in tabular_features"
             )
         self.decision_variables = decision_variables
+        self.dtype = th.float32
         self.device = get_default_device()
+
+        self.theta_all_minmax = (
+            np.array(spark_conf.knob_min),
+            np.array(spark_conf.knob_max),
+        )
+        self.theta_minmax = {
+            "c": (
+                np.array(spark_conf.knob_min[: len(THETA_C)]),
+                np.array(spark_conf.knob_max[: len(THETA_C)]),
+            ),
+            "p": (
+                np.array(
+                    spark_conf.knob_min[len(THETA_C) : len(THETA_C) + len(THETA_P)]
+                ),
+                np.array(
+                    spark_conf.knob_max[len(THETA_C) : len(THETA_C) + len(THETA_P)]
+                ),
+            ),
+            "s": (
+                np.array(spark_conf.knob_min[-len(THETA_S) :]),
+                np.array(spark_conf.knob_max[-len(THETA_S) :]),
+            ),
+        }
 
     def extract_non_decision_embeddings_from_df(
         self, df: pd.DataFrame
@@ -73,7 +103,15 @@ class BaseOptimizer(ABC):
         ]
         return graph_embedding, non_decision_tabular_features
 
-    def predict_objectives(
+    def get_cloud_cost(
+        self, lat: th.Tensor, cores: th.Tensor, mem: th.Tensor, nexec: th.Tensor
+    ) -> th.Tensor:
+        cpu_hour = (nexec + 1) * cores * lat / 3600
+        mem_hour = (nexec + 1) * mem * lat / 3600
+        cost = cpu_hour * aws_cost_cpu_hour_ratio + mem_hour * aws_cost_mem_hour_ratio
+        return cost
+
+    def _predict_objectives(
         self, graph_embedding: th.Tensor, tabular_features: th.Tensor
     ) -> th.Tensor:
         """
@@ -81,10 +119,46 @@ class BaseOptimizer(ABC):
         tabular features in the normalized space
         """
         with th.no_grad():
-            return self.ms.model.regressor(graph_embedding, tabular_features)
+            return (
+                self.ms.model.regressor(
+                    graph_embedding, tabular_features.to(self.device)
+                )
+                .detach()
+                .cpu()
+            )
+
+    def sample_theta_all(self, n_samples: int, seed: Optional[int]) -> th.Tensor:
+        if seed is not None:
+            np.random.seed(seed)
+        samples = np.random.randint(
+            low=self.theta_all_minmax[0],
+            high=self.theta_all_minmax[1],
+            size=(n_samples, len(self.sc.knob_min)),
+        )
+        samples_normalized = (samples - self.theta_all_minmax[0]) / (
+            self.theta_all_minmax[1] - self.theta_all_minmax[0]
+        )
+        return th.tensor(samples_normalized, dtype=self.dtype)
+
+    def sample_theta_x(
+        self, n_samples: int, theta_type: ThetaType, seed: Optional[int]
+    ) -> th.Tensor:
+        if seed is not None:
+            np.random.seed(seed)
+        samples = np.random.randint(
+            low=self.theta_minmax[theta_type][0],
+            high=self.theta_minmax[theta_type][1],
+            size=(n_samples, len(self.theta_minmax[theta_type][0])),
+        )
+        samples_normalized = (samples - self.theta_minmax[theta_type][0]) / (
+            self.theta_minmax[theta_type][1] - self.theta_minmax[theta_type][0]
+        )
+        return th.tensor(samples_normalized, dtype=self.dtype)
 
     @abstractmethod
-    def solve(self, non_decision_input: Dict) -> List[Point]:
+    def solve(
+        self, non_decision_input: Dict, seed: Optional[int] = None
+    ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         pass
 
     def weighted_utopia_nearest(self, pareto_points: List[Point]) -> Point:

@@ -1,10 +1,12 @@
-from typing import Dict, List
+from typing import Dict, Optional, Tuple
 
-from udao.optimization.utils.moo_utils import Point
+import numpy as np
 
 from .base_optimizer import BaseOptimizer
 
 
 class AtomicOptimizer(BaseOptimizer):
-    def solve(self, non_decision_input: Dict) -> List[Point]:
-        return []
+    def solve(
+        self, non_decision_input: Dict, seed: Optional[int] = None
+    ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+        return None, None
