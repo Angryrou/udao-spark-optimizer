@@ -2,6 +2,7 @@ from pathlib import Path
 
 from udao_spark.data.extractors.injection_extractor import InjectionExtractor
 from udao_spark.optimizer.hierarchical_optimizer import HierarchicalOptimizer
+from udao_trace.configuration import SparkConf
 from udao_trace.utils import BenchmarkType
 from udao_trace.utils.logging import logger
 
@@ -11,7 +12,7 @@ if __name__ == "__main__":
 
     benchmark = BenchmarkType.TPCH
     scale_factor = 100
-    oracle = False
+    oracle = True
     ie = InjectionExtractor(
         benchmark_type=BenchmarkType.TPCH, scale_factor=scale_factor, logger=logger
     )
@@ -38,11 +39,11 @@ if __name__ == "__main__":
     if oracle:
         header = optimizer_preparation_header / "qs_lqp_runtime/ea0378f56dcf"
         model_params_path = str(
-            header / "graph_avg_00a5ff4aaa46/model_struct_params.json"
+            header / "graph_avg_96fd41972e88/model_struct_params.json"
         )
         weights_path = str(
             header
-            / "graph_avg_00a5ff4aaa46"
+            / "graph_avg_96fd41972e88"
             / "learning_9c49bcdcb630"
             / "99-val_latency_s_WMAPE=0.297-val_io_mb_WMAPE=0.191"
             "-val_ana_latency_s_WMAPE=0.234.ckpt"
@@ -61,16 +62,25 @@ if __name__ == "__main__":
             "-val_ana_latency_s_WMAPE=0.237.ckpt"
         )
         data_processor_path = str(header / "data_processor.pkl")
+
+    spark_conf = SparkConf(str(base_dir / "assets/spark_configuration_aqe_on.json"))
+    decision_variables = (
+        ["k1", "k2", "k3", "k4", "k5", "k6", "k7", "k8"]
+        + ["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9"]
+        + ["s10", "s11"]
+    )
     hier_optimizer = HierarchicalOptimizer(
-        model_sign, model_params_path, weights_path, data_processor_path
+        model_sign,
+        model_params_path,
+        weights_path,
+        data_processor_path,
+        spark_conf,
+        decision_variables,
     )
 
     # Compile time QS logical plans from CBO estimation (a list of LQP-sub)
 
     for trace in raw_traces:
         logger.info(f"Processing {trace}")
-        non_decision_input = ie.get_qs_lqp(trace, is_oracle=True)
-        logger.info(non_decision_input)
-        non_decision_input = ie.get_qs_lqp(trace, is_oracle=False)
-        logger.info(non_decision_input)
+        non_decision_input = ie.get_qs_lqp(trace, is_oracle=oracle)
         po_points = hier_optimizer.solve(non_decision_input)

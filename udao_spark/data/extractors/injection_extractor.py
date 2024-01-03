@@ -89,7 +89,7 @@ class InjectionExtractor:
     ) -> Dict[str, Dict[str, Any]]:
         d = JsonHandler.load_json(json_path)["RuntimeQSs"]
         return {
-            f"QS-{qs_id}": self._get_one_qs_runtime(qs)
+            f"qs-{qs_id}": self._get_one_qs_runtime(qs)
             if is_oracle
             else self._get_one_qs_compile(qs)
             for qs_id, qs in d.items()
