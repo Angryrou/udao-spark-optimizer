@@ -12,7 +12,7 @@ if __name__ == "__main__":
 
     benchmark = BenchmarkType.TPCH
     scale_factor = 100
-    oracle = True
+    oracle = False
     ie = InjectionExtractor(
         benchmark_type=BenchmarkType.TPCH, scale_factor=scale_factor, logger=logger
     )
@@ -52,14 +52,14 @@ if __name__ == "__main__":
     else:
         header = optimizer_preparation_header / "qs_lqp_compile/ea0378f56dcf"
         model_params_path = str(
-            header / "graph_avg_00a5ff4aaa46/model_struct_params.json"
+            header / "graph_avg_01a990cd1c09/model_struct_params.json"
         )
         weights_path = str(
             header
-            / "graph_avg_00a5ff4aaa46"
-            / "learning_6a1927e000d3"
-            / "99-val_latency_s_WMAPE=0.303-val_io_mb_WMAPE=0.190"
-            "-val_ana_latency_s_WMAPE=0.237.ckpt"
+            / "graph_avg_01a990cd1c09"
+            / "learning_9c49bcdcb630"
+            / "99-val_latency_s_WMAPE=0.441-val_io_mb_WMAPE=0.352"
+            "-val_ana_latency_s_WMAPE=0.408.ckpt"
         )
         data_processor_path = str(header / "data_processor.pkl")
 
