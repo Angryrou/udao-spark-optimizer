@@ -83,12 +83,10 @@ def extract_query_plan_features_from_serialized_json(
     for link in links:
         from_id, to_id = link["fromId"], link["toId"]
         from_name, to_name = link["fromName"], link["toName"]
-        if from_name.startswith("Scan"):
-            from_name = "FileSourceScan"
-        if to_name.startswith("Scan"):
-            to_name = "FileSourceScan"
-        if from_name != id2name[from_id] or to_name != id2name[to_id]:
-            raise OperatorMisMatchError
+        if from_name != id2name[from_id]:
+            id2name[from_id] = from_name
+        if to_name != id2name[to_id]:
+            id2name[to_id] = to_name
         incoming_ids.append(from_id)
         outgoing_ids.append(to_id)
 
