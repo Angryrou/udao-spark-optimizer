@@ -39,5 +39,6 @@ class ModelServer:
         if not isinstance(module.model, UdaoModel):
             raise TypeError(f"Unknown model type: {type(module.model)}")
         self.model: UdaoModel = module.model
+        self.model.eval()
         self.objectives = module.objectives
         logger.info(f"Model loaded with objectives: {self.objectives}")
