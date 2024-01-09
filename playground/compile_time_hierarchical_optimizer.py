@@ -6,6 +6,9 @@ from udao_trace.configuration import SparkConf
 from udao_trace.utils import BenchmarkType
 from udao_trace.utils.logging import logger
 
+# import os
+# os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
+
 logger.setLevel("INFO")
 if __name__ == "__main__":
     # Initialize InjectionExtractor
@@ -83,4 +86,6 @@ if __name__ == "__main__":
     for trace in raw_traces:
         logger.info(f"Processing {trace}")
         non_decision_input = ie.get_qs_lqp(trace, is_oracle=oracle)
-        po_points = hier_optimizer.solve(non_decision_input)
+        po_points = hier_optimizer.solve(
+            non_decision_input, seed=0, algo="div_and_conq_moo"
+        )
