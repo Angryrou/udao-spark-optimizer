@@ -55,6 +55,11 @@ def _get_base_parser() -> ArgumentParser:
                         choices=["q_compile", "q_all", "qs_lqp_compile",
                                  "qs_lqp_runtime", "qs_pqp_runtime"],
                         help="graph type")
+    # Common embedding parameters
+    parser.add_argument("--lpe_size", type=int, default=8,
+                        help="Provided Laplacian Positional encoding size")
+    parser.add_argument("--vec_size", type=int, default=16,
+                        help="Word2Vec embedding size")
     # Learning parameters
     parser.add_argument("--init_lr", type=float, default=1e-1,
                         help="Initial learning rate")
@@ -83,14 +88,10 @@ def get_graph_avg_params() -> Namespace:
     parser = _get_base_parser()
     # fmt: off
     # Embedder parameters
-    parser.add_argument("--lpe_size", type=int, default=8,
-                        help="Laplacian Positional encoding size (not used)")
     parser.add_argument("--output_size", type=int, default=32,
                         help="Embedder output size")
     parser.add_argument("--type_embedding_dim", type=int, default=8,
                         help="Type embedding dimension")
-    parser.add_argument("--vec_size", type=int, default=16,
-                        help="Word2Vec embedding size")
     parser.add_argument("--embedding_normalizer", type=str, default=None,
                         help="Embedding normalizer")
     # Regressor parameters
@@ -108,14 +109,19 @@ def get_graph_gtn_params() -> Namespace:
     parser = _get_base_parser()
     # fmt: off
     # Embedder parameters
-    parser.add_argument("--lpe_size", type=int, default=8,
-                        help="Laplacian Positional encoding size")
     parser.add_argument("--output_size", type=int, default=32,
                         help="Embedder output size")
+    parser.add_argument("--pos_encoding_dim", type=int, default=8,
+                        help="Positional encoding dimension for use")
+    parser.add_argument("--gtn_n_layers", type=int, default=2,
+                        help="Number of layers in the GTN")
+    parser.add_argument("--gtn_n_heads", type=int, default=2,
+                        help="Number of heads in the GTN")
+    parser.add_argument("--readout", type=str, default="mean",
+                        choices=["mean", "max", "sum"],
+                        help="Readout function")
     parser.add_argument("--type_embedding_dim", type=int, default=8,
                         help="Type embedding dimension")
-    parser.add_argument("--vec_size", type=int, default=16,
-                        help="Word2Vec embedding size")
     parser.add_argument("--embedding_normalizer", type=str, default=None,
                         help="Embedding normalizer")
     # Regressor parameters
