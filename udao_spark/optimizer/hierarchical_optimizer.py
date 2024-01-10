@@ -7,6 +7,7 @@ import torch as th
 from udao_trace.utils.logging import logger
 
 from .base_optimizer import BaseOptimizer
+from .utils import get_cloud_cost_add_io, get_cloud_cost_wo_io
 
 
 class HierarchicalOptimizer(BaseOptimizer):
@@ -34,16 +35,25 @@ class HierarchicalOptimizer(BaseOptimizer):
         objs = self._predict_objectives(graph_embeddings, tabular_features)
         obj_io = objs[:, 1]
         obj_ana_lat = objs[:, 2]
-        obj_ana_cost = self.get_cloud_cost(
+        obj_ana_cost_wo_io = get_cloud_cost_wo_io(
             lat=obj_ana_lat,
             cores=theta[:, 0],
             mem=theta[:, 0] * theta[:, 1],
             nexec=theta[:, 2],
         )
+        obj_ana_cost_w_io = get_cloud_cost_add_io(obj_ana_cost_wo_io, obj_io)
+        if not isinstance(obj_ana_cost_wo_io, th.Tensor) or not isinstance(
+            obj_ana_cost_w_io, th.Tensor
+        ):
+            raise TypeError(
+                f"Expected th.Tensor, "
+                f"got {type(obj_ana_cost_wo_io)} and {type(obj_ana_cost_w_io)}"
+            )
         return {
             "ana_latency": obj_ana_lat,
-            "ana_cost": obj_ana_cost,
             "io": obj_io,
+            "ana_cost_wo_io": obj_ana_cost_wo_io,
+            "ana_cost_w_io": obj_ana_cost_w_io,
         }
 
     def solve(
@@ -90,8 +100,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         objs = np.array(
             [
                 objs_dict["ana_latency"][index],
-                objs_dict["ana_cost"][index],
-                objs_dict["io"][index],
+                objs_dict["ana_cost_w_io"][index],
             ]
         )
 

@@ -16,8 +16,6 @@ from ..model.model_server import ModelServer
 from ..utils.constants import THETA_C, THETA_P, THETA_S
 
 ThetaType = Literal["c", "p", "s"]
-aws_cost_cpu_hour_ratio = 0.052624
-aws_cost_mem_hour_ratio = 0.0057785  # for GB*H
 
 
 class BaseOptimizer(ABC):
@@ -102,14 +100,6 @@ class BaseOptimizer(ABC):
             :, : -len(self.decision_variables)
         ]
         return graph_embedding, non_decision_tabular_features
-
-    def get_cloud_cost(
-        self, lat: th.Tensor, cores: th.Tensor, mem: th.Tensor, nexec: th.Tensor
-    ) -> th.Tensor:
-        cpu_hour = (nexec + 1) * cores * lat / 3600
-        mem_hour = (nexec + 1) * mem * lat / 3600
-        cost = cpu_hour * aws_cost_cpu_hour_ratio + mem_hour * aws_cost_mem_hour_ratio
-        return cost
 
     def _predict_objectives(
         self, graph_embedding: th.Tensor, tabular_features: th.Tensor
