@@ -12,7 +12,7 @@ from lightning.pytorch.loggers import TensorBoardLogger
 from torchmetrics import WeightedMeanAbsolutePercentageError
 from udao.data import BaseIterator
 from udao.data.utils.utils import DatasetType
-from udao.model import MLP, GraphAverager, UdaoModel, UdaoModule
+from udao.model import MLP, GraphAverager, GraphTransformer, UdaoModel, UdaoModule
 from udao.model.module import LearningParams
 from udao.model.utils.losses import WMAPELoss
 from udao.model.utils.schedulers import UdaoLRScheduler, setup_cosine_annealing_lr
@@ -31,6 +31,7 @@ class GraphAverageMLPParams(UdaoParams):
     output_size: int = 32
     type_embedding_dim: int = 8
     embedding_normalizer: Optional[str] = None
+    # MLP
     n_layers: int = 2
     hidden_dim: int = 32
     dropout: float = 0.1
@@ -73,6 +74,63 @@ class GraphAverageMLPParams(UdaoParams):
 
 
 @dataclass
+class GraphTransformerMLPParams(UdaoParams):
+    iterator_shape: UdaoEmbedItemShape
+    op_groups: List[str]
+    output_size: int = 32
+    pos_encoding_dim: int = 8
+    gtn_n_layers: int = 2
+    gtn_n_heads: int = 2
+    readout: str = "mean"
+    type_embedding_dim: int = 8
+    embedding_normalizer: Optional[str] = None
+    # MLP
+    n_layers: int = 2
+    hidden_dim: int = 32
+    dropout: float = 0.1
+
+    @classmethod
+    def from_dict(cls, data_dict: Dict[str, Any]) -> "GraphTransformerMLPParams":
+        if "iterator_shape" not in data_dict:
+            raise ValueError("iterator_shape not found in data_dict")
+        if not isinstance(data_dict["iterator_shape"], UdaoEmbedItemShape):
+            iterator_shape_dict = data_dict["iterator_shape"]
+            data_dict["iterator_shape"] = UdaoEmbedItemShape(
+                embedding_input_shape=iterator_shape_dict["embedding_input_shape"],
+                feature_names=iterator_shape_dict["feature_names"],
+                output_names=iterator_shape_dict["output_names"],
+            )
+        return cls(**data_dict)
+
+    def to_dict(self) -> Dict[str, object]:
+        return {
+            k: v if not isinstance(v, UdaoEmbedItemShape) else v.__dict__
+            for k, v in self.__dict__.items()
+        }
+
+    def hash(self) -> str:
+        attributes_tuple = str(
+            (
+                str(self.iterator_shape),
+                tuple(self.op_groups),
+                self.output_size,
+                self.pos_encoding_dim,
+                self.gtn_n_layers,
+                self.gtn_n_heads,
+                self.readout,
+                self.type_embedding_dim,
+                self.embedding_normalizer,
+                self.n_layers,
+                self.hidden_dim,
+                self.dropout,
+            )
+        ).encode("utf-8")
+        sha256_hash = hashlib.sha256(attributes_tuple)
+        hex12 = sha256_hash.hexdigest()[:12]
+        return "graph_gtn_" + hex12
+
+
+@dataclass
 class MyLearningParams(UdaoParams):
     epochs: int = 2
     batch_size: int = 512
@@ -107,6 +165,33 @@ def get_graph_avg_mlp(params: GraphAverageMLPParams) -> UdaoModel:
         iterator_shape=params.iterator_shape,
         embedder_params={
             "output_size": params.output_size,  # 32
+            "op_groups": params.op_groups,  # ["type", "cbo", "op_enc"]
+            "type_embedding_dim": params.type_embedding_dim,  # 8
+            "embedding_normalizer": params.embedding_normalizer,  # None
+        },
+        regressor_params={
+            "n_layers": params.n_layers,  # 3
+            "hidden_dim": params.hidden_dim,  # 512
+            "dropout": params.dropout,  # 0.1
+        },
+    )
+    print("MODEL DETAILS:\n")
+    print(model)
+    return model
+
+
+def get_graph_gtn_mlp(params: GraphTransformerMLPParams) -> UdaoModel:
+    model = UdaoModel.from_config(
+        embedder_cls=GraphTransformer,
+        regressor_cls=MLP,
+        iterator_shape=params.iterator_shape,
+        embedder_params={
+            "output_size": params.output_size,  # 128
+            "pos_encoding_dim": params.pos_encoding_dim,  # 8
+            "n_layers": params.gtn_n_layers,  # 2
+            "n_heads": params.gtn_n_heads,  # 2
+            "hidden_dim": params.output_size,  # same as out_size
+            "readout": params.readout,  # "mean"
             "op_groups": params.op_groups,  # ["type", "cbo", "op_enc"]
             "type_embedding_dim": params.type_embedding_dim,  # 8
             "embedding_normalizer": params.embedding_normalizer,  # None

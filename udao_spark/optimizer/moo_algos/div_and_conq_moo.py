@@ -123,6 +123,7 @@ class DivAndConqMOO:
         p_samples, s_samples = self.p_samples, self.s_samples
 
         # 2. cluster_based optimal theta_p and theta_p_s estimation
+
         (
             tuned_f_df,
             tuned_conf_df,
@@ -150,6 +151,7 @@ class DivAndConqMOO:
         print(f"time cost of extending c is {time.time() - start_extend_c}")
 
         # 5. cluster-based theta_p_s estimation
+        start_predict = time.time()
         # predict labels
         pred_cluster_label = cluster_model.predict(new_theta_c_list)  # type: ignore
         uniq_cluster_label = np.unique(pred_cluster_label)
@@ -161,7 +163,11 @@ class DivAndConqMOO:
             new_label_arr[:, 1][np.where(new_label_arr[:, 0] == label)].tolist()
             for label in uniq_cluster_label
         ]
-
+        print(
+            f"time cost of predicting cluster labels for new theta_c "
+            f"is {time.time() - start_predict}"
+        )
+        start_est_opt_p_new_c = time.time()
         new_tuned_f_df, new_tuned_conf_df = self._estimate_opt_theta_p_s(
             th.Tensor(new_theta_c_list),
             uniq_cluster_label,
@@ -170,7 +176,10 @@ class DivAndConqMOO:
             tuned_conf_df,
             mode="estimate_new",
         )
-
+        print(
+            f"time cost of estimating optimal theta_p for new theta_c "
+            f"is {time.time() - start_est_opt_p_new_c}"
+        )
         # 6. union all solutions
         all_f_df = pd.concat([tuned_f_df, new_tuned_f_df])
         all_conf_df = pd.concat([tuned_conf_df, new_tuned_conf_df])
@@ -206,6 +215,7 @@ class DivAndConqMOO:
             label_rep_theta_c_mapping,
         ) = self.clustering_representation(clusters_labels)
 
+        start_tune_p = time.time()
         f_df, conf_df = self._tune_p(
             represent_theta_c,
             label_rep_theta_c_mapping,
@@ -214,14 +224,19 @@ class DivAndConqMOO:
             s_samples,
             self.n_stages,
         )
-
+        print(f"time cost of tuning theta_p is {time.time() - start_tune_p}")
         # estimate optimal theta_p and theta_s
+        start_est_opt_p = time.time()
         tuned_f_df, tuned_conf_df = self._estimate_opt_theta_p_s(
             clustering_features,
             np.arange(len(clusters_labels)),
             cluster_members,
             label_rep_theta_c_mapping,
             conf_df,
+        )
+        print(
+            f"time cost of estimating optimal theta_p for all theta_c "
+            f"is {time.time() - start_est_opt_p}"
         )
         return tuned_f_df, tuned_conf_df, cluster_model, label_rep_theta_c_mapping
 
@@ -278,6 +293,7 @@ class DivAndConqMOO:
         label_rep_theta_c_mapping: Dict[Any, Any],
         conf_df: pd.DataFrame,
         mode: str = "estimate_exist",
+        runmode: str = "multiprocessing",
     ) -> Tuple[pd.DataFrame, pd.DataFrame]:
         len_theta_c = clustering_features.shape[1]
 
@@ -290,6 +306,7 @@ class DivAndConqMOO:
             for cluster_id, cm in zip(
                 cluster_labels, cluster_members
             ):  # the number of clusters, i is the cluster index
+                start_gen_theta = time.time()
                 c_id = label_rep_theta_c_mapping[cluster_id]  # theta_c id
                 opt_c_p_s = conf_df.query(f"qs_id == {stage_id}").query(
                     f"c_id == {c_id}"
@@ -318,13 +335,25 @@ class DivAndConqMOO:
                     .repeat_interleave(mesh_theta.shape[0], dim=0)
                 )
 
-                y_hat = self.obj_model(
+                # y_hat = self.obj_model(
+                #     mesh_graph_embeddings,
+                #     mesh_non_decision_tabular_features,
+                #     mesh_theta,
+                # )
+                y_hat = self._get_obj_values(
+                    mesh_theta.shape[0],
                     mesh_graph_embeddings,
                     mesh_non_decision_tabular_features,
                     mesh_theta,
                 )
+                print(
+                    f"time cost of getting objective values of theta with "
+                    f"opt theta_p of all theta_c is {time.time() - start_gen_theta}"
+                )
 
-                split_y_hat = y_hat.split(len_opt_p)
+                start_filter = time.time()
+                # split_y_hat = y_hat.split(len_opt_p)
+                split_y_hat = th.split(y_hat, len_opt_p)
                 # split_conf = mesh_theta.split(len_opt_p)
                 split_conf = th.split(mesh_theta, len_opt_p)
                 assert len(split_conf) == len_cluster_member
@@ -374,6 +403,11 @@ class DivAndConqMOO:
 
                     opt_f_df_list.append(df_f)
                     opt_conf_df_list.append(df_conf)
+
+                print(
+                    f"time cost of filter dominated theta_p of each "
+                    f"theta_c is {time.time() - start_filter}"
+                )
                 qs_f_df_list.append(pd.concat(opt_f_df_list))
                 qs_conf_df_list.append(pd.concat(opt_conf_df_list))
 
@@ -386,8 +420,13 @@ class DivAndConqMOO:
             )
             final_f_df_list.append(pd.concat(qs_f_df_list))
             final_conf_df_list.append(pd.concat(qs_conf_df_list))
-
-        return pd.concat(final_f_df_list), pd.concat(final_conf_df_list)
+        start_concat = time.time()
+        result_f = pd.concat(final_f_df_list)
+        result_conf = pd.concat(final_conf_df_list)
+        print(
+            f"time cost of concat f_df and conf_df list is {time.time() - start_concat}"
+        )
+        return result_f, result_conf
 
     def _union_opt_theta_c(
         self, tuned_f_df: pd.DataFrame, tuned_conf_df: pd.DataFrame
@@ -408,24 +447,24 @@ class DivAndConqMOO:
         c_list: List[List[Any]],
     ) -> List[List[Any]]:
         # crossover to generate new \theta_c
-        extend_q_list = c_list
-        uniq_res_q = np.unique(np.array(c_list)[:, :location], axis=0)
-        uniq_non_res_q = np.unique(np.array(c_list)[:, location:8], axis=0)
+        extend_c_list = c_list
+        uniq_res_c = np.unique(np.array(c_list)[:, :location], axis=0)
+        uniq_non_res_c = np.unique(np.array(c_list)[:, location:8], axis=0)
 
-        if uniq_res_q.shape[0] <= uniq_non_res_q.shape[0]:
-            theta_res_mesh = np.repeat(uniq_res_q, uniq_non_res_q.shape[0], axis=0)
-            theta_q_non_res_mesh = np.tile(uniq_non_res_q, (uniq_res_q.shape[0], 1))
-            extend_theta_q = np.hstack((theta_res_mesh, theta_q_non_res_mesh))
+        if uniq_res_c.shape[0] <= uniq_non_res_c.shape[0]:
+            theta_res_mesh = np.repeat(uniq_res_c, uniq_non_res_c.shape[0], axis=0)
+            theta_c_non_res_mesh = np.tile(uniq_non_res_c, (uniq_res_c.shape[0], 1))
+            extend_theta_c = np.hstack((theta_res_mesh, theta_c_non_res_mesh))
         else:
-            theta_res_mesh = np.tile(uniq_res_q, (uniq_non_res_q.shape[0], 1))
-            theta_q_non_res_mesh = np.repeat(
-                uniq_non_res_q, uniq_res_q.shape[0], axis=0
+            theta_res_mesh = np.tile(uniq_res_c, (uniq_non_res_c.shape[0], 1))
+            theta_c_non_res_mesh = np.repeat(
+                uniq_non_res_c, uniq_res_c.shape[0], axis=0
             )
-            extend_theta_q = np.hstack((theta_res_mesh, theta_q_non_res_mesh))
+            extend_theta_c = np.hstack((theta_res_mesh, theta_c_non_res_mesh))
 
         # filter theta_c from the newly generated theta_c candidates,
         # which are already included in the initial theta_c candidates
-        uniq_new_c = np.unique(extend_theta_q, axis=0)
+        uniq_new_c = np.unique(extend_theta_c, axis=0)
         matching_rows = np.all(
             uniq_new_c[:, None, :] == np.array(c_list)[None, :, :], axis=-1
         )
@@ -434,8 +473,8 @@ class DivAndConqMOO:
         mask = ~np.isin(all_new_c_inds, matching_indices)
         filtered_inds = all_new_c_inds[mask]
 
-        extend_q_list.extend(extend_theta_q[filtered_inds].tolist())
-        return extend_q_list
+        extend_c_list.extend(extend_theta_c[filtered_inds].tolist())
+        return extend_c_list
 
     def _tune_p(
         self,
@@ -445,6 +484,7 @@ class DivAndConqMOO:
         p_samples: th.Tensor,
         s_samples: th.Tensor,
         n_stages: int,
+        runmode: str = "multiprocessing",
     ) -> Tuple[pd.DataFrame, pd.DataFrame]:
         rep_c_samples = clustering_features[represent_theta_c]
         n_evals = rep_c_samples.shape[0] * p_samples.shape[0] * n_stages
@@ -463,6 +503,63 @@ class DivAndConqMOO:
                 p_samples.shape[0] * rep_c_samples.shape[0], dim=0
             )
         )
+        y_hat = self._get_obj_values(
+            n_evals,
+            mesh_graph_embeddings,
+            mesh_non_decision_tabular_features,
+            mesh_theta,
+        )
+
+        start_filter = time.time()
+        split_y_hat = th.split(y_hat, p_samples.shape[0])
+        split_theta = th.split(mesh_theta, p_samples.shape[0])
+
+        df_f_list = []
+        df_conf_list = []
+        for i, (sub_f, sub_conf) in enumerate(zip(split_y_hat, split_theta)):
+            stage_id = int(i / rep_c_samples.shape[0])
+            c_id = label_rep_theta_c_mapping[int(i % rep_c_samples.shape[0])]
+            po_ind = pg.non_dominated_front_2d(sub_f).tolist()
+            po_objs = sub_f[po_ind]
+            po_confs = sub_conf[po_ind]
+
+            index = [
+                np.ones(
+                    [
+                        len(po_ind),
+                    ]
+                )
+                * stage_id,
+                np.ones(
+                    [
+                        len(po_ind),
+                    ]
+                )
+                * c_id,
+            ]
+            indices = pd.MultiIndex.from_tuples(
+                list(zip(*index)), names=["qs_id", "c_id"]
+            )
+            df_f = pd.DataFrame(po_objs, index=indices)
+            df_conf = pd.DataFrame(po_confs, index=indices)
+
+            df_f_list.append(df_f)
+            df_conf_list.append(df_conf)
+
+        print(
+            f"time cost of filtering dominated theta_p of "
+            f"all theta_c is {time.time() - start_filter}"
+        )
+
+        return pd.concat(df_f_list), pd.concat(df_conf_list)
+
+    def _get_obj_values(
+        self,
+        n_evals: int,
+        mesh_graph_embeddings: th.Tensor,
+        mesh_non_decision_tabular_features: th.Tensor,
+        mesh_theta: th.Tensor,
+    ) -> th.Tensor:
         if n_evals < 5120:
             loader = DataLoader(
                 dataset=TensorDataset(
@@ -517,39 +614,10 @@ class DivAndConqMOO:
                 y_hat_list.append(y_hat_batch)
             y_hat = th.cat(y_hat_list)
 
-        split_y_hat = th.split(y_hat, p_samples.shape[0])
-        split_theta = th.split(mesh_theta, p_samples.shape[0])
+        return y_hat
 
-        df_f_list = []
-        df_conf_list = []
-        for i, (sub_f, sub_conf) in enumerate(zip(split_y_hat, split_theta)):
-            stage_id = int(i / rep_c_samples.shape[0])
-            c_id = label_rep_theta_c_mapping[int(i % rep_c_samples.shape[0])]
-            po_ind = pg.non_dominated_front_2d(sub_f).tolist()
-            po_objs = sub_f[po_ind]
-            po_confs = sub_conf[po_ind]
+    def _tune_p_per_node(self) -> None:
+        pass
 
-            index = [
-                np.ones(
-                    [
-                        len(po_ind),
-                    ]
-                )
-                * stage_id,
-                np.ones(
-                    [
-                        len(po_ind),
-                    ]
-                )
-                * c_id,
-            ]
-            indices = pd.MultiIndex.from_tuples(
-                list(zip(*index)), names=["qs_id", "c_id"]
-            )
-            df_f = pd.DataFrame(po_objs, index=indices)
-            df_conf = pd.DataFrame(po_confs, index=indices)
-
-            df_f_list.append(df_f)
-            df_conf_list.append(df_conf)
-
-        return pd.concat(df_f_list), pd.concat(df_conf_list)
+    def _est_opt_p_per_node(self) -> None:
+        pass

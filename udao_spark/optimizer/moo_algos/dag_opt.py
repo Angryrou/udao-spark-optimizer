@@ -215,7 +215,7 @@ class DAGOpt:
                 objs = f_df.query(f"qs_id == {stage_id}").query(f"c_id == {i}").values
                 objs_min, objs_max = objs.min(0), objs.max(0)
                 if all((objs_min - objs_max) <= 0):
-                    obj = np.sum(objs * ws_pairs, axis=1)
+                    obj = np.sum(objs * ws, axis=1)
                     po_ind = int(np.argmin(obj))
                     # po_ind = self._get_soo_index(objs, ws)
                     sum_objs += objs[po_ind]

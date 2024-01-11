@@ -26,8 +26,8 @@ from udao_trace.configuration import SparkConf
 from udao_trace.utils import BenchmarkType, JsonHandler, ParquetHandler, PickleHandler
 from udao_trace.workload import Benchmark
 
-from ..model.utils import GraphAverageMLPParams
 from ..utils.collaborators import PathWatcher, TypeAdvisor
+from ..utils.params import UdaoParams
 from .handlers.data_processor import create_udao_data_processor
 
 
@@ -172,9 +172,7 @@ def save_and_log_df(
     logger.info(f"prepared {name} shape: {df.shape}")
 
 
-def checkpoint_model_structure(
-    pw: PathWatcher, model_params: GraphAverageMLPParams
-) -> str:
+def checkpoint_model_structure(pw: PathWatcher, model_params: UdaoParams) -> str:
     model_struct_hash = model_params.hash()
     ckp_header = f"{pw.cc_extract_prefix}/{model_struct_hash}"
     json_name = "model_struct_params.json"

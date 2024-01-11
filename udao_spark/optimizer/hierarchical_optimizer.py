@@ -4,10 +4,10 @@ import numpy as np
 import pandas as pd
 import torch as th
 
-from udao_spark.optimizer.moo_algos.div_and_conq_moo import DivAndConqMOO
 from udao_trace.utils.logging import logger
 
 from .base_optimizer import BaseOptimizer
+from .utils import get_cloud_cost_add_io, get_cloud_cost_wo_io
 
 
 class HierarchicalOptimizer(BaseOptimizer):
@@ -71,19 +71,28 @@ class HierarchicalOptimizer(BaseOptimizer):
         objs = self._predict_objectives(graph_embeddings, tabular_features)
         obj_io = objs[:, 1]
         obj_ana_lat = objs[:, 2]
-        obj_ana_cost = self.get_cloud_cost(
+        obj_ana_cost_wo_io = get_cloud_cost_wo_io(
             lat=obj_ana_lat,
             cores=theta[:, 0],
             mem=theta[:, 0] * theta[:, 1],
             nexec=theta[:, 2],
         )
+        obj_ana_cost_w_io = get_cloud_cost_add_io(obj_ana_cost_wo_io, obj_io)
+        if not isinstance(obj_ana_cost_wo_io, th.Tensor) or not isinstance(
+            obj_ana_cost_w_io, th.Tensor
+        ):
+            raise TypeError(
+                f"Expected th.Tensor, "
+                f"got {type(obj_ana_cost_wo_io)} and {type(obj_ana_cost_w_io)}"
+            )
 
-        if mode == "2D_general":
-            return th.vstack([obj_ana_lat, obj_io]).T
-        elif mode == "2D_simple":
-            return th.vstack([obj_ana_lat, obj_ana_cost]).T
-        else:
-            return th.vstack([obj_ana_lat, obj_ana_cost, obj_io]).T
+        return obj_ana_cost_w_io
+        # return {
+        #     "ana_latency": obj_ana_lat,
+        #     "io": obj_io,
+        #     "ana_cost_wo_io": obj_ana_cost_wo_io,
+        #     "ana_cost_w_io": obj_ana_cost_w_io,
+        # }
 
     def solve(
         self,
@@ -124,51 +133,25 @@ class HierarchicalOptimizer(BaseOptimizer):
             objs = objs_tensor.detach().numpy()
             logger.info(objs)
 
-            # fixme: the final returned theta should have 8 + (9 + 2) * n_stages
-            index = 0
-            theta_chosen = theta[index]
-            logger.info(theta_chosen)
-            conf = self.sc.construct_configuration_from_norm(
-                theta_chosen.numpy().reshape(1, -1)
-            ).squeeze()
+        # an example to get objective values given theta
+        objs_dict = self.get_objective_values(
+            graph_embeddings, non_decision_tabular_features, theta
+        )
+        logger.info(objs_dict)
 
-        elif algo == "div_and_conq_moo":
-            n_stages = len(non_decision_input)
-            theta_c = self.sample_theta_x(2000, "c", seed if seed is not None else None)
-            theta_p = self.sample_theta_x(
-                2000, "p", seed + 1 if seed is not None else None
-            )
-            theta_s = self.sample_theta_x(
-                1, "s", seed + 2 if seed is not None else None
-            )
-
-            div_moo = DivAndConqMOO(
-                n_stages=n_stages,
-                graph_embeddings=graph_embeddings,
-                non_decision_tabular_features=non_decision_tabular_features,
-                obj_model=self.get_objective_values,
-                params=DivAndConqMOO.Params(
-                    c_samples=theta_c,
-                    p_samples=theta_p,
-                    s_samples=theta_s,
-                    n_clusters=100,
-                    cross_location=3,
-                    dag_opt_algo="approx_solve",
-                ),
-                seed=0,
-            )
-            po_objs, po_conf = div_moo.solve()
-
-            # todo: apply WUN
-            objs, conf_norm = self.weighted_utopia_nearest(po_objs, po_conf)
-            conf = self.sc.construct_configuration_from_norm(
-                conf_norm.reshape(1, -1)
-            ).squeeze()
-
-        else:
-            raise Exception(
-                f"Compile-time optimization algorithm {algo} is not supported!"
-            )
+        index = 0
+        theta_chosen = theta[index]
+        logger.info(theta_chosen)
+        conf = self.sc.construct_configuration_from_norm(
+            theta_chosen.numpy().reshape(1, -1)
+        ).squeeze()
+        # objs = np.array(
+        #     [
+        #         objs_dict["ana_latency"][index],
+        #         objs_dict["ana_cost_w_io"][index],
+        #     ]
+        # )
+        objs = objs_dict.numpy()
 
         logger.info(f"conf: {conf}")
         logger.info(f"objs: {objs}")
