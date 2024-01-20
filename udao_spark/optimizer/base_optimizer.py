@@ -95,7 +95,7 @@ class BaseOptimizer(ABC):
             raise TypeError(f"Expected QueryPlanInput, got {type(batch_input)}")
         embedding_input = batch_input.embedding_input
         tabular_input = batch_input.features
-        graph_embedding = self.ms.model.embedder(embedding_input)
+        graph_embedding = self.ms.model.embedder(embedding_input.to(self.device))
         non_decision_tabular_features = tabular_input[
             :, : -len(self.decision_variables)
         ]
