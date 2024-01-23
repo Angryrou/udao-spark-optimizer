@@ -6,7 +6,12 @@ from udao.utils.logging import logger
 
 from udao_trace.utils import JsonHandler
 
-from .utils import GraphAverageMLPParams, get_graph_avg_mlp
+from .utils import (
+    GraphAverageMLPParams,
+    GraphTransformerMLPParams,
+    get_graph_avg_mlp,
+    get_graph_gtn_mlp,
+)
 
 
 class ModelServer:
@@ -15,14 +20,24 @@ class ModelServer:
         cls, model_sign: str, model_params_path: str, weights_path: str
     ) -> "ModelServer":
         if model_sign == "graph_avg":
-            model_params = GraphAverageMLPParams.from_dict(
+            graph_avg_ml_params = GraphAverageMLPParams.from_dict(
                 JsonHandler.load_json(model_params_path)
             )
-            model = get_graph_avg_mlp(model_params)
-            model_sign = "graph_avg"
+            objectives = graph_avg_ml_params.iterator_shape.output_names
+            model = get_graph_avg_mlp(graph_avg_ml_params)
+            logger.info("MODEL DETAILS:\n")
+            logger.info(model)
+        elif model_sign == "graph_gtn":
+            graph_gtn_ml_params = GraphTransformerMLPParams.from_dict(
+                JsonHandler.load_json(model_params_path)
+            )
+            objectives = graph_gtn_ml_params.iterator_shape.output_names
+            model = get_graph_gtn_mlp(graph_gtn_ml_params)
+            logger.info("MODEL DETAILS:\n")
+            logger.info(model)
         else:
             raise ValueError(f"Unknown model sign: {model_sign}")
-        objectives = model_params.iterator_shape.output_names
+
         module = UdaoModule.load_from_checkpoint(
             weights_path,
             map_location=get_default_device(),
