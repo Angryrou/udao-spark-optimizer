@@ -175,8 +175,6 @@ def get_graph_avg_mlp(params: GraphAverageMLPParams) -> UdaoModel:
             "dropout": params.dropout,  # 0.1
         },
     )
-    print("MODEL DETAILS:\n")
-    print(model)
     return model
 
 
