@@ -100,7 +100,14 @@ class Conf(ABC):
     # ) -> Union[Iterable, List[float]]:
     #     ...
 
-    def denormalize(self, conf_norm: np.ndarray) -> np.ndarray:
+    def denormalize(
+        self, conf_norm: np.ndarray, eps: float = float(np.finfo(float).eps)
+    ) -> np.ndarray:
+        if (conf_norm < 0).any() or (conf_norm > 1).any():
+            raise Exception(
+                f"conf_norm should be within [0, 1], got {conf_norm} instead"
+            )
+        conf_norm = np.clip(conf_norm, 0.0, 1.0 - eps)
         knob_list, knob_min, knob_max = (
             self.knob_list,
             np.array(self.knob_min),

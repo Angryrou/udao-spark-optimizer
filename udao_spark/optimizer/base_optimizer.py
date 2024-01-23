@@ -122,7 +122,7 @@ class BaseOptimizer(ABC):
             np.random.seed(seed)
         samples = np.random.randint(
             low=self.theta_all_minmax[0],
-            high=self.theta_all_minmax[1],
+            high=self.theta_all_minmax[1] + 1,
             size=(n_samples, len(self.sc.knob_min)),
         )
         samples_normalized = (samples - self.theta_all_minmax[0]) / (
