@@ -5,7 +5,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import lightning.pytorch as pl
+import numpy as np
 import pytorch_warmup as warmup
+from autogluon.core.metrics import make_scorer
 from lightning import Trainer
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.loggers import TensorBoardLogger
@@ -298,3 +300,21 @@ def get_tuned_trainer(
     )
     checkpoint_learning_params(ckp_learning_header, params)
     return trainer, module, ckp_learning_header
+
+
+def local_wmape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    sum_abs_error = np.abs(y_pred - y_true).sum()
+    sum_scale = np.abs(y_true).sum()
+    return sum_abs_error / np.max([sum_scale, 1.17e-06])
+
+
+wmape = make_scorer(
+    name="WMAPE", score_func=local_wmape, optimum=0.0, greater_is_better=False
+)
+
+
+def local_p90(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    return float(np.percentile(np.abs(y_pred - y_true) / y_true, 90))
+
+
+p90 = make_scorer("p90", local_p90, optimum=0.0, greater_is_better=False)

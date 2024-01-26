@@ -45,7 +45,7 @@ class ExtractParams(UdaoParams):
         return hex12
 
 
-def _get_base_parser() -> ArgumentParser:
+def get_base_parser() -> ArgumentParser:
     # fmt: off
     parser = ArgumentParser(description="Udao Script with Input Arguments")
     # Data-related arguments
@@ -55,6 +55,15 @@ def _get_base_parser() -> ArgumentParser:
                         choices=["q_compile", "q_all", "qs_lqp_compile",
                                  "qs_lqp_runtime", "qs_pqp_runtime"],
                         help="graph type")
+    parser.add_argument("--debug", action="store_true",
+                        help="Enable debug mode")
+    # fmt: on
+    return parser
+
+
+def _get_graph_base_parser() -> ArgumentParser:
+    # fmt: off
+    parser = get_base_parser()
     # Common embedding parameters
     parser.add_argument("--lpe_size", type=int, default=8,
                         help="Provided Laplacian Positional encoding size")
@@ -76,8 +85,6 @@ def _get_base_parser() -> ArgumentParser:
                         help="non-debug only")
     parser.add_argument("--seed", type=int, default=42,
                         help="Random seed")
-    parser.add_argument("--debug", action="store_true",
-                        help="Enable debug mode")
     parser.add_argument("--op_groups", nargs="+", default=["type", "cbo", "op_enc"],
                         help="List of operation groups")
     # fmt: on
@@ -85,7 +92,7 @@ def _get_base_parser() -> ArgumentParser:
 
 
 def get_graph_avg_params() -> Namespace:
-    parser = _get_base_parser()
+    parser = _get_graph_base_parser()
     # fmt: off
     # Embedder parameters
     parser.add_argument("--output_size", type=int, default=32,
@@ -106,7 +113,7 @@ def get_graph_avg_params() -> Namespace:
 
 
 def get_graph_gtn_params() -> Namespace:
-    parser = _get_base_parser()
+    parser = _get_graph_base_parser()
     # fmt: off
     # Embedder parameters
     parser.add_argument("--output_size", type=int, default=32,
@@ -132,4 +139,14 @@ def get_graph_gtn_params() -> Namespace:
     parser.add_argument("--dropout", type=float, default=0.1,
                         help="Dropout rate")
     # fmt: on
+    return parser.parse_args()
+
+
+def get_ag_parameters() -> Namespace:
+    parser = get_base_parser()
+    # fmt: off
+    parser.add_argument("--graph_choice", type=str, default="none",
+                        choices=["none", "avg", "gtn"])
+    # fmt: on
+
     return parser.parse_args()
