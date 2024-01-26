@@ -147,6 +147,8 @@ def get_ag_parameters() -> Namespace:
     # fmt: off
     parser.add_argument("--graph_choice", type=str, default="none",
                         choices=["none", "avg", "gtn"])
+    parser.add_argument("--weights_path", type=str, default=None,
+                        help="Path to the checkpoint")
     # fmt: on
 
     return parser.parse_args()

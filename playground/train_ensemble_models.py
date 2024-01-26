@@ -88,6 +88,12 @@ if __name__ == "__main__":
             df_splits[split] = df_split
     elif graph_choice in ("avg", "gtn"):
         model_sign = f"graph_{graph_choice}"
+        if (
+            weights_path is None
+            or not weights_path.exists()
+            or len(weights_path.split("/")) != 7
+        ):
+            raise ValueError("weights_path is None")
         # weights_path = parser.weights_path
         # weights_path = Path(
         #     "cache_and_ckp" /
