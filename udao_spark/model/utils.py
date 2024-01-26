@@ -200,8 +200,6 @@ def get_graph_gtn_mlp(params: GraphTransformerMLPParams) -> UdaoModel:
             "dropout": params.dropout,  # 0.1
         },
     )
-    print("MODEL DETAILS:\n")
-    print(model)
     return model
 
 
