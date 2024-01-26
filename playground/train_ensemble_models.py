@@ -1,6 +1,7 @@
+import os.path
 from datetime import datetime
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional
 
 import numpy as np
 import torch as th
@@ -13,7 +14,7 @@ from udao_spark.model.model_server import ModelServer
 from udao_spark.model.mulitlabel_predictor import MultilabelPredictor  # type: ignore
 from udao_spark.model.utils import p90, wmape
 from udao_spark.utils.collaborators import PathWatcher, TypeAdvisor
-from udao_spark.utils.params import ExtractParams, get_ag_parameters
+from udao_spark.utils.params import ExtractParams, QType, get_ag_parameters
 from udao_trace.utils import ParquetHandler, PickleHandler
 
 
@@ -34,6 +35,7 @@ def get_graph_embedding(
         print("not found, generating...")
     graph_embedding_dict = {}
     bs = 1024
+    device = get_default_device()
     for split, iterator in split_iterators.items():
         print(f"start working on {split}")
         n_items = len(index_splits[split])
@@ -57,11 +59,10 @@ def get_graph_embedding(
     return graph_np_dict
 
 
-if __name__ == "__main__":
-    parser = get_ag_parameters()
-    bm, q_type, debug = parser.benchmark, parser.q_type, parser.debug
-    graph_choice, weights_path = parser.graph_choice, parser.weights_path
-    ta = TypeAdvisor(q_type=parser.q_type)
+def get_ag_data(
+    bm: str, q_type: QType, debug: bool, graph_choice: str, weights_path: Optional[str]
+) -> Dict:
+    ta = TypeAdvisor(q_type=q_type)
     extract_params = ExtractParams.from_dict(  # placeholder
         {
             "lpe_size": 0,
@@ -90,7 +91,7 @@ if __name__ == "__main__":
         model_sign = f"graph_{graph_choice}"
         if (
             weights_path is None
-            or not weights_path.exists()
+            or not os.path.exists(weights_path)
             or len(weights_path.split("/")) != 7
         ):
             raise ValueError("weights_path is None")
@@ -109,9 +110,7 @@ if __name__ == "__main__":
             "/".join(weights_path.split("/")[:5]) + "/model_struct_params.json"
         )
         weights_header = "/".join(weights_path.split("/")[:6])
-        split_iterators_path = f"{header}/split_iterators.pkl"
         ms = ModelServer.from_ckp_path(model_sign, model_params_path, weights_path)
-        device = get_default_device()
         split_iterators = PickleHandler.load(header, "split_iterators.pkl")
         if not isinstance(split_iterators, Dict):
             raise TypeError("split_iterators not found or not a desired type")
@@ -132,6 +131,21 @@ if __name__ == "__main__":
     train_data = TabularDataset(df_splits["train"])
     val_data = TabularDataset(df_splits["val"])
     test_data = TabularDataset(df_splits["test"])
+    return {
+        "data": [train_data, val_data, test_data],
+        "ta": ta,
+        "pw": pw,
+        "objectives": objectives,
+    }
+
+
+if __name__ == "__main__":
+    parser = get_ag_parameters()
+    bm, q_type, debug = parser.benchmark, parser.q_type, parser.debug
+    graph_choice, weights_path = parser.graph_choice, parser.weights_path
+    ret = get_ag_data(bm, q_type, debug, graph_choice, weights_path)
+    train_data, val_data, test_data = ret["data"]
+    ta, pw, objectives = ret["ta"], ret["pw"], ret["objectives"]
 
     utcnow = datetime.utcnow()
     timestamp = utcnow.strftime("%Y%m%d_%H%M%S")
