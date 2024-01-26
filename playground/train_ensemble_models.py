@@ -5,14 +5,13 @@ from typing import Dict, Optional
 
 import numpy as np
 import torch as th
-from autogluon.core.metrics import pearsonr
 from autogluon.tabular import TabularDataset
 from udao.data import QueryPlanIterator
 from udao.optimization.utils.moo_utils import get_default_device
 
 from udao_spark.model.model_server import ModelServer
 from udao_spark.model.mulitlabel_predictor import MultilabelPredictor  # type: ignore
-from udao_spark.model.utils import p90, wmape
+from udao_spark.model.utils import wmape
 from udao_spark.utils.collaborators import PathWatcher, TypeAdvisor
 from udao_spark.utils.params import ExtractParams, QType, get_ag_parameters
 from udao_trace.utils import ParquetHandler, PickleHandler
@@ -149,8 +148,8 @@ if __name__ == "__main__":
 
     utcnow = datetime.utcnow()
     timestamp = utcnow.strftime("%Y%m%d_%H%M%S")
-    path = "AutogluonModels/{}_{}/{}/{}/ag-{}".format(
-        bm, pw.data_sign, q_type, graph_choice, timestamp
+    path = "AutogluonModels/{}_{}/{}/{}/ag/".format(
+        bm, pw.data_sign, q_type, graph_choice
     )
 
     predictor = MultilabelPredictor(
@@ -166,15 +165,14 @@ if __name__ == "__main__":
         # num_stack_levels=3,
         # num_bag_folds=4,
         tuning_data=val_data,
-        num_gpus=1,
         # presets='good_quality',
         use_bag_holdout=True,
     )
 
-    print(path)
-    for obj in objectives:
-        print(
-            predictor.get_predictor(obj)
-            .leaderboard(val_data, extra_metrics=[p90, pearsonr])
-            .to_string()
-        )
+    # print(path)
+    # for obj in objectives:
+    #     print(
+    #         predictor.get_predictor(obj)
+    #         .leaderboard(val_data, extra_metrics=[p90, pearsonr])
+    #         .to_string()
+    #     )
