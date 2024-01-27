@@ -82,10 +82,17 @@ if __name__ == "__main__":
     )
 
     # Compile time QS logical plans from CBO estimation (a list of LQP-sub)
-
-    for trace in raw_traces:
+    for trace in [raw_traces[9]]:
+        # for trace in raw_traces:
         logger.info(f"Processing {trace}")
+        query_id = trace.split("tpch100_")[1].split("_")[0]  # e.g. 2-1
         non_decision_input = ie.get_qs_lqp(trace, is_oracle=oracle)
         po_points = hier_optimizer.solve(
-            non_decision_input, seed=0, algo="div_and_conq_moo"
+            non_decision_input,
+            seed=0,
+            algo="div_and_conq_moo",
+            sample_mode="grid",
+            query_id=query_id,
+            save_data=True,
         )
+        # print(f" the n_stages is {len(non_decision_input)}")

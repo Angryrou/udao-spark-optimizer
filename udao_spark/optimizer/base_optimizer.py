@@ -95,7 +95,8 @@ class BaseOptimizer(ABC):
             raise TypeError(f"Expected QueryPlanInput, got {type(batch_input)}")
         embedding_input = batch_input.embedding_input
         tabular_input = batch_input.features
-        graph_embedding = self.ms.model.embedder(embedding_input)
+        graph_embedding = self.ms.model.embedder(embedding_input.to(self.device))
+        # graph_embedding = self.ms.model.embedder(embedding_input)
         non_decision_tabular_features = tabular_input[
             :, : -len(self.decision_variables)
         ]
@@ -137,7 +138,7 @@ class BaseOptimizer(ABC):
             np.random.seed(seed)
         samples = np.random.randint(
             low=self.theta_minmax[theta_type][0],
-            high=self.theta_minmax[theta_type][1],
+            high=self.theta_minmax[theta_type][1] + 1,
             size=(n_samples, len(self.theta_minmax[theta_type][0])),
         )
         samples_normalized = (samples - self.theta_minmax[theta_type][0]) / (
@@ -160,7 +161,7 @@ class BaseOptimizer(ABC):
     #     pass
 
     def weighted_utopia_nearest(
-        self, pareto_objs: np.ndarray, pareto_confs: pd.DataFrame
+        self, pareto_objs: np.ndarray, pareto_confs: np.ndarray
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         return the Pareto point that is closest to the utopia point
@@ -170,7 +171,8 @@ class BaseOptimizer(ABC):
         assert n_pareto > 0
         if n_pareto == 1:
             # (2,), (n, 2)
-            return pareto_objs[0], pareto_confs.query("qs_id == 0").values
+            # return pareto_objs[0], pareto_confs.query("qs_id == 0").values
+            return pareto_objs[0], pareto_confs[0]
 
         # utopia = self.getUtopia(pareto)
         utopia = np.zeros_like(pareto_objs[0])
@@ -184,5 +186,9 @@ class BaseOptimizer(ABC):
         wun_id = np.argmin(dists)
 
         picked_pareto = pareto_objs[wun_id]
-        picked_confs = pareto_confs.query("qs_id == 0").values[wun_id, :]
+        picked_confs = pareto_confs[wun_id]
+        # if isinstance(pareto_confs, np.ndarray):
+        #     picked_confs = pareto_confs[wun_id]
+        # else:
+        #     picked_confs = pareto_confs.query("qs_id == 0").values[wun_id, :]
         return picked_pareto, picked_confs

@@ -10,45 +10,51 @@
 #
 # Created at 21/11/2023
 import itertools
+import time
+from multiprocessing import Pool
 from typing import Any, List, Tuple
 
 import numpy as np
-import pandas as pd
 import pygmo as pg  # type: ignore
+import torch as th
 from tqdm import tqdm  # type: ignore
 
 
 class DAGOpt:
     def __init__(
         self,
-        f: pd.DataFrame,
-        conf: pd.DataFrame,
+        f: th.Tensor,
+        conf: th.Tensor,
+        indices_arr: np.ndarray,
         algo: str,
         runmode: str,
     ) -> None:
-        # key: stage_id, value: dict{c_ind: stage-level Pareto solutions}
         self.f = f
         self.conf = conf
-        # hier_moo; seq_div_and_conq; seq_div_and_conq(approx); approx_solve
+        self.indices_arr = indices_arr
+        # hier_moo; seq_div_and_conq; approx_solve
         self.algo = algo
         self.runmode = runmode
+        self.verbose = False
 
-        # self.n_stages = len(f)
+        self.len_theta = conf.shape[1]
+        self.n_objs = f.shape[1]
 
-    def solve(self) -> Tuple[np.ndarray, pd.DataFrame]:
+    def solve(self) -> Tuple[np.ndarray, np.ndarray]:
         if "hier_moo" in self.algo:
             # weights
             n_ws = int(self.algo.split("%")[1])
-            n_objs = 2
             ws_steps = 1 / (int(n_ws) - 1)
-            ws_pairs = self.even_weights(ws_steps, n_objs)
-            F, Theta = self._hier_moo(self.f, self.conf, ws_pairs)
+            ws_pairs = self.even_weights(ws_steps, self.n_objs)
+            F, Theta = self._hier_moo(self.f, self.conf, ws_pairs, self.indices_arr)
         elif self.algo == "seq_div_and_conq":
-            F, Theta = self._seq_div_and_conq(self.f, self.conf, mode="all")
-        elif self.algo == "seq_div_and_conq(approx)":
-            F, Theta = self._seq_div_and_conq(self.f, self.conf, mode="approx")
+            F, Theta = self._seq_div_and_conq(
+                self.f,
+                self.conf,
+                self.indices_arr,
+            )
         elif self.algo == "approx_solve":
-            F, Theta = self.approx_solve(self.f, self.conf)
+            F, Theta = self.approx_solve(self.f, self.conf, self.indices_arr)
         else:
             raise Exception(f"mode {self.algo} is not supported in {classmethod}!")
 
@@ -56,459 +62,427 @@ class DAGOpt:
 
     # ------------Approximate solve------------------------------#
     def approx_solve(
-        self, f_df: pd.DataFrame, conf_df: pd.DataFrame
-    ) -> Tuple[np.ndarray, pd.DataFrame]:
-        # find \theta_c with just one optimal \theta_s
-        qs_indices = np.array(f_df.index.values.tolist())
+        self, f_th: th.Tensor, conf_th: th.Tensor, indices_arr: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        start = time.time()
+        sorted_index = np.lexsort(
+            (indices_arr[:, 2], indices_arr[:, 1], indices_arr[:, 0])
+        )
+        qs_indices = indices_arr[sorted_index]
         stages = np.unique(qs_indices[:, 0])
-        c_inds_one_arr, c_inds_multi_arr = self._get_c_inds(f_df, stages)
-
-        query_f_df_one, query_conf_df_one = self._solve_c_inds_one(
-            f_df, conf_df, c_inds_one_arr, stages
-        )
-
-        f_multi_list = []
-        conf_multi_list = []
-
-        for i in tqdm(c_inds_multi_arr, total=c_inds_multi_arr.shape[0]):
-            query_min_ana_lat, query_min_io = np.zeros(
-                2,
-            ), np.zeros(
-                2,
+        c_ids = np.unique(qs_indices[:, 1]).astype(int)
+        print(f"the number of theta_c is: {c_ids.shape[0]}")
+        qs_f_all = f_th.numpy()[sorted_index]
+        qs_conf_all = conf_th.numpy()[sorted_index]
+        if self.verbose:
+            print(
+                f"time cost of getting values and indices of "
+                f"f and conf is {time.time() - start}"
             )
-            query_conf_df_list = []
-            for stage_id in stages:
-                qs_f = f_df.query(f"qs_id == {stage_id}").query(f"c_id == {i}")
-                qs_conf = conf_df.query(f"qs_id == {stage_id}").query(f"c_id == {i}")
-                min_ind_ana_lat = np.argmin(qs_f.values[:, 0])
-                min_ind_io = np.argmin(qs_f.values[:, 1])
-                # query_min_ana_lat += qs_f.iloc[min_ind_ana_lat, :]
-                # query_min_io += qs_f.iloc[min_ind_io, :]
-                query_min_ana_lat += qs_f.values[min_ind_ana_lat, :]
-                query_min_io += qs_f.values[min_ind_io, :]
-                # query_conf_df_list.append(qs_conf.iloc[min_ind_ana_lat, :])
-                # query_conf_df_list.append(qs_conf.iloc[min_ind_io, :])
-                query_conf_df_list.append(qs_conf.values[min_ind_ana_lat, :])
-                query_conf_df_list.append(qs_conf.values[min_ind_io, :])
-
-            query_min_ana_lat_df = pd.DataFrame(
-                query_min_ana_lat, index=np.arange(query_min_ana_lat.shape[0])
-            )
-            query_min_io_df = pd.DataFrame(
-                query_min_io, index=np.arange(query_min_io.shape[0])
-            )
-            i_query_f_df = pd.concat([query_min_ana_lat_df, query_min_io_df], axis=1).T
-            f_multi_list.append(i_query_f_df)
-
-            i_query_conf_values = np.vstack(query_conf_df_list)
-            index = [
-                stages.repeat(2),
-                np.ones(
-                    stages.shape[0] * 2,
-                )
-                * i,
-            ]
-            indices = pd.MultiIndex.from_tuples(
-                list(zip(*index)), names=["qs_id", "c_id"]
-            )
-            i_query_conf_df_w_index = pd.DataFrame(i_query_conf_values, index=indices)
-            conf_multi_list.append(i_query_conf_df_w_index)
-
-        # filter dominated among all theta_c candidates
-        all_query_f_df = pd.concat(f_multi_list + query_f_df_one)
-        all_conf_df = pd.concat(conf_multi_list + query_conf_df_one)
-        assert np.all(
-            [
-                all_conf_df.query(f"qs_id == {stage_id}").shape[0]
-                == all_query_f_df.shape[0]
-                for stage_id in stages
-            ]
-        )
-
-        po_query_ind = pg.non_dominated_front_2d(all_query_f_df)
-        po_query_f_df = all_query_f_df.iloc[po_query_ind, :]
-        po_conf_df_list = [
-            all_conf_df.query(f"qs_id == {stage_id}").iloc[po_query_ind, :]
-            for stage_id in stages
+        qs_f_all_list = [qs_f_all[np.where(qs_indices[:, 0] == i)] for i in stages]
+        qs_conf_all_list = [
+            qs_conf_all[np.where(qs_indices[:, 0] == i)] for i in stages
         ]
 
-        return po_query_f_df.values, pd.concat(po_conf_df_list)
+        boundary_f_list = []
+        boundary_conf_list = []
+        for qs_id, qs_f, qs_conf in zip(stages, qs_f_all_list, qs_conf_all_list):
+            time.time()
+            len_p_counts = np.unique(
+                qs_indices[np.where(qs_indices[:, 0] == qs_id)][:, 1],
+                return_counts=True,
+            )[1]
+            cumsum_counts = np.cumsum(len_p_counts)[:-1]
+            all_f_values = np.split(qs_f, cumsum_counts)
+            all_conf_values = np.split(qs_conf, cumsum_counts)
+            p_max = len_p_counts.max()
+            padded_f_arr = np.array(
+                [
+                    np.tile(array, (int(p_max / array.shape[0] + 1), 1))[:p_max, :]
+                    if array.shape[0] < p_max
+                    else array
+                    for array in all_f_values
+                ]
+            )
+            min_row_inds_per_obj = np.argmin(padded_f_arr, axis=1)
+            min_rows_f = padded_f_arr[
+                np.arange(padded_f_arr.shape[0])[:, None], min_row_inds_per_obj, :
+            ].reshape(-1, self.n_objs)
+            boundary_f_list.append(min_rows_f)
+
+            min_conf = [
+                conf[min_ind].tolist()
+                for conf, min_ind in zip(all_conf_values, min_row_inds_per_obj)
+            ]
+
+            confs = np.array(sum(min_conf, []))
+            assert confs.shape[0] == min_rows_f.shape[0]
+            boundary_conf_list.append(confs)
+
+        assert len(boundary_f_list) == len(boundary_conf_list)
+        if self.verbose:
+            print(f"time cost of getting boundary points is: {time.time() - start}")
+        all_f_qs = np.hstack(boundary_f_list)
+        all_confs_qs = np.hstack(boundary_conf_list)
+        assert all_confs_qs.shape[1] == self.len_theta * len(stages)
+
+        all_query_lat = np.sum(all_f_qs[:, 0::2], axis=1)
+        all_query_cost = np.sum(all_f_qs[:, 1::2], axis=1)
+        boundary_query_objs = np.vstack((all_query_lat, all_query_cost)).T
+
+        if self.verbose:
+            print(
+                f"time cost of getting boundary query-level objs "
+                f"is {time.time() - start}"
+            )
+
+        start_filter_global = time.time()
+        po_query_ind = pg.non_dominated_front_2d(boundary_query_objs)
+        po_query_objs = boundary_query_objs[po_query_ind]
+        po_query_confs = all_confs_qs[po_query_ind]
+        uniq_po_query_objs, uniq_po_query_inds = np.unique(
+            po_query_objs, axis=0, return_index=True
+        )
+        uniq_po_query_confs = po_query_confs[uniq_po_query_inds]
+
+        if self.verbose:
+            print(
+                f"time cost of filtering globally is"
+                f" {time.time() - start_filter_global}"
+            )
+            print(f"Pareto frontier is {uniq_po_query_objs}")
+
+        return uniq_po_query_objs, uniq_po_query_confs
 
     # -------------General Hierarchical MOO-----------------------#
     def _hier_moo(
         self,
-        f_df: pd.DataFrame,
-        conf_df: pd.DataFrame,
+        f_th: th.Tensor,
+        conf_th: th.Tensor,
         ws_pairs: List[List[Any]],
-    ) -> Tuple[np.ndarray, pd.DataFrame]:
-        # find \theta_c with just one optimal \theta_s
-        qs_indices = np.array(f_df.index.values.tolist())
+        indices_arr: np.ndarray,
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        start = time.time()
+        sorted_index = np.lexsort(
+            (indices_arr[:, 2], indices_arr[:, 1], indices_arr[:, 0])
+        )
+        qs_indices = indices_arr[sorted_index]
         stages = np.unique(qs_indices[:, 0])
-        c_inds_one_arr, c_inds_multi_arr = self._get_c_inds(f_df, stages)
-
-        query_f_df_one, query_conf_df_one = self._solve_c_inds_one(
-            f_df, conf_df, c_inds_one_arr, stages
-        )
-
-        f_multi_list = []
-        conf_multi_list = []
-        for i in tqdm(c_inds_multi_arr, total=c_inds_multi_arr.shape[0]):
-            c_i_f_df_multi_list = [
-                f_df.query(f"qs_id == {stage_id}").query(f"c_id == {i}")
-                for stage_id in stages
-            ]
-            c_i_conf_df_multi_list = [
-                conf_df.query(f"qs_id == {stage_id}").query(f"c_id == {i}")
-                for stage_id in stages
-            ]
-
-            po_objs, po_confs = self._ws_all_sum_nodes(
-                i, c_i_f_df_multi_list, c_i_conf_df_multi_list, ws_pairs, stages
+        c_ids = np.unique(qs_indices[:, 1]).astype(int)
+        print(f"the number of theta_c is: {c_ids.shape[0]}")
+        qs_f_all = f_th.numpy()[sorted_index]
+        qs_conf_all = conf_th.numpy()[sorted_index]
+        if self.verbose:
+            print(
+                f"time cost of getting values and indices of f and conf "
+                f"is {time.time() - start}"
             )
-            f_multi_list.append(po_objs)
-            conf_multi_list.append(po_confs)
 
-        # filter dominated among all theta_c candidates
-        all_query_f_df = pd.concat(f_multi_list + query_f_df_one)
-        all_conf_df = pd.concat(conf_multi_list + query_conf_df_one)
-        assert np.all(
-            [
-                all_conf_df.query(f"qs_id == {stage_id}").shape[0]
-                == all_query_f_df.shape[0]
-                for stage_id in stages
-            ]
-        )
-
-        po_query_ind = pg.non_dominated_front_2d(all_query_f_df)
-        po_query_f_df = all_query_f_df.iloc[po_query_ind, :]
-        po_conf_df_list = [
-            all_conf_df.query(f"qs_id == {stage_id}").iloc[po_query_ind, :]
-            for stage_id in stages
+        qs_f_all_list = [qs_f_all[np.where(qs_indices[:, 0] == i)] for i in stages]
+        qs_conf_all_list = [
+            qs_conf_all[np.where(qs_indices[:, 0] == i)] for i in stages
         ]
 
-        return po_query_f_df.values, pd.concat(po_conf_df_list)
+        qs_c_f_list = []
+        qs_c_conf_list = []
+        for qs_id, qs_f, qs_conf in zip(stages, qs_f_all_list, qs_conf_all_list):
+            len_p_counts = np.unique(
+                qs_indices[np.where(qs_indices[:, 0] == qs_id)][:, 1],
+                return_counts=True,
+            )[1]
+            cumsum_counts = np.cumsum(len_p_counts)[:-1]
+            all_f_values = np.split(qs_f, cumsum_counts)
+            all_conf_values = np.split(qs_conf, cumsum_counts)
+            assert len(all_f_values) == c_ids.shape[0]
+            assert len(all_conf_values) == c_ids.shape[0]
 
-    def _ws_all_sum_nodes(
-        self,
-        i: int,
-        f_df_list: List[pd.DataFrame],
-        conf_df_list: List[pd.DataFrame],
-        ws_pairs: List[List[Any]],
-        stages: np.ndarray,
-    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        # i is the index of c
-        po_obj_list = []
-        po_var_list = []
+            qs_c_f_list.append(all_f_values)
+            qs_c_conf_list.append(all_conf_values)
 
-        f_df = pd.concat(f_df_list)
-        conf_df = pd.concat(conf_df_list)
+        if c_ids.shape[0] > 500:
+            mode = "multiprocessing"
+        else:
+            mode = "naive"
 
-        for ws in ws_pairs:
-            sum_objs = np.zeros(
-                [
-                    2,
-                ]
-            )
-            sel_conf_list = []
-
-            for stage_id in stages:
-                objs = f_df.query(f"qs_id == {stage_id}").query(f"c_id == {i}").values
-                objs_min, objs_max = objs.min(0), objs.max(0)
-                if all((objs_min - objs_max) <= 0):
-                    obj = np.sum(objs * ws, axis=1)
-                    po_ind = int(np.argmin(obj))
-                    # po_ind = self._get_soo_index(objs, ws)
-                    sum_objs += objs[po_ind]
-                    sel_conf = (
-                        conf_df.query(f"qs_id == {stage_id}")
-                        .query(f"c_id == {i}")
-                        .iloc[po_ind, :]
-                    )
-                    sel_conf_list.append(sel_conf)
-                else:
-                    raise Exception(
-                        "Cannot do normalization! "
-                        "Lower bounds of objective values "
-                        "are higher than its upper bounds."
-                    )
-
-            po_obj_list.append(sum_objs.tolist())
-
-            po_conf_i = pd.concat(sel_conf_list, axis=1).T
-            index_i = [
-                stages,
-                np.ones(
-                    stages.shape[0],
-                )
-                * i,
+        if mode == "multiprocessing":
+            arg_list = [
+                (ws, c_id, stages, qs_c_f_list, qs_c_conf_list)
+                for c_id in tqdm(c_ids, total=c_ids.shape[0])
+                for ws in ws_pairs
             ]
-            indices = pd.MultiIndex.from_tuples(
-                list(zip(*index_i)), names=["qs_id", "c_id"]
-            )
-            po_var_list.append(pd.DataFrame(po_conf_i, index=indices))
 
-        # only keep non-dominated solutions
-        i_po_ind = pg.non_dominated_front_2d(po_obj_list)
-        i_query_objs = np.array(po_obj_list)[i_po_ind]
+            with Pool(processes=10) as pool:
+                ret_list = pool.starmap(self._ws_per_c_all_nodes, arg_list)
 
-        i_query_f_df = pd.DataFrame(
-            i_query_objs,
-            index=np.ones(
-                i_query_objs.shape[0],
+            query_f_list = [result[0] for result in ret_list]
+            query_conf_list = [result[1] for result in ret_list]
+        else:
+            query_f_list = []
+            query_conf_list = []
+            for c_id in tqdm(c_ids, total=c_ids.shape[0]):
+                for ws in ws_pairs:
+                    objs, confs = self._ws_per_c_all_nodes(
+                        ws, c_id, stages, qs_c_f_list, qs_c_conf_list
+                    )
+                    query_f_list.append(objs)
+                    query_conf_list.append(confs)
+
+        start_filter_global = time.time()
+        query_f_arr = np.concatenate(query_f_list)
+        query_conf_arr = np.concatenate(query_conf_list)
+        po_query_ind = pg.non_dominated_front_2d(query_f_arr)
+        po_query_objs = query_f_arr[po_query_ind]
+        po_query_confs = query_conf_arr[po_query_ind]
+        if self.verbose:
+            print(
+                f"time cost of filtering globally "
+                f"is {time.time() - start_filter_global}"
             )
-            * i,
+
+        uniq_po_query_objs, uniq_po_query_inds = np.unique(
+            po_query_objs, axis=0, return_index=True
         )
-        i_query_conf_df = pd.concat(po_var_list)
+        uniq_po_query_confs = po_query_confs[uniq_po_query_inds]
+        print(f"Pareto frontier is {uniq_po_query_objs}")
+        return uniq_po_query_objs, uniq_po_query_confs
 
-        return i_query_f_df, i_query_conf_df
-
-    # def _get_soo_index(
-    #     self, objs: np.ndarray, ws_pairs: List[Any]
-    # ) -> np.ndarray[Any, Any]:
-    #     """
-    #     reuse code in VLDB2022
-    #     :param objs: ndarray(n_feasible_samples/grids, 2)
-    #     :param ws_pairs: list, one weight setting for all objectives, e.g. [0, 1]
-    #     :return: int, index of the minimum weighted sum
-    #     """
-    #     obj = np.sum(objs * ws_pairs, axis=1)
-    #     return np.argmin(obj)
-
-    def _get_c_inds(
-        self, f_df: pd.DataFrame, stages: np.ndarray
-    ) -> Tuple[np.ndarray[Any, Any], np.ndarray[Any, Any]]:
-        init_c_inds_one_arr = np.array([])
-        final_c_inds_one_arr = np.array([])
-
-        indices_arr = np.array(
-            f_df.query(f"qs_id == {stages[0]}").index.values.tolist()
+    def _ws_per_c_all_nodes(
+        self,
+        ws: List[Any],
+        c_id: int,
+        stages: np.ndarray,
+        qs_c_f_list: List[Any],
+        qs_c_conf_list: List[Any],
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        sum_objs = np.zeros(
+            [
+                self.n_objs,
+            ]
         )
-        uniq_c_inds = np.unique(indices_arr[:, 1])
+        sel_conf_list = []
+        for qs_id, qs_f_cid_list, qs_conf_cid_list in zip(
+            stages, qs_c_f_list, qs_c_conf_list
+        ):
+            objs = qs_f_cid_list[c_id].reshape(-1, self.n_objs)
+            confs = qs_conf_cid_list[c_id].reshape(-1, self.len_theta)
+            objs_min, objs_max = objs.min(0), objs.max(0)
+            if all((objs_min - objs_max) <= 0):
+                obj = np.sum(objs * ws, axis=1)
+                po_ind = int(np.argmin(obj))
+                sum_objs += objs[po_ind]
 
-        for stage_id in stages:
-            inds_qs_arr = np.array(
-                f_df.query(f"qs_id == {stage_id}").index.values.tolist()
-            )
-            c_inds_qs = inds_qs_arr[:, 1]
-            # check: all the QS should have the same c_inds
-            assert np.all(uniq_c_inds == np.unique(c_inds_qs))
-
-            c_inds_one = np.where(np.unique(c_inds_qs, return_counts=True)[1] == 1)[0]
-
-            if init_c_inds_one_arr.shape[0] == 0:
-                final_c_inds_one_arr = c_inds_one
-                init_c_inds_one_arr = c_inds_one
+                sel_conf = confs[po_ind].reshape(-1, self.len_theta)
+                sel_conf_list.append(sel_conf)
             else:
-                final_c_inds_one_arr = np.intersect1d(final_c_inds_one_arr, c_inds_one)
+                raise Exception(
+                    "Cannot do normalization! "
+                    "Lower bounds of objective values "
+                    "are higher than its upper bounds."
+                )
 
-        if final_c_inds_one_arr.shape[0] == 0:
-            c_inds_multi_arr = uniq_c_inds
-        else:
-            mask = ~np.isin(uniq_c_inds, final_c_inds_one_arr)
-            c_inds_multi_arr = uniq_c_inds[mask]
-
-        return final_c_inds_one_arr, c_inds_multi_arr
-
-    def _solve_c_inds_one(
-        self,
-        f_df: pd.DataFrame,
-        conf_df: pd.DataFrame,
-        c_inds_one_list: np.ndarray,
-        stages: np.ndarray,
-    ) -> Tuple[List[Any], List[Any]]:
-        if c_inds_one_list.shape[0] == 0:
-            return [], []
-        else:
-            reshape_qs_objs = np.hstack(
-                [
-                    f_df.query(f"qs_id == {i}")
-                    .reset_index(level=0, drop=True)
-                    .loc[c_inds_one_list, :]
-                    .values
-                    for i in stages
-                ]
-            )
-            query_lat = reshape_qs_objs[:, ::2].sum(1)
-            query_io = reshape_qs_objs[:, 1::2].sum(1)
-            query_objs = np.vstack((query_lat, query_io)).T
-
-            query_f_df_one = pd.DataFrame(query_objs, index=c_inds_one_list)
-
-            query_conf_list = [
-                conf_df.query(f"qs_id == {i}")
-                .reset_index(level=0, drop=True)
-                .loc[c_inds_one_list, :]
-                .values
-                for i in stages
-            ]
-
-            query_conf_df_one = pd.concat(
-                [
-                    pd.DataFrame(
-                        conf,
-                        index=pd.MultiIndex.from_tuples(
-                            list(
-                                zip(
-                                    *[
-                                        np.ones(
-                                            c_inds_one_list.shape[0],
-                                        )
-                                        * i,
-                                        c_inds_one_list,
-                                    ]
-                                )
-                            ),
-                            names=["qs_id", "c_id"],
-                        ),
-                    )
-                    for i, conf in enumerate(query_conf_list)
-                ]
-            )
-
-            return [query_f_df_one], [query_conf_df_one]
+        all_qs_confs = np.hstack(sel_conf_list)
+        assert all_qs_confs.shape[1] == stages.shape[0] * self.len_theta
+        return sum_objs.reshape(-1, self.n_objs), all_qs_confs
 
     # -------------Sequential Divide-and-Conquer-------------------#
     def _seq_div_and_conq(
         self,
-        f_df: pd.DataFrame,
-        conf_df: pd.DataFrame,
-        mode: str = "all",
-    ) -> Tuple[np.ndarray, pd.DataFrame]:
-        indices_arr = np.array(f_df.index.values.tolist())
-        stages = np.unique(indices_arr[:, 0])
-        c_inds_one_arr, c_inds_multi_arr = self._get_c_inds(f_df, stages)
-
-        query_f_df_one, query_conf_df_one = self._solve_c_inds_one(
-            f_df, conf_df, c_inds_one_arr, stages
+        f_th: th.Tensor,
+        conf_th: th.Tensor,
+        indices_arr: np.ndarray,
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        if self.verbose:
+            print("FUNCTION: Seq_div_and_conq starts:")
+            print()
+        start = time.time()
+        sorted_index = np.lexsort(
+            (indices_arr[:, 2], indices_arr[:, 1], indices_arr[:, 0])
         )
+        qs_indices = indices_arr[sorted_index]
+        stages = np.unique(qs_indices[:, 0])
+        c_ids = np.unique(qs_indices[:, 1]).astype(int)
+        print(f"the number of theta_c is: {c_ids.shape[0]}")
+        qs_f_all = f_th.numpy()[sorted_index]
+        qs_conf_all = conf_th.numpy()[sorted_index]
+        if self.verbose:
+            print(
+                f"time cost of getting values and indices of f and conf "
+                f"is {time.time() - start}"
+            )
 
-        f_multi_list = []
-        conf_multi_list = []
-        for i in tqdm(c_inds_multi_arr, total=c_inds_multi_arr.shape[0]):
-            c_i_f_df_multi_list = [
-                f_df.query(f"qs_id == {stage_id}").query(f"c_id == {i}")
-                for stage_id in stages
-            ]
-            c_i_conf_df_multi_list = [
-                conf_df.query(f"qs_id == {stage_id}").query(f"c_id == {i}")
-                for stage_id in stages
-            ]
-            if mode == "all":
-                query_f_df_multi, query_conf_df_multi = self._divide_and_conquer(
-                    c_i_f_df_multi_list, c_i_conf_df_multi_list
-                )
-            elif mode == "approx":
-                sample_f_df, sample_conf_df = self._approximate_frontier(
-                    c_i_f_df_multi_list, c_i_conf_df_multi_list
-                )
-                query_f_df_multi, query_conf_df_multi = self._divide_and_conquer(
-                    sample_f_df, sample_conf_df
-                )
-                query_f_df_multi1, query_conf_df_multi1 = self._divide_and_conquer(
-                    sample_f_df, sample_conf_df, mode="non_recur"
-                )
-                assert np.all(query_f_df_multi.values == query_f_df_multi1.values)
-            else:
-                raise Exception(f"mode {mode} is not supported in Seq_Div_and_Conq!")
-
-            f_multi_list.append(query_f_df_multi)
-            conf_multi_list.append(query_conf_df_multi)
-
-        # filter dominated among all \theta_c
-        all_query_f_df = pd.concat(f_multi_list + query_f_df_one)
-        all_conf_df = pd.concat(conf_multi_list + query_conf_df_one)
-        assert np.all(
-            [
-                all_conf_df.query(f"qs_id == {stage_id}").shape[0]
-                == all_query_f_df.shape[0]
-                for stage_id in stages
-            ]
-        )
-
-        po_query_ind = pg.non_dominated_front_2d(all_query_f_df)
-        po_query_f_df = all_query_f_df.iloc[po_query_ind, :]
-        po_conf_df_list = [
-            all_conf_df.query(f"qs_id == {stage_id}").iloc[po_query_ind, :]
-            for stage_id in stages
+        qs_f_all_list = [qs_f_all[np.where(qs_indices[:, 0] == i)] for i in stages]
+        qs_conf_all_list = [
+            qs_conf_all[np.where(qs_indices[:, 0] == i)] for i in stages
         ]
 
-        return po_query_f_df.values, pd.concat(po_conf_df_list)
+        qs_c_f_list = []
+        qs_c_conf_list = []
+        for qs_id, qs_f, qs_conf in zip(stages, qs_f_all_list, qs_conf_all_list):
+            len_p_counts = np.unique(
+                qs_indices[np.where(qs_indices[:, 0] == qs_id)][:, 1],
+                return_counts=True,
+            )[1]
+            cumsum_counts = np.cumsum(len_p_counts)[:-1]
+            all_f_values = np.split(qs_f, cumsum_counts)
+            all_conf_values = np.split(qs_conf, cumsum_counts)
+            assert len(all_f_values) == c_ids.shape[0]
+            assert len(all_conf_values) == c_ids.shape[0]
+
+            qs_c_f_list.append(all_f_values)
+            qs_c_conf_list.append(all_conf_values)
+
+        if c_ids.shape[0] > 500:
+            runmode = "multiprocessing"
+        else:
+            runmode = "naive"
+
+        if runmode == "multiprocessing":
+            arg_list = [
+                (c_id, stages, qs_c_f_list, qs_c_conf_list)
+                for c_id in tqdm(c_ids, total=c_ids.shape[0])
+            ]
+            with Pool(processes=2) as pool:
+                ret_list = pool.starmap(self._div_and_conq_non_recur, arg_list)
+
+            query_f_list = [result[0].tolist() for result in ret_list]
+            query_conf_list = [result[1].tolist() for result in ret_list]
+        else:
+            query_f_list = []
+            query_conf_list = []
+            for c_id in tqdm(c_ids, total=c_ids.shape[0]):
+                objs, confs = self._div_and_conq_non_recur(
+                    c_id, stages, qs_c_f_list, qs_c_conf_list
+                )
+                query_f_list.append(objs)
+                query_conf_list.append(confs)
+
+        start_filter_global = time.time()
+        query_f_arr = np.concatenate(query_f_list)
+        query_conf_arr = np.concatenate(query_conf_list)
+        po_query_ind = pg.non_dominated_front_2d(query_f_arr)
+        po_query_objs = query_f_arr[po_query_ind]
+        po_query_confs = query_conf_arr[po_query_ind]
+
+        if self.verbose:
+            print(
+                f"time cost of filtering globally "
+                f"is {time.time() - start_filter_global}"
+            )
+
+        uniq_po_query_objs, uniq_po_query_inds = np.unique(
+            po_query_objs, axis=0, return_index=True
+        )
+        uniq_po_query_confs = po_query_confs[uniq_po_query_inds]
+        print(f"Pareto frontier is {uniq_po_query_objs}")
+        return uniq_po_query_objs, uniq_po_query_confs
 
     def _merge(
         self,
-        node1: Tuple[pd.DataFrame, pd.DataFrame],
-        node2: Tuple[pd.DataFrame, pd.DataFrame],
-    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        node1: Tuple[np.ndarray, np.ndarray],
+        node2: Tuple[np.ndarray, np.ndarray],
+    ) -> Tuple[np.ndarray, np.ndarray]:
         all_objs, all_confs = self._compute_all_configurations(node1, node2)
-        po_objs, po_confs = self._compute_pareto_frontier_efficient(
-            all_objs, all_confs, node1, node2
-        )
+        po_objs, po_confs = self._compute_pareto_frontier_efficient(all_objs, all_confs)
         return po_objs, po_confs
 
-    def _divide_and_conquer(
-        self,
-        f: List[pd.DataFrame],
-        conf: List[pd.DataFrame],
-        mode: str = "recur",
-    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        if mode == "recur":
-            return self._divide_and_conquer_recur(f, conf)
-        else:
-            return self._div_and_conq_non_recur(f, conf)
-
-    def _divide_and_conquer_recur(
-        self, f: List[pd.DataFrame], conf: List[pd.DataFrame]
-    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        if len(f) == 1:
-            result = (f[0], conf[0])
-            return result
-        if len(f) == 2:
-            return self._merge((f[0], conf[0]), (f[1], conf[1]))
-
-        m = len(f) // 2
-        left = self._divide_and_conquer_recur(f[:m], conf[:m])
-        right = self._divide_and_conquer_recur(f[m:], conf[m:])
-
-        result_f, result_conf = self._merge(left, right)
-        return result_f, result_conf
-
     def _div_and_conq_non_recur(
-        self, f: List[pd.DataFrame], conf: List[pd.DataFrame]
-    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        stack_f = f.copy()
-        stack_conf = conf.copy()
-
-        while stack_f:
-            if len(stack_f) == 2 and len(stack_conf) == 2:
+        self,
+        c_id: int,
+        stages: np.ndarray,
+        qs_c_f_list: List[Any],
+        qs_c_conf_list: List[Any],
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        stages_str = [f"qs{int(qs_id)}" for qs_id in stages]
+        stack_f = [qs_f[c_id] for qs_f in qs_c_f_list.copy()]
+        stack_conf = [qs_conf[c_id] for qs_conf in qs_c_conf_list.copy()]
+        while len(stages_str) > 1:
+            if len(stages_str) == 2 and len(stages_str) == 2:
+                node1_qs_id = stages_str[0]
+                node2_qs_id = stages_str[1]
                 node1 = (stack_f[0], stack_conf[0])
                 node2 = (stack_f[1], stack_conf[1])
 
-                result = self._merge(node1, node2)
+                compressed_f, compressed_conf = self._merge(node1, node2)
+                stages_str.append(f"{node1_qs_id}+{node2_qs_id}")
+                stages_str.remove(node1_qs_id)
+                stages_str.remove(node2_qs_id)
+                assert len(stages_str) == 1
+
+                if "+" in node1_qs_id:
+                    node1_stages_inds = [
+                        int(x.split("qs")[1]) for x in node1_qs_id.split("+")
+                    ]
+                else:
+                    node1_stages_inds = [int(node1_qs_id.split("qs")[1])]
+
+                if "+" in node2_qs_id:
+                    node2_stages_inds = [
+                        int(x.split("qs")[1]) for x in node2_qs_id.split("+")
+                    ]
+                else:
+                    node2_stages_inds = [int(node2_qs_id.split("qs")[1])]
+
+                stages_inds = node1_stages_inds + node2_stages_inds
+                node1_confs = node1[1][compressed_conf[:, 0]]
+                node2_confs = node2[1][compressed_conf[:, 1]]
+                confs = np.hstack((node1_confs, node2_confs))
+                assert confs.shape[0] == compressed_f.shape[0]
+                split_confs = np.hsplit(confs, len(stages_inds))
+
+                sort_inds = np.argsort(stages_inds)
+                # let confs follow the order of qs0, 1, ...
+                final_confs = np.hstack([split_confs[x] for x in sort_inds])
+
+                assert final_confs.shape[0] == compressed_f.shape[0]
+                assert final_confs.shape[1] == self.len_theta * len(stages_inds)
+
+                result = (compressed_f, final_confs)
                 break
 
             else:
                 # get sub_problems
                 n_sub_problems = (
-                    int(len(stack_f) / 2)
-                    if len(stack_f) % 2 == 0
-                    else int(len(stack_f) / 2) + 1
+                    int(len(stages_str) / 2)
+                    if len(stages_str) % 2 == 0
+                    else int(len(stages_str) / 2) + 1
                 )
-
-                new_stack_f_df_list = []
-                new_stack_conf_df_list = []
+                tmp_stages = stages_str.copy()
+                new_stack_f_list: List[np.ndarray] = []
+                new_stack_conf_list: List[np.ndarray] = []
                 for i in range(n_sub_problems):
-                    if i * 2 + 1 == len(stack_f):
-                        new_stack_f_df_list.append(stack_f[-1])
-                        new_stack_conf_df_list.append(stack_conf[-1])
+                    if i * 2 + 1 == len(tmp_stages):
+                        new_stack_f_list.insert(0, stack_f[-1])
+                        new_stack_conf_list.insert(0, stack_conf[-1])
                     else:
-                        node1 = (stack_f[i * 2], stack_conf[i * 2])
-                        node2 = (stack_f[i * 2 + 1], stack_conf[i * 2 + 1])
-                        compressed_f_df, compressed_conf_df = self._merge(node1, node2)
-                        new_stack_f_df_list.append(compressed_f_df)
-                        new_stack_conf_df_list.append(compressed_conf_df)
+                        node1_qs_id = tmp_stages[i * 2]
+                        node2_qs_id = tmp_stages[i * 2 + 1]
 
-                stack_f = new_stack_f_df_list
-                stack_conf = new_stack_conf_df_list
+                        node1 = (
+                            stack_f[i * 2].reshape(-1, 2),
+                            stack_conf[i * 2],
+                        )
+                        node2 = (
+                            stack_f[i * 2 + 1].reshape(-1, 2),
+                            stack_conf[i * 2 + 1],
+                        )
+                        compressed_f, compressed_conf = self._merge(node1, node2)
+
+                        new_stack_f_list.append(compressed_f)
+
+                        stages_str.append(f"{node1_qs_id}+{node2_qs_id}")
+                        stages_str.remove(node1_qs_id)
+                        stages_str.remove(node2_qs_id)
+
+                        node1_confs = node1[1][compressed_conf[:, 0]]
+                        node2_confs = node2[1][compressed_conf[:, 1]]
+
+                        confs = np.hstack((node1_confs, node2_confs))
+                        assert confs.shape[0] == compressed_f.shape[0]
+                        new_stack_conf_list.append(confs)
+
+                stack_f = new_stack_f_list
+                stack_conf = new_stack_conf_list
+                assert len(stack_f) == len(stack_conf)
 
         return result
 
@@ -516,95 +490,27 @@ class DAGOpt:
         self,
         all_objs: List[List[Any]],
         all_confs: List[Tuple[Any, ...]],
-        node1: Tuple[pd.DataFrame, pd.DataFrame],
-        node2: Tuple[pd.DataFrame, pd.DataFrame],
-    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        all_indices = np.array(node1[1].index.values.tolist())
-        c_ind = np.unique(all_indices[:, 1])
-
+    ) -> Tuple[np.ndarray, np.ndarray]:
         arr_points = np.array(all_objs)
-        # indices = moo_ut.is_pareto_efficient(arr_points)
-        indices = pg.non_dominated_front_2d(arr_points).tolist()
-        po_objs = arr_points[indices]
-        po_f_df = pd.DataFrame(
-            po_objs,
-            index=np.ones(
-                po_objs.shape[0],
-            )
-            * c_ind,
-        )
+        po_inds = pg.non_dominated_front_2d(arr_points).tolist()
+        po_objs = arr_points[po_inds]
 
-        # all_confs: column1: selections in node1, column2: selections in node2
-        po_confs = np.array(all_confs)[indices]
+        po_confs = np.array(all_confs)[po_inds]
 
-        qs_all_indices_node1 = np.array(node1[1].index.values.tolist())
-        qs_all_indices_node2 = np.array(node2[1].index.values.tolist())
-        stages_node1 = np.unique(qs_all_indices_node1[:, 0])
-        stages_node2 = np.unique(qs_all_indices_node2[:, 0])
-
-        # all_confs: column1: selections in node1, column2: selections in node2
-        selections_node1 = po_confs[:, 0]
-        selections_node2 = po_confs[:, 1]
-
-        po_conf_node1 = [
-            node1[1]
-            .query(f"qs_id == {stage_id}")
-            .query(f"c_id == {c_ind}")
-            .iloc[sel, :]
-            for stage_id in stages_node1
-            for sel in selections_node1
-        ]
-        po_conf_node2 = [
-            node2[1]
-            .query(f"qs_id == {stage_id}")
-            .query(f"c_id == {c_ind}")
-            .iloc[sel, :]
-            for stage_id in stages_node2
-            for sel in selections_node2
-        ]
-
-        index_node1 = [
-            stages_node1.repeat(selections_node1.shape[0]),
-            np.array(
-                np.ones(
-                    stages_node1.shape[0],
-                )
-                * c_ind
-            ).repeat(selections_node1.shape[0]),
-        ]
-        indices_node1 = pd.MultiIndex.from_tuples(
-            list(zip(*index_node1)), names=["qs_id", "c_id"]
-        )
-        po_conf_node1_df = pd.DataFrame(po_conf_node1, index=indices_node1)
-
-        index_node2 = [
-            stages_node2.repeat(selections_node2.shape[0]),
-            np.array(
-                np.ones(
-                    stages_node2.shape[0],
-                )
-                * c_ind
-            ).repeat(selections_node2.shape[0]),
-        ]
-        indices_node2 = pd.MultiIndex.from_tuples(
-            list(zip(*index_node2)), names=["qs_id", "c_id"]
-        )
-        po_conf_node2_df = pd.DataFrame(po_conf_node2, index=indices_node2)
-
-        return po_f_df, pd.concat([po_conf_node1_df, po_conf_node2_df])
+        return po_objs, po_confs
 
     def _compute_all_configurations(
         self,
-        node1: Tuple[pd.DataFrame, pd.DataFrame],
-        node2: Tuple[pd.DataFrame, pd.DataFrame],
+        node1: Tuple[np.ndarray, np.ndarray],
+        node2: Tuple[np.ndarray, np.ndarray],
     ) -> Tuple[List[List[Any]], List[Tuple[Any, ...]]]:
-        pre_product = [list(range(len(node1[0]))), list(range(len(node2[0])))]
+        node1_f = np.unique(node1[0], axis=0)
+        node2_f = np.unique(node2[0], axis=0)
+        pre_product = [list(range(node1_f.shape[0])), list(range(node2_f.shape[0]))]
 
         def mass_evaluate(raw_conf: Tuple[Any, ...]) -> List[Any]:
             i, j = raw_conf[0], raw_conf[1]
-            latency, cost = np.sum(
-                [node1[0].values[i], node2[0].values[j]], axis=0, dtype=np.float64
-            )
+            latency, cost = np.sum([node1_f[i], node2_f[j]], axis=0, dtype=np.float64)
             return [latency, cost]
 
         all_confs = list(itertools.product(*pre_product))
@@ -612,37 +518,6 @@ class DAGOpt:
         confs = all_confs
 
         return objs, confs
-
-    def _approximate_frontier(
-        self,
-        f_df_list: List[pd.DataFrame],
-        conf_df_list: List[pd.DataFrame],
-    ) -> Tuple[List[pd.DataFrame], List[pd.DataFrame]]:
-        product_size = np.prod([v.shape[0] for v in f_df_list])
-
-        target_size = 3_000
-
-        approx_f_df = f_df_list
-        approx_conf_df = conf_df_list
-
-        while product_size > target_size:
-            # find the QS with the largest size
-            top_stage_id = np.argmax([[v.shape[0] for v in approx_f_df]])
-            # randomly sample 1/2 of the frontier of the above QS
-            top_size = approx_f_df[top_stage_id].shape[0]
-            random_choices = np.random.choice(
-                range(top_size), top_size // 2, replace=False
-            )
-            # update product_size, approx_f and approx_conf
-            approx_f_df[top_stage_id] = approx_f_df[top_stage_id].iloc[
-                random_choices, :
-            ]
-            approx_conf_df[top_stage_id] = approx_conf_df[top_stage_id].iloc[
-                random_choices, :
-            ]
-            product_size = np.prod([v.shape[0] for v in approx_f_df])
-
-        return approx_f_df, approx_conf_df
 
     # generate even weights for 2d and 3D
     def even_weights(self, stepsize: Any, m: int) -> List[List[Any]]:

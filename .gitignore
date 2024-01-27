@@ -165,3 +165,5 @@ tb_logs
 !/udao_spark/data
 playground/assets/optimizer_preparation
 .DS_Store
+
+output/
