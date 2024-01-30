@@ -320,6 +320,13 @@ def local_p90_err(y_true: np.ndarray, y_pred: np.ndarray) -> float:
 p90_err = make_scorer("p90_err", local_p90_err, optimum=0.0, greater_is_better=False)
 
 
+def local_p90_wape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    return local_p90_err(y_true, y_pred) / np.mean(y_true)
+
+
+p90_wape = make_scorer("p90_wape", local_p90_wape, optimum=0.0, greater_is_better=False)
+
+
 def local_p90_ape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     return float(np.percentile(np.abs(y_pred - y_true) / y_true, 90))
 
