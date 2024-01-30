@@ -313,8 +313,15 @@ wmape = make_scorer(
 )
 
 
-def local_p90(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+def local_p90_err(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    return float(np.percentile(np.abs(y_pred - y_true), 90))
+
+
+p90_err = make_scorer("p90_err", local_p90_err, optimum=0.0, greater_is_better=False)
+
+
+def local_p90_ape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     return float(np.percentile(np.abs(y_pred - y_true) / y_true, 90))
 
 
-p90 = make_scorer("p90", local_p90, optimum=0.0, greater_is_better=False)
+p90_ape = make_scorer("p90_ape", local_p90_ape, optimum=0.0, greater_is_better=False)

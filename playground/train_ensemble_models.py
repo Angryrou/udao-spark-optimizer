@@ -93,7 +93,7 @@ def get_ag_data(
             or not os.path.exists(weights_path)
             or len(weights_path.split("/")) != 7
         ):
-            raise ValueError("weights_path is None")
+            raise ValueError(f"weights_path is None: {weights_path}")
         # weights_path = parser.weights_path
         # weights_path = Path(
         #     "cache_and_ckp" /
@@ -148,7 +148,7 @@ if __name__ == "__main__":
 
     utcnow = datetime.utcnow()
     timestamp = utcnow.strftime("%Y%m%d_%H%M%S")
-    path = "AutogluonModels/{}_{}/{}/{}/ag/".format(
+    path = "AutogluonModels/{}_{}/{}/{}/ag_fast/".format(
         bm, pw.data_sign, q_type, graph_choice
     )
 
@@ -164,6 +164,36 @@ if __name__ == "__main__":
         train_data=train_data,
         # num_stack_levels=3,
         # num_bag_folds=4,
+        hyperparameters={
+            "NN_TORCH": {},
+            "GBM": {},
+            "CAT": {},
+            "XGB": {},
+            "FASTAI": {},
+            "RF": [
+                {
+                    "criterion": "gini",
+                    "ag_args": {
+                        "name_suffix": "Gini",
+                        "problem_types": ["binary", "multiclass"],
+                    },
+                },
+                {
+                    "criterion": "entropy",
+                    "ag_args": {
+                        "name_suffix": "Entr",
+                        "problem_types": ["binary", "multiclass"],
+                    },
+                },
+                {
+                    "criterion": "squared_error",
+                    "ag_args": {
+                        "name_suffix": "MSE",
+                        "problem_types": ["regression", "quantile"],
+                    },
+                },
+            ],
+        },
         tuning_data=val_data,
         # presets='good_quality',
         use_bag_holdout=True,
