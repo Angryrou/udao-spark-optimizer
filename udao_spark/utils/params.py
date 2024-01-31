@@ -149,6 +149,7 @@ def get_ag_parameters() -> Namespace:
                         choices=["none", "avg", "gtn"])
     parser.add_argument("--weights_path", type=str, default=None,
                         help="Path to the checkpoint")
+    parser.add_argument("--num_gpus", type=int, default=2,)
     # fmt: on
 
     return parser.parse_args()

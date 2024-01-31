@@ -142,6 +142,7 @@ if __name__ == "__main__":
     parser = get_ag_parameters()
     bm, q_type, debug = parser.benchmark, parser.q_type, parser.debug
     graph_choice, weights_path = parser.graph_choice, parser.weights_path
+    num_gpus = parser.num_gpus
     ret = get_ag_data(bm, q_type, debug, graph_choice, weights_path)
     train_data, val_data, test_data = ret["data"]
     ta, pw, objectives = ret["ta"], ret["pw"], ret["objectives"]
@@ -197,6 +198,7 @@ if __name__ == "__main__":
         tuning_data=val_data,
         # presets='good_quality',
         use_bag_holdout=True,
+        num_gpus=num_gpus,
     )
 
     # print(path)
