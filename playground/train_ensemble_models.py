@@ -142,15 +142,15 @@ if __name__ == "__main__":
     parser = get_ag_parameters()
     bm, q_type, debug = parser.benchmark, parser.q_type, parser.debug
     graph_choice, weights_path = parser.graph_choice, parser.weights_path
-    num_gpus = parser.num_gpus
+    num_gpus, ag_sign = parser.num_gpus, parser.ag_sign
     ret = get_ag_data(bm, q_type, debug, graph_choice, weights_path)
     train_data, val_data, test_data = ret["data"]
     ta, pw, objectives = ret["ta"], ret["pw"], ret["objectives"]
 
     utcnow = datetime.utcnow()
     timestamp = utcnow.strftime("%Y%m%d_%H%M%S")
-    path = "AutogluonModels/{}_{}/{}/{}/ag_fast/".format(
-        bm, pw.data_sign, q_type, graph_choice
+    path = "AutogluonModels/{}_{}/{}/{}/{}/".format(
+        bm, pw.data_sign, q_type, graph_choice, ag_sign
     )
 
     predictor = MultilabelPredictor(

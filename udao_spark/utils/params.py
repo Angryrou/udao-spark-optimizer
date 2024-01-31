@@ -150,6 +150,7 @@ def get_ag_parameters() -> Namespace:
     parser.add_argument("--weights_path", type=str, default=None,
                         help="Path to the checkpoint")
     parser.add_argument("--num_gpus", type=int, default=2,)
+    parser.add_argument("--ag_sign", type=str, default="ag_fast")
     # fmt: on
 
     return parser.parse_args()
