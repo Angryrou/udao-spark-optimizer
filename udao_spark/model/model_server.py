@@ -38,6 +38,10 @@ class ModelServer:
         else:
             raise ValueError(f"Unknown model sign: {model_sign}")
 
+        model.eval()
+        for p in model.parameters():
+            p.requires_grad = False
+
         module = UdaoModule.load_from_checkpoint(
             weights_path,
             map_location=get_default_device(),
