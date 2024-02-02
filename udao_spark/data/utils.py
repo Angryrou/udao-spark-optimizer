@@ -119,6 +119,8 @@ def prepare_data(
         df["IM-init-part-num-log"] = np.log(
             df["IM-init-part-num"].to_numpy().clip(min=EPS)
         )
+        df.rename(columns={"total_task_duration_s": "ana_latency_s"}, inplace=True)
+        df["ana_latency_s"] = df["ana_latency_s"] / df["k1"] / df["k3"]
         del df["InitialPartitionNum"]
     else:
         raise ValueError
