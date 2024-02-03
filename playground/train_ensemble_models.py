@@ -154,7 +154,7 @@ if __name__ == "__main__":
     train_data, val_data, test_data = ret["data"]
     ta, pw, objectives = ret["ta"], ret["pw"], ret["objectives"]
     if q_type.startswith("qs_"):
-        objectives = filter(lambda x: x != "latency_s", objectives)
+        objectives = list(filter(lambda x: x != "latency_s", objectives))
 
     utcnow = datetime.utcnow()
     timestamp = utcnow.strftime("%Y%m%d_%H%M%S")
