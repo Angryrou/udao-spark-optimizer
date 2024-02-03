@@ -145,10 +145,9 @@ def get_graph_gtn_params() -> Namespace:
 def get_ag_parameters() -> Namespace:
     parser = get_base_parser()
     # fmt: off
+    parser.add_argument("--hp_choice", type=str, default="default")
     parser.add_argument("--graph_choice", type=str, default="none",
                         choices=["none", "avg", "gtn"])
-    parser.add_argument("--weights_path", type=str, default=None,
-                        help="Path to the checkpoint")
     parser.add_argument("--num_gpus", type=int, default=2,)
     parser.add_argument("--ag_sign", type=str, default="ag_fast")
     # fmt: on

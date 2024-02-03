@@ -14,7 +14,7 @@ from udao_spark.model.mulitlabel_predictor import MultilabelPredictor  # type: i
 from udao_spark.model.utils import wmape
 from udao_spark.utils.collaborators import PathWatcher, TypeAdvisor
 from udao_spark.utils.params import ExtractParams, QType, get_ag_parameters
-from udao_trace.utils import ParquetHandler, PickleHandler
+from udao_trace.utils import JsonHandler, ParquetHandler, PickleHandler
 
 
 def get_graph_embedding(
@@ -141,16 +141,25 @@ def get_ag_data(
 if __name__ == "__main__":
     parser = get_ag_parameters()
     bm, q_type, debug = parser.benchmark, parser.q_type, parser.debug
-    graph_choice, weights_path = parser.graph_choice, parser.weights_path
+    hp_choice, graph_choice = parser.hp_choice, parser.graph_choice
     num_gpus, ag_sign = parser.num_gpus, parser.ag_sign
+    weights_cache = JsonHandler.load_json("assets/mlp_configs.json")
+    try:
+        weights_path = weights_cache[bm][hp_choice][graph_choice][q_type]
+    except KeyError:
+        raise Exception(
+            f"weights_path not found for {bm}/{hp_choice}/{graph_choice}/{q_type}"
+        )
     ret = get_ag_data(bm, q_type, debug, graph_choice, weights_path)
     train_data, val_data, test_data = ret["data"]
     ta, pw, objectives = ret["ta"], ret["pw"], ret["objectives"]
+    if q_type.startwith("qs"):
+        objectives = filter(lambda x: x != "latency_s", objectives)
 
     utcnow = datetime.utcnow()
     timestamp = utcnow.strftime("%Y%m%d_%H%M%S")
-    path = "AutogluonModels/{}_{}/{}/{}/{}/".format(
-        bm, pw.data_sign, q_type, graph_choice, ag_sign
+    path = "AutogluonModels/{}_{}/{}/{}/{}_{}/".format(
+        bm, pw.data_sign, q_type, graph_choice, ag_sign, hp_choice
     )
 
     predictor = MultilabelPredictor(
@@ -165,36 +174,37 @@ if __name__ == "__main__":
         train_data=train_data,
         # num_stack_levels=3,
         # num_bag_folds=4,
-        hyperparameters={
-            "NN_TORCH": {},
-            "GBM": {},
-            "CAT": {},
-            "XGB": {},
-            "FASTAI": {},
-            "RF": [
-                {
-                    "criterion": "gini",
-                    "ag_args": {
-                        "name_suffix": "Gini",
-                        "problem_types": ["binary", "multiclass"],
-                    },
-                },
-                {
-                    "criterion": "entropy",
-                    "ag_args": {
-                        "name_suffix": "Entr",
-                        "problem_types": ["binary", "multiclass"],
-                    },
-                },
-                {
-                    "criterion": "squared_error",
-                    "ag_args": {
-                        "name_suffix": "MSE",
-                        "problem_types": ["regression", "quantile"],
-                    },
-                },
-            ],
-        },
+        # hyperparameters={
+        #     "NN_TORCH": {},
+        #     "GBM": {},
+        #     "CAT": {},
+        #     "XGB": {},
+        #     "FASTAI": {},
+        #     "RF": [
+        #         {
+        #             "criterion": "gini",
+        #             "ag_args": {
+        #                 "name_suffix": "Gini",
+        #                 "problem_types": ["binary", "multiclass"],
+        #             },
+        #         },
+        #         {
+        #             "criterion": "entropy",
+        #             "ag_args": {
+        #                 "name_suffix": "Entr",
+        #                 "problem_types": ["binary", "multiclass"],
+        #             },
+        #         },
+        #         {
+        #             "criterion": "squared_error",
+        #             "ag_args": {
+        #                 "name_suffix": "MSE",
+        #                 "problem_types": ["regression", "quantile"],
+        #             },
+        #         },
+        #     ],
+        # },
+        excluded_model_types=["KNN"],
         tuning_data=val_data,
         # presets='good_quality',
         use_bag_holdout=True,
