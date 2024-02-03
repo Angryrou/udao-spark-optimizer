@@ -153,7 +153,7 @@ if __name__ == "__main__":
     ret = get_ag_data(bm, q_type, debug, graph_choice, weights_path)
     train_data, val_data, test_data = ret["data"]
     ta, pw, objectives = ret["ta"], ret["pw"], ret["objectives"]
-    if q_type.startwith("qs"):
+    if q_type.startswith("qs_"):
         objectives = filter(lambda x: x != "latency_s", objectives)
 
     utcnow = datetime.utcnow()
