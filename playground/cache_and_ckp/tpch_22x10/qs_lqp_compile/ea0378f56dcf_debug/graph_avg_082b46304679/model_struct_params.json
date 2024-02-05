@@ -1,10 +1,10 @@
 {
   "iterator_shape": {
     "feature_names": [
-      "IM-sizeInMB",
-      "IM-rowCount",
-      "IM-sizeInMB-log",
-      "IM-rowCount-log",
+      "IM-sizeInMB-compile",
+      "IM-rowCount-compile",
+      "IM-sizeInMB-compile-log",
+      "IM-rowCount-compile-log",
       "k1",
       "k2",
       "k3",

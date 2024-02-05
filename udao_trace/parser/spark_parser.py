@@ -115,7 +115,7 @@ class SparkParser:
         return {
             "latency_s": d["DurationInMs"] / 1000,
             "io_mb": d["IOBytes"]["Total"] / 1024 / 1024,
-            "ana_latency_s": d["TotalTasksDurationInMs"] / 1000,
+            "total_task_duration_s": d["TotalTasksDurationInMs"] / 1000,
         }
 
     def _parse_lqp(
