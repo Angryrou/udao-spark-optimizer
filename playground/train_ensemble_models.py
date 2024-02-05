@@ -172,46 +172,66 @@ if __name__ == "__main__":
         consider_labels_correlation=False,
     )
 
-    predictor.fit(
-        train_data=train_data,
-        # num_stack_levels=3,
-        # num_bag_folds=4,
-        # hyperparameters={
-        #     "NN_TORCH": {},
-        #     "GBM": {},
-        #     "CAT": {},
-        #     "XGB": {},
-        #     "FASTAI": {},
-        #     "RF": [
-        #         {
-        #             "criterion": "gini",
-        #             "ag_args": {
-        #                 "name_suffix": "Gini",
-        #                 "problem_types": ["binary", "multiclass"],
-        #             },
-        #         },
-        #         {
-        #             "criterion": "entropy",
-        #             "ag_args": {
-        #                 "name_suffix": "Entr",
-        #                 "problem_types": ["binary", "multiclass"],
-        #             },
-        #         },
-        #         {
-        #             "criterion": "squared_error",
-        #             "ag_args": {
-        #                 "name_suffix": "MSE",
-        #                 "problem_types": ["regression", "quantile"],
-        #             },
-        #         },
-        #     ],
-        # },
-        excluded_model_types=["KNN"],
-        tuning_data=val_data,
-        # presets='good_quality',
-        use_bag_holdout=True,
-        num_gpus=num_gpus,
-    )
+    print("selected features:", train_data.columns)
+
+    if os.path.exists(path):
+        predictor.load(f"{path}")
+    else:
+        predictor.fit(
+            train_data=train_data,
+            # num_stack_levels=3,
+            # num_bag_folds=4,
+            # hyperparameters={
+            #     "NN_TORCH": {},
+            #     "GBM": {},
+            #     "CAT": {},
+            #     "XGB": {},
+            #     "FASTAI": {},
+            #     "RF": [
+            #         {
+            #             "criterion": "gini",
+            #             "ag_args": {
+            #                 "name_suffix": "Gini",
+            #                 "problem_types": ["binary", "multiclass"],
+            #             },
+            #         },
+            #         {
+            #             "criterion": "entropy",
+            #             "ag_args": {
+            #                 "name_suffix": "Entr",
+            #                 "problem_types": ["binary", "multiclass"],
+            #             },
+            #         },
+            #         {
+            #             "criterion": "squared_error",
+            #             "ag_args": {
+            #                 "name_suffix": "MSE",
+            #                 "problem_types": ["regression", "quantile"],
+            #             },
+            #         },
+            #     ],
+            # },
+            excluded_model_types=["KNN"],
+            tuning_data=val_data,
+            # presets='good_quality',
+            use_bag_holdout=True,
+            num_gpus=num_gpus,
+        )
+
+    for obj in predictor.predictors.items():
+        models = predictor.get_predictor(obj).get_model_names(stack_name="core")
+        predictor.get_predictor(obj).fit_weighted_ensemble(
+            base_models=[
+                m
+                for m in models
+                if "Large" not in m and "XT" not in m and "ExtraTree" not in m
+            ],
+            name_suffix="Fast",
+        )
+        print(
+            f"ensemble models for {obj} including "
+            f"{predictor.get_predictor(obj).get_model_names()}"
+        )
 
     # print(path)
     # for obj in objectives:
