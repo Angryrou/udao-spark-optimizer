@@ -157,6 +157,7 @@ if __name__ == "__main__":
         train_data.drop(columns=["latency_s"], inplace=True)
         val_data.drop(columns=["latency_s"], inplace=True)
         test_data.drop(columns=["latency_s"], inplace=True)
+    print("selected features:", train_data.columns)
 
     # utcnow = datetime.utcnow()
     # timestamp = utcnow.strftime("%Y%m%d_%H%M%S")
@@ -164,21 +165,18 @@ if __name__ == "__main__":
         bm, pw.data_sign, q_type, graph_choice, ag_sign, hp_choice
     )
 
-    predictor = MultilabelPredictor(
-        path=path,
-        labels=objectives,
-        problem_types=["regression"] * len(objectives),
-        eval_metrics=[wmape] * len(objectives),
-        consider_labels_correlation=False,
-    )
-
-    print("selected features:", train_data.columns)
-
     if os.path.exists(path):
-        predictor.load(f"{path}")
+        predictor = MultilabelPredictor.load(f"{path}")
         print("loaded predictor from", path)
     else:
         print("not found, fitting")
+        predictor = MultilabelPredictor(
+            path=path,
+            labels=objectives,
+            problem_types=["regression"] * len(objectives),
+            eval_metrics=[wmape] * len(objectives),
+            consider_labels_correlation=False,
+        )
         predictor.fit(
             train_data=train_data,
             # num_stack_levels=3,
