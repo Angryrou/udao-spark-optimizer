@@ -302,6 +302,15 @@ def get_tuned_trainer(
     return trainer, module, ckp_learning_header
 
 
+def get_graph_ckp_info(weights_path: str) -> Tuple[str, str, str, str]:
+    splits = weights_path.split("/")
+    ag_prefix = splits[1]
+    model_sign = "_".join(splits[4].split("_")[:2])
+    data_processor_path = "/".join(splits[:4] + ["data_processor.pkl"])
+    model_params_path = "/".join(splits[:5] + ["model_struct_params.json"])
+    return ag_prefix, model_sign, model_params_path, data_processor_path
+
+
 def local_wmape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     sum_abs_error = np.abs(y_pred - y_true).sum()
     sum_scale = np.abs(y_true).sum()

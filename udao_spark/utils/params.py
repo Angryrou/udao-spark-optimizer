@@ -1,6 +1,6 @@
 import hashlib
 from abc import ABC
-from argparse import ArgumentParser, Namespace
+from argparse import ArgumentParser
 from dataclasses import dataclass
 from typing import Any, Dict, Literal
 
@@ -51,12 +51,15 @@ def get_base_parser() -> ArgumentParser:
     # Data-related arguments
     parser.add_argument("--benchmark", type=str, default="tpch",
                         help="Benchmark name")
+    parser.add_argument("--scale-factor", type=int, default=100)
     parser.add_argument("--q_type", type=str, default="q_compile",
                         choices=["q_compile", "q_all", "qs_lqp_compile",
                                  "qs_lqp_runtime", "qs_pqp_runtime"],
                         help="graph type")
     parser.add_argument("--debug", action="store_true",
                         help="Enable debug mode")
+    parser.add_argument("--seed", type=int, default=42,
+                        help="Random seed")
     # fmt: on
     return parser
 
@@ -83,15 +86,13 @@ def _get_graph_base_parser() -> ArgumentParser:
     # Others
     parser.add_argument("--num_workers", type=int, default=15,
                         help="non-debug only")
-    parser.add_argument("--seed", type=int, default=42,
-                        help="Random seed")
     parser.add_argument("--op_groups", nargs="+", default=["type", "cbo", "op_enc"],
                         help="List of operation groups")
     # fmt: on
     return parser
 
 
-def get_graph_avg_params() -> Namespace:
+def get_graph_avg_params() -> ArgumentParser:
     parser = _get_graph_base_parser()
     # fmt: off
     # Embedder parameters
@@ -109,10 +110,10 @@ def get_graph_avg_params() -> Namespace:
     parser.add_argument("--dropout", type=float, default=0.1,
                         help="Dropout rate")
     # fmt: on
-    return parser.parse_args()
+    return parser
 
 
-def get_graph_gtn_params() -> Namespace:
+def get_graph_gtn_params() -> ArgumentParser:
     parser = _get_graph_base_parser()
     # fmt: off
     # Embedder parameters
@@ -139,17 +140,30 @@ def get_graph_gtn_params() -> Namespace:
     parser.add_argument("--dropout", type=float, default=0.1,
                         help="Dropout rate")
     # fmt: on
-    return parser.parse_args()
+    return parser
 
 
-def get_ag_parameters() -> Namespace:
+def get_ag_parameters() -> ArgumentParser:
     parser = get_base_parser()
     # fmt: off
-    parser.add_argument("--hp_choice", type=str, default="default")
-    parser.add_argument("--graph_choice", type=str, default="none",
-                        choices=["none", "avg", "gtn"])
+    parser.add_argument("--hp_choice", type=str, default="default",
+                        choices=["default", "tuned-0202"])
+    parser.add_argument("--graph_choice", type=str, default="gtn",
+                        choices=["avg", "gtn"])
+    parser.add_argument("--ag_sign", type=str, default="ag_default_hp",
+                        choices=["ag_default_hp"])
     parser.add_argument("--num_gpus", type=int, default=2,)
-    parser.add_argument("--ag_sign", type=str, default="ag_fast")
     # fmt: on
 
-    return parser.parse_args()
+    return parser
+
+
+def get_compile_time_optimizer_parameters() -> ArgumentParser:
+    parser = get_ag_parameters()
+    # fmt: off
+    parser.add_argument("--use_mlp", action="store_true",
+                        help="Enable MLP only")
+    parser.add_argument("--ag_model", type=str, default=None,
+                        help="specific model name for AG")
+    # fmt: on
+    return parser

@@ -1,5 +1,4 @@
 import os.path
-from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -139,10 +138,10 @@ def get_ag_data(
 
 
 if __name__ == "__main__":
-    parser = get_ag_parameters()
-    bm, q_type, debug = parser.benchmark, parser.q_type, parser.debug
-    hp_choice, graph_choice = parser.hp_choice, parser.graph_choice
-    num_gpus, ag_sign = parser.num_gpus, parser.ag_sign
+    params = get_ag_parameters().parse_args()
+    bm, q_type, debug = params.benchmark, params.q_type, params.debug
+    hp_choice, graph_choice = params.hp_choice, params.graph_choice
+    num_gpus, ag_sign = params.num_gpus, params.ag_sign
     weights_cache = JsonHandler.load_json("assets/mlp_configs.json")
     try:
         weights_path = weights_cache[bm][hp_choice][graph_choice][q_type]
@@ -155,9 +154,12 @@ if __name__ == "__main__":
     ta, pw, objectives = ret["ta"], ret["pw"], ret["objectives"]
     if q_type.startswith("qs_"):
         objectives = list(filter(lambda x: x != "latency_s", objectives))
+        train_data.drop(columns=["latency_s"], inplace=True)
+        val_data.drop(columns=["latency_s"], inplace=True)
+        test_data.drop(columns=["latency_s"], inplace=True)
 
-    utcnow = datetime.utcnow()
-    timestamp = utcnow.strftime("%Y%m%d_%H%M%S")
+    # utcnow = datetime.utcnow()
+    # timestamp = utcnow.strftime("%Y%m%d_%H%M%S")
     path = "AutogluonModels/{}_{}/{}/{}/{}_{}/".format(
         bm, pw.data_sign, q_type, graph_choice, ag_sign, hp_choice
     )

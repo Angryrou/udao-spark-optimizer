@@ -17,7 +17,7 @@ from udao_trace.utils import JsonHandler
 
 logger.setLevel("INFO")
 if __name__ == "__main__":
-    params = get_graph_avg_params()
+    params = get_graph_avg_params().parse_args()
     set_deterministic_torch(params.seed)
     print(params)
     device = "gpu" if th.cuda.is_available() else "cpu"
