@@ -220,7 +220,7 @@ if __name__ == "__main__":
             num_gpus=num_gpus,
         )
 
-    for obj in predictor.predictors.items():
+    for obj in predictor.predictors.keys():
         models = predictor.get_predictor(obj).get_model_names(stack_name="core")
         predictor.get_predictor(obj).fit_weighted_ensemble(
             base_models=[
