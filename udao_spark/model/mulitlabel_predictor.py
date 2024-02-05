@@ -120,7 +120,7 @@ class MultilabelPredictor(object):
                 labels_to_drop = [
                     self.labels[j] for j in range(i + 1, len(self.labels))
                 ]
-            logger.log(f"for {label}, drop: {labels_to_drop} for training")
+            logger.log(20, f"for {label}, drop: {labels_to_drop} for training")
             train_data = train_data_og.drop(labels_to_drop, axis=1)
             if tuning_data is not None:
                 tuning_data = tuning_data_og.drop(labels_to_drop, axis=1)
