@@ -230,7 +230,7 @@ if __name__ == "__main__":
         )
         print(
             f"ensemble models for {obj} including "
-            f"{predictor.get_predictor(obj).get_model_names()}"
+            f"{predictor.get_predictor(obj).model_names()}"
         )
 
     # print(path)
