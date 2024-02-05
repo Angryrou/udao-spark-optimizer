@@ -1,5 +1,4 @@
 import os.path
-from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -139,10 +138,10 @@ def get_ag_data(
 
 
 if __name__ == "__main__":
-    parser = get_ag_parameters()
-    bm, q_type, debug = parser.benchmark, parser.q_type, parser.debug
-    hp_choice, graph_choice = parser.hp_choice, parser.graph_choice
-    num_gpus, ag_sign = parser.num_gpus, parser.ag_sign
+    params = get_ag_parameters().parse_args()
+    bm, q_type, debug = params.benchmark, params.q_type, params.debug
+    hp_choice, graph_choice = params.hp_choice, params.graph_choice
+    num_gpus, ag_sign = params.num_gpus, params.ag_sign
     weights_cache = JsonHandler.load_json("assets/mlp_configs.json")
     try:
         weights_path = weights_cache[bm][hp_choice][graph_choice][q_type]
@@ -155,61 +154,84 @@ if __name__ == "__main__":
     ta, pw, objectives = ret["ta"], ret["pw"], ret["objectives"]
     if q_type.startswith("qs_"):
         objectives = list(filter(lambda x: x != "latency_s", objectives))
+        train_data.drop(columns=["latency_s"], inplace=True)
+        val_data.drop(columns=["latency_s"], inplace=True)
+        test_data.drop(columns=["latency_s"], inplace=True)
+    print("selected features:", train_data.columns)
 
-    utcnow = datetime.utcnow()
-    timestamp = utcnow.strftime("%Y%m%d_%H%M%S")
+    # utcnow = datetime.utcnow()
+    # timestamp = utcnow.strftime("%Y%m%d_%H%M%S")
     path = "AutogluonModels/{}_{}/{}/{}/{}_{}/".format(
         bm, pw.data_sign, q_type, graph_choice, ag_sign, hp_choice
     )
 
-    predictor = MultilabelPredictor(
-        path=path,
-        labels=objectives,
-        problem_types=["regression"] * len(objectives),
-        eval_metrics=[wmape] * len(objectives),
-        consider_labels_correlation=False,
-    )
+    if os.path.exists(path):
+        predictor = MultilabelPredictor.load(f"{path}")
+        print("loaded predictor from", path)
+    else:
+        print("not found, fitting")
+        predictor = MultilabelPredictor(
+            path=path,
+            labels=objectives,
+            problem_types=["regression"] * len(objectives),
+            eval_metrics=[wmape] * len(objectives),
+            consider_labels_correlation=False,
+        )
+        predictor.fit(
+            train_data=train_data,
+            # num_stack_levels=3,
+            # num_bag_folds=4,
+            # hyperparameters={
+            #     "NN_TORCH": {},
+            #     "GBM": {},
+            #     "CAT": {},
+            #     "XGB": {},
+            #     "FASTAI": {},
+            #     "RF": [
+            #         {
+            #             "criterion": "gini",
+            #             "ag_args": {
+            #                 "name_suffix": "Gini",
+            #                 "problem_types": ["binary", "multiclass"],
+            #             },
+            #         },
+            #         {
+            #             "criterion": "entropy",
+            #             "ag_args": {
+            #                 "name_suffix": "Entr",
+            #                 "problem_types": ["binary", "multiclass"],
+            #             },
+            #         },
+            #         {
+            #             "criterion": "squared_error",
+            #             "ag_args": {
+            #                 "name_suffix": "MSE",
+            #                 "problem_types": ["regression", "quantile"],
+            #             },
+            #         },
+            #     ],
+            # },
+            excluded_model_types=["KNN"],
+            tuning_data=val_data,
+            # presets='good_quality',
+            use_bag_holdout=True,
+            num_gpus=num_gpus,
+        )
 
-    predictor.fit(
-        train_data=train_data,
-        # num_stack_levels=3,
-        # num_bag_folds=4,
-        # hyperparameters={
-        #     "NN_TORCH": {},
-        #     "GBM": {},
-        #     "CAT": {},
-        #     "XGB": {},
-        #     "FASTAI": {},
-        #     "RF": [
-        #         {
-        #             "criterion": "gini",
-        #             "ag_args": {
-        #                 "name_suffix": "Gini",
-        #                 "problem_types": ["binary", "multiclass"],
-        #             },
-        #         },
-        #         {
-        #             "criterion": "entropy",
-        #             "ag_args": {
-        #                 "name_suffix": "Entr",
-        #                 "problem_types": ["binary", "multiclass"],
-        #             },
-        #         },
-        #         {
-        #             "criterion": "squared_error",
-        #             "ag_args": {
-        #                 "name_suffix": "MSE",
-        #                 "problem_types": ["regression", "quantile"],
-        #             },
-        #         },
-        #     ],
-        # },
-        excluded_model_types=["KNN"],
-        tuning_data=val_data,
-        # presets='good_quality',
-        use_bag_holdout=True,
-        num_gpus=num_gpus,
-    )
+    for obj in predictor.predictors.keys():
+        models = predictor.get_predictor(obj).model_names(stack_name="core")
+        predictor.get_predictor(obj).fit_weighted_ensemble(
+            base_models=[
+                m
+                for m in models
+                if "Large" not in m and "XT" not in m and "ExtraTree" not in m
+            ],
+            name_suffix="Fast",
+        )
+        print(
+            f"ensemble models for {obj} including "
+            f"{predictor.get_predictor(obj).model_names()}"
+        )
 
     # print(path)
     # for obj in objectives:

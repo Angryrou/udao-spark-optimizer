@@ -1,12 +1,15 @@
 # ruff: noqa: F401
 # type: ignore
 
+import logging
 import os.path
 
 from autogluon.common.utils.utils import setup_outputdir
 from autogluon.core.utils.loaders import load_pkl
 from autogluon.core.utils.savers import save_pkl
 from autogluon.tabular import TabularDataset, TabularPredictor
+
+logger = logging.getLogger(__name__)
 
 
 class MultilabelPredictor(object):
@@ -117,6 +120,7 @@ class MultilabelPredictor(object):
                 labels_to_drop = [
                     self.labels[j] for j in range(i + 1, len(self.labels))
                 ]
+            logger.log(f"for {label}, drop: {labels_to_drop} for training")
             train_data = train_data_og.drop(labels_to_drop, axis=1)
             if tuning_data is not None:
                 tuning_data = tuning_data_og.drop(labels_to_drop, axis=1)

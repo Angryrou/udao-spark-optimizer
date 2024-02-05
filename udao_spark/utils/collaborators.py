@@ -86,6 +86,13 @@ class TypeAdvisor:
             return ["latency_s", "io_mb", "ana_latency_s"]
         raise NoQTypeError(self.q_type)
 
+    def get_ag_objectives(self) -> List[str]:
+        if self.q_type in ["q_compile", "q_all"]:
+            return ["latency_s", "io_mb"]
+        if self.q_type in ["qs_lqp_compile", "qs_lqp_runtime", "qs_pqp_runtime"]:
+            return ["io_mb", "ana_latency_s"]
+        raise NoQTypeError(self.q_type)
+
     def get_q_type_for_cache(self) -> str:
         if self.q_type in ["q_compile", "q_all"]:
             return self.q_type

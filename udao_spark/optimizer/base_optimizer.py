@@ -12,8 +12,9 @@ from udao.optimization.utils.moo_utils import Point, get_default_device
 from udao_trace.configuration import SparkConf
 from udao_trace.utils import PickleHandler
 
-from ..model.model_server import ModelServer
+from ..model.model_server import AGServer
 from ..utils.constants import THETA_C, THETA_P, THETA_S
+from ..utils.params import QType
 
 ThetaType = Literal["c", "p", "s"]
 
@@ -22,13 +23,17 @@ class BaseOptimizer(ABC):
     def __init__(
         self,
         model_sign: str,
-        model_params_path: str,
-        weights_path: str,
+        graph_model_params_path: str,
+        graph_weights_path: str,
+        q_type: QType,
         data_processor_path: str,
         spark_conf: SparkConf,
         decision_variables: List[str],
+        ag_path: str,
     ) -> None:
-        self.ms = ModelServer.from_ckp_path(model_sign, model_params_path, weights_path)
+        self.ag_ms = AGServer.from_ckp_path(
+            model_sign, graph_model_params_path, graph_weights_path, q_type, ag_path
+        )
         data_processor = PickleHandler.load(
             os.path.dirname(data_processor_path), os.path.basename(data_processor_path)
         )
@@ -95,27 +100,22 @@ class BaseOptimizer(ABC):
             raise TypeError(f"Expected QueryPlanInput, got {type(batch_input)}")
         embedding_input = batch_input.embedding_input
         tabular_input = batch_input.features
-        graph_embedding = self.ms.model.embedder(embedding_input.to(self.device))
+        graph_embedding = self.ag_ms.ms.model.embedder(embedding_input.to(self.device))
         non_decision_tabular_features = tabular_input[
             :, : -len(self.decision_variables)
         ]
         return graph_embedding, non_decision_tabular_features
 
-    def _predict_objectives(
+    def _predict_objectives_mlp(
         self, graph_embedding: th.Tensor, tabular_features: th.Tensor
     ) -> th.Tensor:
         """
         return multiple objective values for a given graph embedding and
         tabular features in the normalized space
         """
-        with th.no_grad():
-            return (
-                self.ms.model.regressor(
-                    graph_embedding, tabular_features.to(self.device)
-                )
-                .detach()
-                .cpu()
-            )
+        return self.ag_ms.predict_with_mlp(
+            graph_embedding, tabular_features.to(self.device)
+        )
 
     def sample_theta_all(self, n_samples: int, seed: Optional[int]) -> th.Tensor:
         if seed is not None:
@@ -131,8 +131,12 @@ class BaseOptimizer(ABC):
         return th.tensor(samples_normalized, dtype=self.dtype)
 
     def sample_theta_x(
-        self, n_samples: int, theta_type: ThetaType, seed: Optional[int]
-    ) -> th.Tensor:
+        self,
+        n_samples: int,
+        theta_type: ThetaType,
+        seed: Optional[int],
+        normalize: bool = True,
+    ) -> np.ndarray:
         if seed is not None:
             np.random.seed(seed)
         samples = np.random.randint(
@@ -140,10 +144,13 @@ class BaseOptimizer(ABC):
             high=self.theta_minmax[theta_type][1],
             size=(n_samples, len(self.theta_minmax[theta_type][0])),
         )
-        samples_normalized = (samples - self.theta_minmax[theta_type][0]) / (
-            self.theta_minmax[theta_type][1] - self.theta_minmax[theta_type][0]
-        )
-        return th.tensor(samples_normalized, dtype=self.dtype)
+        if normalize:
+            samples_normalized = (samples - self.theta_minmax[theta_type][0]) / (
+                self.theta_minmax[theta_type][1] - self.theta_minmax[theta_type][0]
+            )
+            return samples_normalized
+        else:
+            return samples
 
     @abstractmethod
     def solve(

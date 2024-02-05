@@ -22,6 +22,7 @@ THETA_RAW = [
 THETA_C = ["k1", "k2", "k3", "k4", "k5", "k6", "k7", "k8"]
 THETA_P = ["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9"]
 THETA_S = ["s10", "s11"]
+THETA_COMPILE = THETA_C + THETA_P + THETA_S
 
 ALPHA_LQP_RAW = [
     "IM-inputSizeInBytes",

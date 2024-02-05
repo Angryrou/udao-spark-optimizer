@@ -1,3 +1,10 @@
+from typing import Dict
+
+import numpy as np
+import pandas as pd
+import torch as th
+from autogluon.core import TabularDataset
+from autogluon.tabular import TabularPredictor
 from torchmetrics import WeightedMeanAbsolutePercentageError
 from udao.model import UdaoModel, UdaoModule
 from udao.model.utils.losses import WMAPELoss
@@ -6,6 +13,9 @@ from udao.utils.logging import logger
 
 from udao_trace.utils import JsonHandler
 
+from ..utils.collaborators import TypeAdvisor
+from ..utils.constants import THETA_COMPILE
+from ..utils.params import QType
 from .utils import (
     GraphAverageMLPParams,
     GraphTransformerMLPParams,
@@ -25,7 +35,7 @@ class ModelServer:
             )
             objectives = graph_avg_ml_params.iterator_shape.output_names
             model = get_graph_avg_mlp(graph_avg_ml_params)
-            logger.info("MODEL DETAILS:\n")
+            logger.info("GRAPH MODEL DETAILS:\n")
             logger.info(model)
         elif model_sign == "graph_gtn":
             graph_gtn_ml_params = GraphTransformerMLPParams.from_dict(
@@ -33,7 +43,7 @@ class ModelServer:
             )
             objectives = graph_gtn_ml_params.iterator_shape.output_names
             model = get_graph_gtn_mlp(graph_gtn_ml_params)
-            logger.info("MODEL DETAILS:\n")
+            logger.info("GRAPH MODEL DETAILS:\n")
             logger.info(model)
         else:
             raise ValueError(f"Unknown model sign: {model_sign}")
@@ -59,5 +69,67 @@ class ModelServer:
             raise TypeError(f"Unknown model type: {type(module.model)}")
         self.model: UdaoModel = module.model
         self.model.eval()
+        for p in self.model.parameters():
+            p.requires_grad = False
         self.objectives = module.objectives
         logger.info(f"Model loaded with objectives: {self.objectives}")
+
+
+class AGServer:
+    @classmethod
+    def from_ckp_path(
+        cls,
+        model_sign: str,
+        graph_model_params_path: str,
+        graph_weights_path: str,
+        q_type: QType,
+        ag_path: str,
+    ) -> "AGServer":
+        ms = ModelServer.from_ckp_path(
+            model_sign, graph_model_params_path, graph_weights_path
+        )
+        ta = TypeAdvisor(q_type=q_type)
+        predictors = {
+            obj: TabularPredictor.load(f"{ag_path}/Predictor_{obj}")
+            for obj in ta.get_ag_objectives()
+        }
+        return cls(ta, ms, predictors)
+
+    def __init__(
+        self, ta: TypeAdvisor, ms: ModelServer, predictors: Dict[str, TabularPredictor]
+    ):
+        self.ta = ta
+        self.ms = ms
+        self.predictors = predictors
+
+    def predict_with_mlp(
+        self, graph_embedding: th.Tensor, tabular_features: th.Tensor
+    ) -> th.Tensor:
+        """
+        return multiple objective values for a given graph embedding and
+        tabular features in the normalized space
+        """
+        with th.no_grad():
+            return (
+                self.ms.model.regressor(graph_embedding, tabular_features)
+                .detach()
+                .cpu()
+            )
+
+    def predict_with_ag(
+        self,
+        graph_embeddings: np.ndarray,
+        non_decision_df: pd.DataFrame,
+        sampled_theta: np.ndarray,
+        model_name: str,
+    ) -> Dict[str, np.ndarray]:
+        df = non_decision_df.copy()
+        ge_dim = graph_embeddings.shape[1]
+        ge_cols = [f"ge_{i}" for i in range(ge_dim)]
+        df[ge_cols] = graph_embeddings
+        df[THETA_COMPILE] = sampled_theta
+        dataset = TabularDataset(df[ge_cols + self.ta.get_tabular_columns()])
+        return {
+            obj: self.predictors[obj].predict(dataset, model=model_name)
+            for obj in self.ta.get_ag_objectives()
+        }
