@@ -176,7 +176,9 @@ if __name__ == "__main__":
 
     if os.path.exists(path):
         predictor.load(f"{path}")
+        print("loaded predictor from", path)
     else:
+        print("not found, fitting")
         predictor.fit(
             train_data=train_data,
             # num_stack_levels=3,
