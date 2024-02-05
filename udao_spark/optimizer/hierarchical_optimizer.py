@@ -84,8 +84,8 @@ class HierarchicalOptimizer(BaseOptimizer):
             sampled_theta[:, 0],
             sampled_theta[:, 1],
             sampled_theta[:, 2],
-            objs["ana_latency"],
-            objs["io"],
+            np.array(objs["ana_latency_s"]),
+            np.array(objs["io_mb"]),
         )
 
     def foo_samples(
@@ -156,9 +156,14 @@ class HierarchicalOptimizer(BaseOptimizer):
         index = 0
         theta_chosen = sampled_theta[index]
         logger.info(theta_chosen)
-        conf = self.sc.construct_configuration_from_norm(
-            theta_chosen.reshape(1, -1)
-        ).squeeze()
+        if use_ag:
+            conf = self.sc.construct_configuration(
+                theta_chosen.reshape(1, -1).astype(float)
+            ).squeeze()
+        else:
+            conf = self.sc.construct_configuration_from_norm(
+                theta_chosen.reshape(1, -1)
+            ).squeeze()
         objs = np.array(
             [
                 objs_dict["ana_latency"][index],
