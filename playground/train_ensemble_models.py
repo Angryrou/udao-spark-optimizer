@@ -221,7 +221,7 @@ if __name__ == "__main__":
         )
 
     for obj in predictor.predictors.keys():
-        models = predictor.get_predictor(obj).get_model_names(stack_name="core")
+        models = predictor.get_predictor(obj).model_names(stack_name="core")
         predictor.get_predictor(obj).fit_weighted_ensemble(
             base_models=[
                 m
