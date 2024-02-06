@@ -49,6 +49,7 @@ if __name__ == "__main__":
     logger.info(f"ag_path: {ag_path}")
 
     hier_optimizer = HierarchicalOptimizer(
+        bm=bm,
         model_sign=model_sign,
         graph_model_params_path=model_params_path,
         graph_weights_path=weights_path,
