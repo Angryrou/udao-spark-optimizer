@@ -22,6 +22,7 @@ ThetaType = Literal["c", "p", "s"]
 class BaseOptimizer(ABC):
     def __init__(
         self,
+        bm: str,
         model_sign: str,
         graph_model_params_path: str,
         graph_weights_path: str,
@@ -31,6 +32,7 @@ class BaseOptimizer(ABC):
         decision_variables: List[str],
         ag_path: str,
     ) -> None:
+        self.bm = bm
         self.ag_ms = AGServer.from_ckp_path(
             model_sign, graph_model_params_path, graph_weights_path, q_type, ag_path
         )

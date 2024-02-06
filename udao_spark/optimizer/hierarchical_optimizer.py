@@ -78,7 +78,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         model_name: str,
     ) -> Dict[str, np.ndarray]:
         objs = self.ag_ms.predict_with_ag(
-            graph_embeddings, non_decision_df, sampled_theta, model_name
+            self.bm, graph_embeddings, non_decision_df, sampled_theta, model_name
         )
         return self._summarize_obj(
             sampled_theta[:, 0],
