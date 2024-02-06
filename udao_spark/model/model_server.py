@@ -102,6 +102,8 @@ class AGServer:
         self.ta = ta
         self.ms = ms
         self.predictors = predictors
+        for obj in predictors:
+            self.predictors[obj].persist()  # persist the predictor in memory
 
     def predict_with_mlp(
         self, graph_embedding: th.Tensor, tabular_features: th.Tensor
