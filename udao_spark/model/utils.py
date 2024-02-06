@@ -23,7 +23,7 @@ from udao.utils.logging import logger
 
 from udao_trace.utils import JsonHandler
 
-from ..utils.params import UdaoParams
+from ..utils.params import QType, UdaoParams
 
 
 @dataclass
@@ -309,6 +309,41 @@ def get_graph_ckp_info(weights_path: str) -> Tuple[str, str, str, str]:
     data_processor_path = "/".join(splits[:4] + ["data_processor.pkl"])
     model_params_path = "/".join(splits[:5] + ["model_struct_params.json"])
     return ag_prefix, model_sign, model_params_path, data_processor_path
+
+
+LAT_MIN_MAP = {
+    "tpch": {
+        "q_compile": {
+            "latency_s": 3.073,
+            "io_mb": 194.81466484069824,
+        },
+        "q_all": {
+            "latency_s": 0.076,
+            "io_mb": 4.1961669921875e-05,
+        },
+        "qs_lqp_compile": {
+            "ana_latency_s": 0.0001625,
+            "io_mb": 3.4332275390625e-05,
+        },
+        "qs_lqp_runtime": {
+            "ana_latency_s": 0.0001625,
+            "io_mb": 3.4332275390625e-05,
+        },
+        "qs_pqp_runtime": {
+            "ana_latency_s": 0.0001625,
+            "io_mb": 3.4332275390625e-05,
+        },
+    },
+}
+
+
+def calibrate_negative_predictions(
+    y_pred: np.ndarray, bm: str, obj: str, q_type: Optional[QType] = None
+) -> np.ndarray:
+    if q_type is None:
+        return np.clip(y_pred, a_min=0, a_max=None)
+    else:
+        return np.clip(y_pred, a_min=LAT_MIN_MAP[bm][q_type][obj], a_max=None)
 
 
 def local_wmape(y_true: np.ndarray, y_pred: np.ndarray) -> float:

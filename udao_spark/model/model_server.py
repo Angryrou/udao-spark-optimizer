@@ -19,6 +19,7 @@ from ..utils.params import QType
 from .utils import (
     GraphAverageMLPParams,
     GraphTransformerMLPParams,
+    calibrate_negative_predictions,
     get_graph_avg_mlp,
     get_graph_gtn_mlp,
 )
@@ -101,6 +102,8 @@ class AGServer:
         self.ta = ta
         self.ms = ms
         self.predictors = predictors
+        for obj in predictors:
+            self.predictors[obj].persist()  # persist the predictor in memory
 
     def predict_with_mlp(
         self, graph_embedding: th.Tensor, tabular_features: th.Tensor
@@ -118,6 +121,7 @@ class AGServer:
 
     def predict_with_ag(
         self,
+        bm: str,
         graph_embeddings: np.ndarray,
         non_decision_df: pd.DataFrame,
         sampled_theta: np.ndarray,
@@ -130,6 +134,11 @@ class AGServer:
         df[THETA_COMPILE] = sampled_theta
         dataset = TabularDataset(df[ge_cols + self.ta.get_tabular_columns()])
         return {
-            obj: self.predictors[obj].predict(dataset, model=model_name)
+            obj: calibrate_negative_predictions(
+                self.predictors[obj].predict(dataset, model=model_name),
+                bm=bm,
+                obj=obj,
+                q_type=self.ta.q_type,
+            )
             for obj in self.ta.get_ag_objectives()
         }

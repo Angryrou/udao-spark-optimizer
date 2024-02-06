@@ -49,6 +49,7 @@ if __name__ == "__main__":
     logger.info(f"ag_path: {ag_path}")
 
     hier_optimizer = HierarchicalOptimizer(
+        bm=bm,
         model_sign=model_sign,
         graph_model_params_path=model_params_path,
         graph_weights_path=weights_path,
@@ -81,12 +82,23 @@ if __name__ == "__main__":
     # Compile time QS logical plans from CBO estimation (a list of LQP-sub)
     is_oracle = q_type == "qs_lqp_runtime"
     use_ag = not params.use_mlp
-    for trace in raw_traces:
+    # for trace in raw_traces:
+    for trace in [
+        raw_traces[9],
+        raw_traces[14],
+        raw_traces[15],
+        raw_traces[16],
+        raw_traces[21],
+    ]:
         logger.info(f"Processing {trace}")
+        query_id = trace.split("tpch100_")[1].split("_")[0]  # e.g. 2-1
         non_decision_input = ie.get_qs_lqp(trace, is_oracle=is_oracle)
         po_points = hier_optimizer.solve(
             non_decision_input,
             seed=params.seed,
             use_ag=use_ag,
             ag_model=params.ag_model,
+            algo="analyze_multi_control%1",
+            save_data=True,
+            query_id=query_id,
         )

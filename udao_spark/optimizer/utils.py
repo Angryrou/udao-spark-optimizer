@@ -1,3 +1,4 @@
+import os
 from typing import Union
 
 import numpy as np
@@ -35,3 +36,16 @@ def get_cloud_cost_w_io(
     io_mb: UdaoNumeric,
 ) -> UdaoNumeric:
     return get_cloud_cost_add_io(get_cloud_cost_wo_io(lat, cores, mem, nexec), io_mb)
+
+
+def save_results(path: str, results: np.ndarray, mode: str = "data") -> None:
+    file_path = path
+    if not os.path.exists(file_path):
+        os.makedirs(file_path, exist_ok=True)
+
+    if mode == "Theta":
+        np.savetxt(
+            f"{file_path}/{mode}.txt", results, delimiter=" ", newline="\n", fmt="%s"
+        )
+    else:
+        np.savetxt(f"{file_path}/{mode}.txt", results)
