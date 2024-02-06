@@ -1,3 +1,4 @@
+import time
 from typing import Dict, Optional, Tuple
 
 import numpy as np
@@ -77,8 +78,14 @@ class HierarchicalOptimizer(BaseOptimizer):
         sampled_theta: np.ndarray,
         model_name: str,
     ) -> Dict[str, np.ndarray]:
+        start_time_ns = time.perf_counter_ns()
         objs = self.ag_ms.predict_with_ag(
             self.bm, graph_embeddings, non_decision_df, sampled_theta, model_name
+        )
+        end_time_ns = time.perf_counter_ns()
+        logger.info(
+            f"takes {(end_time_ns - start_time_ns) / 1e6} ms "
+            f"to run {len(sampled_theta)} theta"
         )
         return self._summarize_obj(
             sampled_theta[:, 0],
