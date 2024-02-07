@@ -220,6 +220,10 @@ if __name__ == "__main__":
 
     for obj in predictor.predictors.keys():
         models = predictor.get_predictor(obj).model_names(stack_name="core")
+        return_models_po = predictor.get_predictor(obj).fit_weighted_ensemble(
+            expand_pareto_frontier=True,
+            name_suffix="PO",
+        )
         predictor.get_predictor(obj).fit_weighted_ensemble(
             base_models=[
                 m
@@ -228,6 +232,17 @@ if __name__ == "__main__":
             ],
             name_suffix="Fast",
         )
+        return_models_fast_po = predictor.get_predictor(obj).fit_weighted_ensemble(
+            base_models=[
+                m
+                for m in models
+                if "Large" not in m and "XT" not in m and "ExtraTree" not in m
+            ],
+            expand_pareto_frontier=True,
+            name_suffix="FastPO",
+        )
+        print(f"get po-models from {obj}: {return_models_po}")
+        print(f"get fast-po-models from {obj}: {return_models_fast_po}")
         print(
             f"ensemble models for {obj} including "
             f"{predictor.get_predictor(obj).model_names()}"
