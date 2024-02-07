@@ -142,6 +142,9 @@ if __name__ == "__main__":
     bm, q_type, debug = params.benchmark, params.q_type, params.debug
     hp_choice, graph_choice = params.hp_choice, params.graph_choice
     num_gpus, ag_sign = params.num_gpus, params.ag_sign
+    infer_limit = params.infer_limit
+    infer_limit_batch_size = params.infer_limit_batch_size
+
     weights_cache = JsonHandler.load_json("assets/mlp_configs.json")
     try:
         weights_path = weights_cache[bm][hp_choice][graph_choice][q_type]
@@ -161,9 +164,23 @@ if __name__ == "__main__":
 
     # utcnow = datetime.utcnow()
     # timestamp = utcnow.strftime("%Y%m%d_%H%M%S")
-    path = "AutogluonModels/{}_{}/{}/{}/{}_{}/".format(
-        bm, pw.data_sign, q_type, graph_choice, ag_sign, hp_choice
-    )
+    if infer_limit is None:
+        path = "AutogluonModels/{}_{}/{}/{}/{}_{}/".format(
+            bm, pw.data_sign, q_type, graph_choice, ag_sign, hp_choice
+        )
+    else:
+        if infer_limit_batch_size is None:
+            infer_limit_batch_size = 10000
+        path = "AutogluonModels/{}_{}/{}/{}/{}_{}_infer_limit_{}_batch_size_{}/".format(
+            bm,
+            pw.data_sign,
+            q_type,
+            graph_choice,
+            ag_sign,
+            hp_choice,
+            infer_limit,
+            infer_limit_batch_size,
+        )
 
     if os.path.exists(path):
         predictor = MultilabelPredictor.load(f"{path}")
@@ -215,6 +232,8 @@ if __name__ == "__main__":
             tuning_data=val_data,
             # presets='good_quality',
             use_bag_holdout=True,
+            infer_limit=infer_limit,
+            infer_limit_batch_size=infer_limit_batch_size,
             num_gpus=num_gpus,
         )
 
@@ -241,17 +260,10 @@ if __name__ == "__main__":
             expand_pareto_frontier=True,
             name_suffix="FastPO",
         )
+
         print(f"get po-models from {obj}: {return_models_po}")
         print(f"get fast-po-models from {obj}: {return_models_fast_po}")
         print(
             f"ensemble models for {obj} including "
             f"{predictor.get_predictor(obj).model_names()}"
         )
-
-    # print(path)
-    # for obj in objectives:
-    #     print(
-    #         predictor.get_predictor(obj)
-    #         .leaderboard(val_data, extra_metrics=[p90, pearsonr])
-    #         .to_string()
-    #     )
