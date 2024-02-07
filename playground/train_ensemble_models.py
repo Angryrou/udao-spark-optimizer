@@ -11,9 +11,10 @@ from udao.optimization.utils.moo_utils import get_default_device
 from udao_spark.model.model_server import ModelServer
 from udao_spark.model.mulitlabel_predictor import MultilabelPredictor  # type: ignore
 from udao_spark.model.utils import wmape
+from udao_spark.optimizer.utils import get_ag_meta
 from udao_spark.utils.collaborators import PathWatcher, TypeAdvisor
 from udao_spark.utils.params import ExtractParams, QType, get_ag_parameters
-from udao_trace.utils import JsonHandler, ParquetHandler, PickleHandler
+from udao_trace.utils import ParquetHandler, PickleHandler
 
 
 def get_graph_embedding(
@@ -93,16 +94,6 @@ def get_ag_data(
             or len(weights_path.split("/")) != 7
         ):
             raise ValueError(f"weights_path is None: {weights_path}")
-        # weights_path = parser.weights_path
-        # weights_path = Path(
-        #     "cache_and_ckp" /
-        #     "tpch_22x2273" /
-        #     "q_compile" /
-        #     "ea0378f56dcf" /
-        #     "graph_avg_0036afb5d8af" /
-        #     "learning_b125dbcf7f40" /
-        #     "199-val_latency_s_WMAPE=0.148-val_io_mb_WMAPE=0.166.ckpt"
-        # )
         header = "/".join(weights_path.split("/")[:4])
         model_params_path = (
             "/".join(weights_path.split("/")[:5]) + "/model_struct_params.json"
@@ -145,13 +136,18 @@ if __name__ == "__main__":
     infer_limit = params.infer_limit
     infer_limit_batch_size = params.infer_limit_batch_size
 
-    weights_cache = JsonHandler.load_json("assets/mlp_configs.json")
-    try:
-        weights_path = weights_cache[bm][hp_choice][graph_choice][q_type]
-    except KeyError:
-        raise Exception(
-            f"weights_path not found for {bm}/{hp_choice}/{graph_choice}/{q_type}"
-        )
+    ag_meta = get_ag_meta(
+        bm,
+        hp_choice,
+        graph_choice,
+        q_type,
+        ag_sign,
+        infer_limit,
+        infer_limit_batch_size,
+    )
+    weights_path = ag_meta["graph_weights_path"]
+    ag_path = ag_meta["ag_path"]
+
     ret = get_ag_data(bm, q_type, debug, graph_choice, weights_path)
     train_data, val_data, test_data = ret["data"]
     ta, pw, objectives = ret["ta"], ret["pw"], ret["objectives"]
@@ -162,33 +158,13 @@ if __name__ == "__main__":
         test_data.drop(columns=["latency_s"], inplace=True)
     print("selected features:", train_data.columns)
 
-    # utcnow = datetime.utcnow()
-    # timestamp = utcnow.strftime("%Y%m%d_%H%M%S")
-    if infer_limit is None:
-        path = "AutogluonModels/{}_{}/{}/{}/{}_{}/".format(
-            bm, pw.data_sign, q_type, graph_choice, ag_sign, hp_choice
-        )
-    else:
-        if infer_limit_batch_size is None:
-            infer_limit_batch_size = 10000
-        path = "AutogluonModels/{}_{}/{}/{}/{}_{}_infer_limit_{}_batch_size_{}/".format(
-            bm,
-            pw.data_sign,
-            q_type,
-            graph_choice,
-            ag_sign,
-            hp_choice,
-            infer_limit,
-            infer_limit_batch_size,
-        )
-
-    if os.path.exists(path):
-        predictor = MultilabelPredictor.load(f"{path}")
-        print("loaded predictor from", path)
+    if os.path.exists(ag_path):
+        predictor = MultilabelPredictor.load(f"{ag_path}")
+        print("loaded predictor from", ag_path)
     else:
         print("not found, fitting")
         predictor = MultilabelPredictor(
-            path=path,
+            path=ag_path,
             labels=objectives,
             problem_types=["regression"] * len(objectives),
             eval_metrics=[wmape] * len(objectives),
