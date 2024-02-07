@@ -98,7 +98,7 @@ if __name__ == "__main__":
             seed=params.seed,
             use_ag=use_ag,
             ag_model=params.ag_model,
-            algo="analyze_multi_control%1",
+            algo="model_inference_time",
             save_data=True,
             query_id=query_id,
         )

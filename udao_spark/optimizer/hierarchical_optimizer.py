@@ -251,7 +251,7 @@ class HierarchicalOptimizer(BaseOptimizer):
             fake_objs = np.array([-1])
             start_infer = time.time()
             # n_repeat = 10
-            for n_repeat in [10, 100, 1000]:
+            for n_repeat in [10, 100, 1000, 10000]:
                 if use_ag:
                     graph_embeddings = graph_embeddings.detach().cpu()
                     if graph_embeddings.shape[0] != n_stages:
