@@ -102,6 +102,7 @@ class AGServer:
         self.ta = ta
         self.ms = ms
         self.predictors = predictors
+        self.objectives = self.ta.get_ag_objectives()
         for obj in predictors:
             self.predictors[obj].persist()  # persist the predictor in memory
 
@@ -133,9 +134,14 @@ class AGServer:
         df[ge_cols] = graph_embeddings
         df[THETA_COMPILE] = sampled_theta
         dataset = TabularDataset(df[ge_cols + self.ta.get_tabular_columns()])
+        transformed_data = self.predictors[self.objectives[0]].transform_features(
+            dataset
+        )
         return {
             obj: calibrate_negative_predictions(
-                self.predictors[obj].predict(dataset, model=model_name),
+                self.predictors[obj].predict(
+                    transformed_data, model=model_name, transform_features=False
+                ),
                 bm=bm,
                 obj=obj,
                 q_type=self.ta.q_type,
