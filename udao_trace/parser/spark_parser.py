@@ -38,6 +38,100 @@ THETA_S = [
 ]
 
 
+def parse_conf(conf: Dict) -> Dict:
+    d = {
+        f"{k}": v
+        for k_type, k_list in conf.items()
+        for kv in k_list
+        for k, v in kv.items()
+    }
+    return {
+        **{f"theta_c-{k}": d[k] for k in THETA_C if k in d},
+        **{f"theta_p-{k}": d[k] for k in THETA_P if k in d},
+        **{f"theta_s-{k}": d[k] for k in THETA_S if k in d},
+    }
+
+
+def parse_base(d: Dict) -> Tuple[Dict, Dict]:
+    im = {f"IM-{k}": v for k, v in d["IM"].items()}
+    pd = d["PD"]
+    ss_dict = {}
+    if "RunningQueryStageSnapshot" in d:
+        for k, v in d["RunningQueryStageSnapshot"].items():
+            if isinstance(v, list):
+                for tile, v_ in zip([0, 25, 50, 75, 100], v):
+                    ss_dict[f"SS-{k}-{tile}tile"] = v_
+            else:
+                ss_dict[f"SS-{k}"] = v
+    else:
+        ss_dict = {
+            "SS-RunningTasksNum": 0,
+            "SS-FinishedTasksNum": 0,
+            "SS-FinishedTasksTotalTimeInMs": 0.0,
+            "SS-FinishedTasksDistributionInMs-0tile": 0.0,
+            "SS-FinishedTasksDistributionInMs-25tile": 0.0,
+            "SS-FinishedTasksDistributionInMs-50tile": 0.0,
+            "SS-FinishedTasksDistributionInMs-75tile": 0.0,
+            "SS-FinishedTasksDistributionInMs-100tile": 0.0,
+        }
+    if "Configuration" in d:
+        conf_key = "Configuration"
+    else:
+        assert "RuntimeConfiguration" in d
+        conf_key = "RuntimeConfiguration"
+    conf = parse_conf(d[conf_key])
+    return {**im, **{"PD": pd}, **ss_dict}, conf
+
+
+def parse_lqp_objectives(d: Dict) -> Dict:
+    return {
+        "latency_s": d["DurationInMs"] / 1000,
+        "io_mb": d["IOBytes"]["Total"] / 1024 / 1024,
+    }
+
+
+def parse_qs_objectives(d: Dict) -> Dict:
+    return {
+        "latency_s": d["DurationInMs"] / 1000,
+        "io_mb": d["IOBytes"]["Total"] / 1024 / 1024,
+        "total_task_duration_s": d["TotalTasksDurationInMs"] / 1000,
+    }
+
+
+def drop_raw_plan(d: Dict, to_drop: str = "rawPlan") -> Dict:
+    return {k: v for k, v in d.items() if k != to_drop}
+
+
+def parse_lqp_features(d: Dict) -> Tuple[Dict, Dict]:
+    lqp_str = JsonHandler.dump_to_string(drop_raw_plan(d["LQP"]), indent=None)
+    base, conf = parse_base(d)
+    return {**{"lqp": lqp_str}, **base}, conf
+
+
+def parse_lqp(
+    feat: Dict, obj: Dict, meta: Dict, theta_c: Optional[Dict] = None
+) -> Dict:
+    feat_dict, conf = parse_lqp_features(feat)
+    obj_dict = parse_lqp_objectives(obj)
+    if theta_c is None:
+        return {**meta, **feat_dict, **conf, **obj_dict}
+    else:
+        return {**meta, **feat_dict, **theta_c, **conf, **obj_dict}
+
+
+def parse_qs(d: Dict, meta: Dict, theta_c: Dict) -> Dict:
+    qs_lqp_str = JsonHandler.dump_to_string(drop_raw_plan(d["QSLogical"]), indent=None)
+    qs_pqp_str = JsonHandler.dump_to_string(drop_raw_plan(d["QSPhysical"]), indent=None)
+    local = {
+        "qs_lqp": qs_lqp_str,
+        "qs_pqp": qs_pqp_str,
+        "InitialPartitionNum": d["InitialPartitionNum"],
+    }
+    base, conf = parse_base(d)
+    obj_dict = parse_qs_objectives(d["Objectives"])
+    return {**meta, **local, **base, **theta_c, **conf, **obj_dict}
+
+
 class SparkParser:
     def __init__(
         self,
@@ -50,100 +144,6 @@ class SparkParser:
         self.benchmark_prefix = benchmark.get_prefix()
         self.logger = logger
 
-    @staticmethod
-    def _parse_conf(conf: Dict) -> Dict:
-        d = {
-            f"{k}": v
-            for k_type, k_list in conf.items()
-            for kv in k_list
-            for k, v in kv.items()
-        }
-        return {
-            **{f"theta_c-{k}": d[k] for k in THETA_C if k in d},
-            **{f"theta_p-{k}": d[k] for k in THETA_P if k in d},
-            **{f"theta_s-{k}": d[k] for k in THETA_S if k in d},
-        }
-
-    def _parse_base(self, d: Dict) -> Tuple[Dict, Dict]:
-        im = {f"IM-{k}": v for k, v in d["IM"].items()}
-        pd = d["PD"]
-        ss_dict = {}
-        if "RunningQueryStageSnapshot" in d:
-            for k, v in d["RunningQueryStageSnapshot"].items():
-                if isinstance(v, list):
-                    for tile, v_ in zip([0, 25, 50, 75, 100], v):
-                        ss_dict[f"SS-{k}-{tile}tile"] = v_
-                else:
-                    ss_dict[f"SS-{k}"] = v
-        else:
-            ss_dict = {
-                "SS-RunningTasksNum": 0,
-                "SS-FinishedTasksNum": 0,
-                "SS-FinishedTasksTotalTimeInMs": 0.0,
-                "SS-FinishedTasksDistributionInMs-0tile": 0.0,
-                "SS-FinishedTasksDistributionInMs-25tile": 0.0,
-                "SS-FinishedTasksDistributionInMs-50tile": 0.0,
-                "SS-FinishedTasksDistributionInMs-75tile": 0.0,
-                "SS-FinishedTasksDistributionInMs-100tile": 0.0,
-            }
-        if "Configuration" in d:
-            conf_key = "Configuration"
-        else:
-            assert "RuntimeConfiguration" in d
-            conf_key = "RuntimeConfiguration"
-        conf = self._parse_conf(d[conf_key])
-        return {**im, **{"PD": pd}, **ss_dict}, conf
-
-    @staticmethod
-    def drop_raw_plan(d: Dict, to_drop: str = "rawPlan") -> Dict:
-        return {k: v for k, v in d.items() if k != to_drop}
-
-    def _parse_lqp_features(self, d: Dict) -> Tuple[Dict, Dict]:
-        lqp_str = JsonHandler.dump_to_string(self.drop_raw_plan(d["LQP"]), indent=None)
-        base, conf = self._parse_base(d)
-        return {**{"lqp": lqp_str}, **base}, conf
-
-    @staticmethod
-    def _parse_lqp_objectives(d: Dict) -> Dict:
-        return {
-            "latency_s": d["DurationInMs"] / 1000,
-            "io_mb": d["IOBytes"]["Total"] / 1024 / 1024,
-        }
-
-    @staticmethod
-    def _parse_qs_objectives(d: Dict) -> Dict:
-        return {
-            "latency_s": d["DurationInMs"] / 1000,
-            "io_mb": d["IOBytes"]["Total"] / 1024 / 1024,
-            "total_task_duration_s": d["TotalTasksDurationInMs"] / 1000,
-        }
-
-    def _parse_lqp(
-        self, feat: Dict, obj: Dict, meta: Dict, theta_c: Optional[Dict] = None
-    ) -> Dict:
-        feat_dict, conf = self._parse_lqp_features(feat)
-        obj_dict = self._parse_lqp_objectives(obj)
-        if theta_c is None:
-            return {**meta, **feat_dict, **conf, **obj_dict}
-        else:
-            return {**meta, **feat_dict, **theta_c, **conf, **obj_dict}
-
-    def _parse_qs(self, d: Dict, meta: Dict, theta_c: Dict) -> Dict:
-        qs_lqp_str = JsonHandler.dump_to_string(
-            self.drop_raw_plan(d["QSLogical"]), indent=None
-        )
-        qs_pqp_str = JsonHandler.dump_to_string(
-            self.drop_raw_plan(d["QSPhysical"]), indent=None
-        )
-        local = {
-            "qs_lqp": qs_lqp_str,
-            "qs_pqp": qs_pqp_str,
-            "InitialPartitionNum": d["InitialPartitionNum"],
-        }
-        base, conf = self._parse_base(d)
-        obj_dict = self._parse_qs_objectives(d["Objectives"])
-        return {**meta, **local, **base, **theta_c, **conf, **obj_dict}
-
     def parse_one_file(self, file: str) -> Tuple[Optional[List], Optional[List]]:
         try:
             appid = "application_" + file.split("_application_")[-1][:-5]
@@ -152,10 +152,9 @@ class SparkParser:
             meta = {"appid": appid, "template": template, "qid": qid}
 
             d = JsonHandler.load_json(file)
-
             # work on compile_time LQP
             q_dict_list = []
-            compile_time_lqp_dict = self._parse_lqp(
+            compile_time_lqp_dict = parse_lqp(
                 d["CompileTimeLQP"], d["Objectives"], {**meta, **{"lqp_id": 0}}, None
             )
             theta_c = {
@@ -166,7 +165,7 @@ class SparkParser:
             q_dict_list.append(compile_time_lqp_dict)
             # work on runtime LQP
             for lqp_id, runtime_lqp in d["RuntimeLQPs"].items():
-                runtime_lqp_dict = self._parse_lqp(
+                runtime_lqp_dict = parse_lqp(
                     runtime_lqp,
                     runtime_lqp["Objectives"],
                     {**meta, **{"lqp_id": lqp_id}},
@@ -178,7 +177,7 @@ class SparkParser:
             # work on QSs
             qs_dict_list = []
             for qs_id, qs in d["RuntimeQSs"].items():
-                qs_dict = self._parse_qs(qs, {**meta, **{"qs_id": qs_id}}, theta_c)
+                qs_dict = parse_qs(qs, {**meta, **{"qs_id": qs_id}}, theta_c)
                 qs_dict = {**qs_dict, **theta_c}
                 qs_dict_list.append(qs_dict)
 
@@ -187,7 +186,8 @@ class SparkParser:
             self.logger.error(f"failed to parse {file} with error: {e}")
             return None, None
 
-    def prepare_headers(self, header: str) -> Tuple[str, str]:
+    @staticmethod
+    def prepare_headers(header: str) -> Tuple[str, str]:
         trace_header = f"{header}/trace"
         assert os.path.exists(trace_header), FileNotFoundError(trace_header)
         csv_header = f"{header}/csv"

@@ -1,5 +1,5 @@
 import time
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -78,6 +78,16 @@ class HierarchicalOptimizer(BaseOptimizer):
         sampled_theta: np.ndarray,
         model_name: str,
     ) -> Dict[str, np.ndarray]:
+        reps = 10
+        graph_embeddings = np.tile(
+            graph_embeddings,
+            (reps, 1),
+        )
+        non_decision_df = pd.concat([non_decision_df] * reps)
+        sampled_theta = np.tile(
+            sampled_theta,
+            (reps, 1),
+        )
         start_time_ns = time.perf_counter_ns()
         objs = self.ag_ms.predict_with_ag(
             self.bm, graph_embeddings, non_decision_df, sampled_theta, model_name
@@ -116,7 +126,7 @@ class HierarchicalOptimizer(BaseOptimizer):
 
     def solve(
         self,
-        non_decision_input: Dict,
+        non_decision_input: Dict[str, Any],
         seed: Optional[int] = None,
         use_ag: bool = True,
         ag_model: Optional[str] = None,

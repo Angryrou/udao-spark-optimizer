@@ -1,11 +1,12 @@
 from pathlib import Path
 
-from udao_spark.data.extractors.injection_extractor import InjectionExtractor
+from udao_spark.data.extractors.injection_extractor import (
+    get_non_decision_inputs_for_qs_compile_dict,
+)
 from udao_spark.optimizer.hierarchical_optimizer import HierarchicalOptimizer
 from udao_spark.optimizer.utils import get_ag_meta
-from udao_spark.utils.params import get_compile_time_optimizer_parameters
+from udao_spark.utils.params import QType, get_compile_time_optimizer_parameters
 from udao_trace.configuration import SparkConf
-from udao_trace.utils import BenchmarkType
 from udao_trace.utils.logging import logger
 
 logger.setLevel("INFO")
@@ -16,7 +17,8 @@ if __name__ == "__main__":
     params = get_compile_time_optimizer_parameters().parse_args()
     logger.info(f"get parameters: {params}")
 
-    bm, q_type = params.benchmark, params.q_type
+    bm = params.benchmark
+    q_type: QType = params.q_type
     hp_choice, graph_choice = params.hp_choice, params.graph_choice
     ag_sign = params.ag_sign
     infer_limit = params.infer_limit
@@ -37,8 +39,6 @@ if __name__ == "__main__":
         infer_limit,
         infer_limit_batch_size,
     )
-    ag_path = ag_meta["ag_path"]
-    logger.info(f"ag_path: {ag_path}")
 
     # Initialize HierarchicalOptimizer and Model
     base_dir = Path(__file__).parent
@@ -58,15 +58,10 @@ if __name__ == "__main__":
         data_processor_path=ag_meta["data_processor_path"],
         spark_conf=spark_conf,
         decision_variables=decision_variables,
-        ag_path=ag_path,
+        ag_path=ag_meta["ag_path"],
     )
 
     # Prepare traces
-    ie = InjectionExtractor(
-        benchmark_type=BenchmarkType[params.benchmark.upper()],
-        scale_factor=params.scale_factor,
-        logger=logger,
-    )
     sample_header = str(base_dir / "assets/samples")
     raw_traces = [
         f"{sample_header}/tpch100_{q}-1_1,1g,16,16,48m,200,true,0.6,"
@@ -85,7 +80,9 @@ if __name__ == "__main__":
     use_ag = not params.use_mlp
     for trace in raw_traces:
         logger.info(f"Processing {trace}")
-        non_decision_input = ie.get_qs_lqp(trace, is_oracle=is_oracle)
+        non_decision_input = get_non_decision_inputs_for_qs_compile_dict(
+            trace, is_oracle=is_oracle
+        )
         po_points = hier_optimizer.solve(
             non_decision_input,
             seed=params.seed,
