@@ -146,7 +146,7 @@ if __name__ == "__main__":
         infer_limit_batch_size,
     )
     weights_path = ag_meta["graph_weights_path"]
-    ag_path = ag_meta["ag_path"]
+    ag_path = ag_meta["ag_path"] + "/"
 
     ret = get_ag_data(bm, q_type, debug, graph_choice, weights_path)
     train_data, val_data, test_data = ret["data"]
