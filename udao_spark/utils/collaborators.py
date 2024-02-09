@@ -68,6 +68,15 @@ class TypeAdvisor:
     def __init__(self, q_type: QType):
         self.q_type = q_type
 
+    def get_graph_column(self) -> str:
+        if self.q_type in ["q_compile", "q_all"]:
+            return "lqp"
+        if self.q_type in ["qs_lqp_compile", "qs_lqp_runtime"]:
+            return "qs_lqp"
+        if self.q_type in ["qs_pqp_runtime"]:
+            return "qs_pqp"
+        raise NoQTypeError(self.q_type)
+
     def get_tabular_columns(self) -> List[str]:
         if self.q_type in ["q_compile"]:
             return ALPHA + THETA_C + THETA_P + THETA_S
@@ -77,6 +86,28 @@ class TypeAdvisor:
             return ALPHA + BETA + GAMMA + THETA_C + THETA_P + THETA_S
         if self.q_type in "qs_pqp_runtime":
             return ALPHA + ALPHA_QS_PLUS + BETA + GAMMA + THETA_C + THETA_S
+        raise NoQTypeError(self.q_type)
+
+    def get_decision_columns(self) -> List[str]:
+        if self.q_type in ["q_compile", "qs_lqp_compile", "qs_lqp_runtime"]:
+            return THETA_C + THETA_P + THETA_S
+        if self.q_type in ["q_all"]:
+            return THETA_P + THETA_S
+        if self.q_type in ["qs_pqp_runtime"]:
+            return THETA_S
+        raise NoQTypeError(self.q_type)
+
+    def get_tabular_non_decision_columns(self) -> List[str]:
+        if self.q_type in ["q_compile"]:
+            return ALPHA
+        if self.q_type in ["qs_lqp_compile"]:
+            return ALPHA_COMPILE
+        if self.q_type in ["q_all"]:
+            return ALPHA + BETA + GAMMA + THETA_C
+        if self.q_type in ["qs_lqp_runtime"]:
+            return ALPHA + BETA + GAMMA
+        if self.q_type in ["qs_pqp_runtime"]:
+            return ALPHA + ALPHA_QS_PLUS + BETA + GAMMA + THETA_C
         raise NoQTypeError(self.q_type)
 
     def get_objectives(self) -> List[str]:
@@ -98,15 +129,6 @@ class TypeAdvisor:
             return self.q_type
         if self.q_type in ["qs_lqp_compile", "qs_lqp_runtime", "qs_pqp_runtime"]:
             return "qs"
-        raise NoQTypeError(self.q_type)
-
-    def get_graph_column(self) -> str:
-        if self.q_type in ["q_compile", "q_all"]:
-            return "lqp"
-        if self.q_type in ["qs_lqp_compile", "qs_lqp_runtime"]:
-            return "qs_lqp"
-        if self.q_type in ["qs_pqp_runtime"]:
-            return "qs_pqp"
         raise NoQTypeError(self.q_type)
 
     def size_mb_in_log(self, operator: Dict) -> float:
