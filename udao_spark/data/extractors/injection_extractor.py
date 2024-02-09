@@ -57,7 +57,7 @@ def get_non_decision_inputs_for_q_compile(json_path: str) -> Dict[str, Any]:
     d = JsonHandler.load_json(json_path)["CompileTimeLQP"]
     alpha = extract_alpha(
         size_in_mb=d["IM"]["inputSizeInBytes"] / 1024 / 1024,
-        rows_count=d["IM"]["rowCount"] * 1.0,
+        rows_count=d["IM"]["inputRowCount"] * 1.0,
         add_compile_tag=False,
     )
     return {
@@ -69,7 +69,7 @@ def get_non_decision_inputs_for_q_compile(json_path: str) -> Dict[str, Any]:
 def get_non_decision_inputs_for_q_runtime(d: Dict) -> Dict[str, Any]:
     alpha = extract_alpha(
         size_in_mb=d["IM"]["inputSizeInBytes"] / 1024 / 1024,
-        rows_count=d["IM"]["rowCount"] * 1.0,
+        rows_count=d["IM"]["inputRowCount"] * 1.0,
         add_compile_tag=False,
     )
     beta = extract_beta(d["PD"])

@@ -171,7 +171,6 @@ class SparkParser:
                     {**meta, **{"lqp_id": lqp_id}},
                     theta_c,
                 )
-                runtime_lqp_dict = {**runtime_lqp_dict, **theta_c}
                 q_dict_list.append(runtime_lqp_dict)
 
             # work on QSs
