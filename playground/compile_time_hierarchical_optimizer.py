@@ -3,7 +3,7 @@ from pathlib import Path
 from udao_spark.data.extractors.injection_extractor import InjectionExtractor
 from udao_spark.model.utils import get_graph_ckp_info
 from udao_spark.optimizer.hierarchical_optimizer import HierarchicalOptimizer
-from udao_spark.utils.params import get_compile_time_optimizer_parameters
+from udao_spark.utils.params import get_moo_algos_parameters
 from udao_trace.configuration import SparkConf
 from udao_trace.utils import BenchmarkType, JsonHandler
 from udao_trace.utils.logging import logger
@@ -13,11 +13,15 @@ logger.setLevel("INFO")
 
 if __name__ == "__main__":
     # Initialize InjectionExtractor
-    params = get_compile_time_optimizer_parameters().parse_args()
+    # params = get_compile_time_optimizer_parameters().parse_args()
+    params = get_moo_algos_parameters().parse_args()
     logger.info(f"get ag parameters: {params}")
     bm, q_type = params.benchmark, params.q_type
     hp_choice, graph_choice = params.hp_choice, params.graph_choice
     ag_sign = params.ag_sign
+
+    # params = get_moo_algo_parameters().parse_args()
+    # logger.info(f"get ag parameters: {params}")
 
     if params.q_type not in ["qs_lqp_compile", "qs_lqp_runtime"]:
         raise ValueError(
@@ -83,22 +87,41 @@ if __name__ == "__main__":
     is_oracle = q_type == "qs_lqp_runtime"
     use_ag = not params.use_mlp
     # for trace in raw_traces:
-    for trace in [
-        raw_traces[9],
-        raw_traces[14],
-        raw_traces[15],
-        raw_traces[16],
-        raw_traces[21],
-    ]:
-        logger.info(f"Processing {trace}")
+    #     for trace in [
+    #         raw_traces[9],
+    #         raw_traces[14],
+    #         raw_traces[15],
+    #         raw_traces[16],
+    #         raw_traces[21],
+    #     ]:
+
+    # moo_params = get_moo_algos_parameters().parse_args()
+    for trace in [raw_traces[0], raw_traces[1]]:
+        # logger.info(f"Processing {trace}")
         query_id = trace.split("tpch100_")[1].split("_")[0]  # e.g. 2-1
+        print(f"query_id is {query_id}")
         non_decision_input = ie.get_qs_lqp(trace, is_oracle=is_oracle)
+        if params.moo_algo == "evo":
+            param1 = params.pop_size
+            param2 = params.nfe
+        elif params.moo_algo == "ws":
+            param1 = params.n_samples
+            param2 = params.n_ws
+        elif "div_and_conq_moo" in params.moo_algo:
+            param1, param2 = 0, 0
+        else:
+            raise Exception(f"algo {params.moo_algo} is not supported!")
+
         po_points = hier_optimizer.solve(
             non_decision_input,
             seed=params.seed,
             use_ag=use_ag,
             ag_model=params.ag_model,
-            algo="model_inference_time",
-            save_data=True,
+            algo=params.moo_algo,
+            save_data=params.save_data,
             query_id=query_id,
+            sample_mode=params.sample_mode,
+            param1=param1,
+            param2=param2,
+            time_limit=params.time_limit,
         )

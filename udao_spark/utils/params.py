@@ -167,3 +167,37 @@ def get_compile_time_optimizer_parameters() -> ArgumentParser:
                         help="specific model name for AG")
     # fmt: on
     return parser
+
+
+def get_moo_algos_parameters() -> ArgumentParser:
+    parser = get_compile_time_optimizer_parameters()  # Data-related arguments
+    parser.add_argument("--save_data", default=False, action="store_true")
+    parser.add_argument(
+        "--moo_algo",
+        type=str,
+        default="div_and_conq_moo%B",
+        choices=["div_and_conq_moo%B", "div_and_conq_moo%GD", "evo", "ws", "ppf"],
+        help="algorithm for the compile-time optimization",
+    )
+    parser.add_argument(
+        "--sample_mode",
+        type=str,
+        default="grid",
+        choices=["grid", "random"],
+        help="sample type for div_and_conq_moo",
+    )
+    parser.add_argument("--pop_size", type=int, default=10)
+    parser.add_argument("--nfe", type=int, default=100)
+    parser.add_argument("--time_limit", type=int, default=-1)
+
+    parser.add_argument("--n_ws", type=int, default=101)
+    parser.add_argument(
+        "--n_samples", type=int, default=1000, help="the number of samples in WS"
+    )
+
+    parser.add_argument("--n_grids", type=int, default=1)
+    parser.add_argument("--n_process", type=int, default=1)
+    parser.add_argument("--n_max_iters", type=int, default=1)
+
+    # fmt: on
+    return parser
