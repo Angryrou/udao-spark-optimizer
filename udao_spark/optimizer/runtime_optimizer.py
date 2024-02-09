@@ -49,6 +49,15 @@ def recvall(sock: socket, n: int) -> Optional[bytearray]:
     return data
 
 
+def parse_msg(msg: str) -> Optional[Dict]:
+    try:
+        d: Dict = json.loads(msg)
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse message: {msg}, error: {e}")
+        return None
+    return d
+
+
 class RuntimeOptimizer:
     def __init__(
         self, ro_q: AtomicOptimizer, ro_qs: AtomicOptimizer, seed: Optional[int] = 42
@@ -57,13 +66,10 @@ class RuntimeOptimizer:
         self.ro_qs = ro_qs
         self.seed = seed
 
-    def solve_query(self, message: str) -> str:
-        try:
-            d: Dict = json.loads(message)
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse message: {message}, error: {e}")
-            return "Failed to parse message"
-
+    def solve_query(self, msg: str) -> str:
+        d = parse_msg(msg)
+        if d is None:
+            return f"parse failed for message\n {msg}"
         request_type = d["RequestType"]
         if request_type == "RuntimeLQP":
             non_decision_input = get_non_decision_inputs_for_q_runtime(d)
@@ -89,15 +95,15 @@ class RuntimeOptimizer:
                 logger.info(f"Connected by {addr}")
 
                 while True:
-                    message = recv_msg(conn)
-                    logger.info(f"Received message: {message}")
-                    if not message:
+                    msg = recv_msg(conn)
+                    logger.info(f"Received message: {msg}")
+                    if not msg:
                         logger.warning(f"No message received, disconnecting {addr}")
                         break
                     if debug:
                         response = "xxx\n"
                     else:
-                        response = self.solve_query(message)
+                        response = self.solve_query(msg)
                     conn.sendall(response.encode("utf-8"))
                     logger.info(f"Sent response: {response}")
 
@@ -105,3 +111,25 @@ class RuntimeOptimizer:
         except Exception as e:
             logger.exception(f"Exception occurred: {e}")
             sock.close()
+
+    def sanity_check(self) -> None:
+        with open("assets/runtime_samples/sample_runtime_lqp.txt") as f:
+            msg = f.read().strip()
+        d = parse_msg(msg)
+        if d is None:
+            raise ValueError(f"Failed to parse message: {msg}")
+        request_type = d["RequestType"]
+        if request_type == "RuntimeLQP":
+            non_decision_input = get_non_decision_inputs_for_q_runtime(d)
+            non_decision_df = self.ro_q.extract_non_decision_df(non_decision_input)
+            (
+                graph_embeddings,
+                non_decision_tabular_features,
+            ) = self.ro_q.extract_non_decision_embeddings_from_df(non_decision_df)
+            print(graph_embeddings.shape, non_decision_tabular_features.shape)
+            # po_confs, po_objs = self.ro_q.solve(non_decision_input, seed=self.seed)
+        elif request_type == "RuntimeQS":
+            non_decision_input = get_non_decision_inputs_for_qs_runtime(d, is_lqp=False)
+            # po_confs, po_objs = self.ro_qs.solve(non_decision_input, seed=self.seed)
+        else:
+            raise ValueError(f"Query type {request_type} is not supported")

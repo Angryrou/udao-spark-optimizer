@@ -1,3 +1,4 @@
+import time
 from typing import Dict
 
 import numpy as np
@@ -134,9 +135,12 @@ class AGServer:
         df[ge_cols] = graph_embeddings
         df[THETA_COMPILE] = sampled_theta
         dataset = TabularDataset(df[ge_cols + self.ta.get_tabular_columns()])
+        start = time.perf_counter_ns()
         transformed_data = self.predictors[self.objectives[0]].transform_features(
             dataset
         )
+        dt = time.perf_counter_ns() - start
+        logger.debug(f"Transformed data for AG prediction in {dt / 1e6} ms")
         return {
             obj: calibrate_negative_predictions(
                 self.predictors[obj].predict(

@@ -36,6 +36,7 @@ class BaseOptimizer(ABC):
         self.ag_ms = AGServer.from_ckp_path(
             model_sign, graph_model_params_path, graph_weights_path, q_type, ag_path
         )
+        self.ta = self.ag_ms.ta
         data_processor = PickleHandler.load(
             os.path.dirname(data_processor_path), os.path.basename(data_processor_path)
         )
