@@ -14,8 +14,7 @@ from .utils import get_cloud_cost_add_io, get_cloud_cost_wo_io
 class HierarchicalOptimizer(BaseOptimizer):
     def extract_non_decision_df(self, non_decision_input: Dict) -> pd.DataFrame:
         """
-        compute the graph_embedding and
-        the normalized values of the non-decision variables
+        extract the non_decision dict to a DataFrame
         """
         df = pd.DataFrame.from_dict(non_decision_input, orient="index")
         df = df.reset_index().rename(columns={"index": "id"})
