@@ -171,3 +171,14 @@ def get_compile_time_optimizer_parameters() -> ArgumentParser:
                         help="specific model name for AG")
     # fmt: on
     return parser
+
+
+def get_runtime_optimizer_parameters() -> ArgumentParser:
+    parser = get_ag_parameters()
+    # fmt: off
+    parser.add_argument("--use_mlp", action="store_true",
+                        help="Enable MLP only")
+    parser.add_argument("--ag_model", type=str, default=None,
+                        help="specific model name for AG")
+    # fmt: on
+    return parser

@@ -1,6 +1,6 @@
 import os.path
 from abc import ABC, abstractmethod
-from typing import Dict, List, Literal, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -156,7 +156,7 @@ class BaseOptimizer(ABC):
 
     @abstractmethod
     def solve(
-        self, non_decision_input: Dict, seed: Optional[int] = None
+        self, non_decision_input: Dict[str, Any], seed: Optional[int] = None
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         pass
 
