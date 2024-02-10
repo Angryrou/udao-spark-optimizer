@@ -82,6 +82,16 @@ class BaseOptimizer(ABC):
                 np.array(spark_conf.knob_max[-len(THETA_S) :]),
             ),
         }
+        self.theta_ktype = {
+            "c": [k.ktype for k in spark_conf.knob_list[: len(THETA_C)]],
+            "p": [
+                k.ktype
+                for k in spark_conf.knob_list[
+                    len(THETA_C) : len(THETA_C) + len(THETA_P)
+                ]
+            ],
+            "s": [k.ktype for k in spark_conf.knob_list[-len(THETA_S) :]],
+        }
 
     def extract_non_decision_embeddings_from_df(
         self, df: pd.DataFrame
@@ -168,3 +178,31 @@ class BaseOptimizer(ABC):
         """
         # todo
         pass
+
+    def weighted_utopia_nearest_impl(
+        self, pareto_objs: np.ndarray, pareto_confs: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        return the Pareto point that is closest to the utopia point
+        in a weighted distance function
+        """
+        n_pareto = pareto_objs.shape[0]
+        assert n_pareto > 0
+        if n_pareto == 1:
+            # (2,), (n, 2)
+            return pareto_objs[0], pareto_confs[0]
+
+        utopia = np.zeros_like(pareto_objs[0])
+        min_objs, max_objs = pareto_objs.min(0), pareto_objs.max(0)
+        pareto_norm = (pareto_objs - min_objs) / (max_objs - min_objs)
+        # fixme: internal weights
+        weights = np.array([1, 1])
+        pareto_weighted_norm = pareto_norm * weights
+        # check the speed comparison: https://stackoverflow.com/a/37795190/5338690
+        dists = np.sum((pareto_weighted_norm - utopia) ** 2, axis=1)
+        wun_id = np.argmin(dists)
+
+        picked_pareto = pareto_objs[wun_id]
+        picked_confs = pareto_confs[wun_id]
+
+        return picked_pareto, picked_confs
