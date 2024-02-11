@@ -10,6 +10,7 @@
 #
 # Created at 04/01/2024
 
+import platform
 import random
 import signal
 import time
@@ -28,11 +29,19 @@ import torch as th
 # th.multiprocessing.set_sharing_strategy('file_system')
 # from numba.typed import List
 from sklearn.cluster import KMeans
-from sklearnex import patch_sklearn  # type: ignore
 
 from udao_spark.optimizer.moo_algos.dag_opt import DAGOpt
 
-patch_sklearn()
+# Detect the CPU architecture
+cpu_arch = platform.machine()
+
+# For Intel CPUs (x86_64), import the specific library
+if cpu_arch in ["x86_64", "AMD64"]:
+    from sklearnex import patch_sklearn  # type: ignore
+
+    # Apply the patch to accelerate scikit-learn
+    patch_sklearn()
+# For Apple Silicon (M1, M2 chips), which is arm64 architecture, do not import
 
 
 class DivAndConqMOO:
