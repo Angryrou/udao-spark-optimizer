@@ -26,14 +26,13 @@ pip install dgl>=1.1.2,<=1.1.3 -f https://data.dgl.ai/wheels/cu118/repo.html
 pip install -r requirements.txt
 ```
 
-# Dependencies for compile-time optimization
-
-### Install on MacOS/CPU/GPU
+## Additional dependencies for compile-time optimization (CPU/GPU/MacOS-intel)
 
 ```bash
 conda install -c conda-forge pygmo
-pip install scikit-learn-intelex
+pip install scikit-learn-intelex # only for intel chips
 ```
+
 #### Possible issue on GPU
 
 If there is an error related to "GLIBCXX_3.4.29" occuring, please try the following to export the "LD_LIBRARY_PATH":
