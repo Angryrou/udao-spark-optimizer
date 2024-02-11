@@ -169,6 +169,38 @@ def get_compile_time_optimizer_parameters() -> ArgumentParser:
                         help="Enable MLP only")
     parser.add_argument("--ag_model", type=str, default=None,
                         help="specific model name for AG")
+
+    parser.add_argument("--save_data", action="store_true",
+                        help="Enable to save data")
+    parser.add_argument("--moo_algo", type=str, default="div_and_conq_moo%B",
+                        choices=["div_and_conq_moo%B", "div_and_conq_moo%GD",
+                            "evo", "ws", "ppf"],
+                        help="Algorithm for the compile-time optimization",)
+    parser.add_argument("--sample_mode", type=str, default="grid",
+                        choices=["grid", "random"],
+                        help="Sample type for div_and_conq_moo")
+    parser.add_argument("--pop_size", type=int, default=100,
+                        help="Population size in EVO")
+    parser.add_argument("--nfe", type=int, default=1000,
+                        help="The number of function evaluations in EVO")
+    parser.add_argument("--time_limit", type=int, default=-1,
+                        help="Time limit for algorithms in "
+                             "the compile-time optimization")
+
+    parser.add_argument("--n_ws", type=int, default=11,
+                        help="The number of weight pairs in WS")
+    parser.add_argument("--n_samples", type=int, default=1000,
+                        help="The number of samples in WS"
+    )
+
+    parser.add_argument("--n_grids", type=int, default=1,
+                        help="The number of grids used in PF-AP")
+    parser.add_argument("--n_process", type=int, default=1,
+                        help="The number of processes for multiprocessing "
+                             "used in PF-AP")
+    parser.add_argument("--n_max_iters", type=int, default=1,
+                        help="The number of maximum iterations used in PF-AP")
+
     # fmt: on
     return parser
 

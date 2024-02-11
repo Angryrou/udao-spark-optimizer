@@ -82,6 +82,16 @@ class BaseOptimizer(ABC):
                 np.array(spark_conf.knob_max[-len(THETA_S) :]),
             ),
         }
+        self.theta_ktype = {
+            "c": [k.ktype for k in spark_conf.knob_list[: len(THETA_C)]],
+            "p": [
+                k.ktype
+                for k in spark_conf.knob_list[
+                    len(THETA_C) : len(THETA_C) + len(THETA_P)
+                ]
+            ],
+            "s": [k.ktype for k in spark_conf.knob_list[-len(THETA_S) :]],
+        }
 
     def extract_non_decision_embeddings_from_df(
         self, df: pd.DataFrame

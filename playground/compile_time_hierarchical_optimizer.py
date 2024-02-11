@@ -83,9 +83,30 @@ if __name__ == "__main__":
         non_decision_input = get_non_decision_inputs_for_qs_compile_dict(
             trace, is_oracle=is_oracle
         )
+        query_id = trace.split("tpch100_")[1].split("_")[0]  # e.g. 2-1
+        print(f"query_id is {query_id}")
+
+        if params.moo_algo == "evo":
+            param1 = params.pop_size
+            param2 = params.nfe
+        elif params.moo_algo == "ws":
+            param1 = params.n_samples
+            param2 = params.n_ws
+        elif "div_and_conq_moo" in params.moo_algo:
+            param1, param2 = 0, 0
+        else:
+            raise Exception(f"algo {params.moo_algo} is not supported!")
+
         po_points = hier_optimizer.solve(
             non_decision_input,
             seed=params.seed,
             use_ag=use_ag,
             ag_model=params.ag_model,
+            algo=params.moo_algo,
+            save_data=params.save_data,
+            query_id=query_id,
+            sample_mode=params.sample_mode,
+            param1=param1,
+            param2=param2,
+            time_limit=params.time_limit,
         )
