@@ -133,7 +133,7 @@ def is_pareto_efficient(costs: np.ndarray, return_mask: bool = True) -> np.ndarr
         return is_efficient
 
 
-def _keep_non_dominated(
+def keep_non_dominated(
     po_obj_list: List[np.ndarray], po_var_list: List[np.ndarray]
 ) -> Tuple[np.ndarray, np.ndarray]:
     ## reuse code in VLDB2022

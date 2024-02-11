@@ -171,7 +171,7 @@ class WSOptimizer:
                 po_var_list.append(theta[po_ind])
 
             # only keep non-dominated solutions
-            po, confs = ut._keep_non_dominated(po_obj_list, po_var_list)
+            po, confs = ut.keep_non_dominated(po_obj_list, po_var_list)
 
             return po, confs
             # return moo_ut._summarize_ret(po_obj_list, po_var_list)

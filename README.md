@@ -39,7 +39,7 @@ pip install scikit-learn-intelex
 If there is an error related to "GLIBCXX_3.4.29" occuring, please try the following to export the "LD_LIBRARY_PATH":
 
 ```bash
-find /home/qi -name "libstdc++.so*"
-strings /home/qi/miniconda3/envs/your-env-name/lib/libstdc++.so.6.0.32 | grep GLIBCXX_3.4.29
-export LD_LIBRARY_PATH=/home/qi/miniconda3/envs/your-env-name/lib/:$LD_LIBRARY_PATH
+find /your-home-directory -name "libstdc++.so*"
+strings /your-directory-to-envs/your-env-name/lib/libstdc++.so.6.0.32 | grep GLIBCXX_3.4.29
+export LD_LIBRARY_PATH=/your-directory-to-envs/your-env-name/lib/:$LD_LIBRARY_PATH
 ```
