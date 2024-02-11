@@ -17,6 +17,7 @@ from udao_spark.optimizer.utils import (
     get_cloud_cost_add_io,
     get_cloud_cost_wo_io,
     save_results,
+    weighted_utopia_nearest_impl,
 )
 from udao_trace.utils.interface import VarTypes
 from udao_trace.utils.logging import logger
@@ -727,7 +728,7 @@ class HierarchicalOptimizer(BaseOptimizer):
             save_results(data_path, np.array([time_cost]), mode="time")
 
         # add WUN
-        objs, conf = self.weighted_utopia_nearest_impl(po_objs, conf_raw)
+        objs, conf = weighted_utopia_nearest_impl(po_objs, conf_raw)
         print(f"FUNCTION: time cost of {algo} with WUN " f"is: {time.time() - start}")
 
         return conf, objs
@@ -850,7 +851,7 @@ class HierarchicalOptimizer(BaseOptimizer):
             save_results(data_path, np.array([time_cost]), mode="time")
 
         # add WUN
-        objs, conf = self.weighted_utopia_nearest_impl(po_objs, conf2)
+        objs, conf = weighted_utopia_nearest_impl(po_objs, conf2)
         print(f"FUNCTION: time cost of {algo} with WUN " f"is: {time.time() - start}")
 
         return objs, conf
@@ -986,7 +987,7 @@ class HierarchicalOptimizer(BaseOptimizer):
             save_results(data_path, np.array([time_cost]), mode="time")
 
         # add WUN
-        objs, conf = self.weighted_utopia_nearest_impl(po_objs, conf2)
+        objs, conf = weighted_utopia_nearest_impl(po_objs, conf2)
         print(f"FUNCTION: time cost of {algo} with WUN " f"is: {time.time() - start}")
 
         return objs, conf

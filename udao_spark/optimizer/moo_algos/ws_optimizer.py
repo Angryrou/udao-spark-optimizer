@@ -1,4 +1,4 @@
-# Copyright (c) 2020 École Polytechnique
+# Copyright (c) 2024 École Polytechnique
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,7 +8,7 @@
 #
 # Description: TODO
 #
-# Created at 17/10/2023
+# Created at 05/02/2024
 import signal
 from dataclasses import dataclass
 from types import FrameType
@@ -20,7 +20,7 @@ import torch as th
 from udao.optimization.concepts import Variable
 
 import udao_spark.optimizer.utils as ut
-from udao_spark.optimizer.solver.random_sampler import RandomSampler
+from udao_spark.optimizer.soo.random_sampler import RandomSampler
 
 
 class WSOptimizer:
@@ -171,7 +171,7 @@ class WSOptimizer:
                 po_var_list.append(theta[po_ind])
 
             # only keep non-dominated solutions
-            po, confs = ut._summarize_ret(po_obj_list, po_var_list)
+            po, confs = ut._keep_non_dominated(po_obj_list, po_var_list)
 
             return po, confs
             # return moo_ut._summarize_ret(po_obj_list, po_var_list)

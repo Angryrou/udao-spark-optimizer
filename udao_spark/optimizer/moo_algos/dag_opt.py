@@ -1,4 +1,4 @@
-# Copyright (c) 2020 École Polytechnique
+# Copyright (c) 2024 École Polytechnique
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,7 +8,7 @@
 #
 # Description: DAG optimization in query_moo_general (DAG is degenerated as list)
 #
-# Created at 21/11/2023
+# Created at 04/01/2024
 import itertools
 import time
 from multiprocessing import Pool

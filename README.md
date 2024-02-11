@@ -25,3 +25,21 @@ pip install dgl>=1.1.2,<=1.1.3 -f https://data.dgl.ai/wheels/cu118/repo.html
 # then install the rest of the dependencies
 pip install -r requirements.txt
 ```
+
+# Dependencies for compile-time optimization
+
+### Install on MacOS/CPU/GPU
+
+```bash
+conda install -c conda-forge pygmo
+pip install scikit-learn-intelex
+```
+#### Possible issue on GPU
+
+If there is an error related to "GLIBCXX_3.4.29" occuring, please try the following to export the "LD_LIBRARY_PATH":
+
+```bash
+find /home/qi -name "libstdc++.so*"
+strings /home/qi/miniconda3/envs/your-env-name/lib/libstdc++.so.6.0.32 | grep GLIBCXX_3.4.29
+export LD_LIBRARY_PATH=/home/qi/miniconda3/envs/your-env-name/lib/:$LD_LIBRARY_PATH
+```
