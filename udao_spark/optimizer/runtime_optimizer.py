@@ -4,12 +4,14 @@ import struct
 from socket import AF_INET, SOCK_STREAM, socket
 from typing import Dict, Optional
 
+from udao_trace.configuration import SparkConf
 from udao_trace.utils.logging import _get_logger
 
 from ..data.extractors.injection_extractor import (
     get_non_decision_inputs_for_q_runtime,
     get_non_decision_inputs_for_qs_runtime,
 )
+from ..utils.params import QType
 from .atomic_optimizer import AtomicOptimizer
 
 logger = _get_logger(
@@ -58,13 +60,52 @@ def parse_msg(msg: str) -> Optional[Dict]:
     return d
 
 
+R_Q: QType = "q_all"
+R_QS: QType = "qs_pqp_runtime"
+
+
 class RuntimeOptimizer:
+    @classmethod
+    def from_params(
+        cls,
+        bm: str,
+        ag_meta_dict: Dict,
+        spark_conf: SparkConf,
+        decision_variables_dict: Dict,
+        seed: Optional[int] = 42,
+    ) -> "RuntimeOptimizer":
+        optimizer_dict = {
+            q_type: AtomicOptimizer(
+                bm=bm,
+                model_sign=ag_meta_dict[q_type]["model_sign"],
+                graph_model_params_path=ag_meta_dict[q_type]["model_params_path"],
+                graph_weights_path=ag_meta_dict[q_type]["graph_weights_path"],
+                q_type=q_type,
+                data_processor_path=ag_meta_dict[q_type]["data_processor_path"],
+                spark_conf=spark_conf,
+                decision_variables=decision_variables_dict[q_type],
+                ag_path=ag_meta_dict[q_type]["ag_path"],
+            )
+            for q_type in [R_Q, R_QS]
+        }
+        return cls(
+            ro_q=optimizer_dict[R_Q],
+            ro_qs=optimizer_dict[R_QS],
+            sc=spark_conf,
+            seed=seed,
+        )
+
     def __init__(
-        self, ro_q: AtomicOptimizer, ro_qs: AtomicOptimizer, seed: Optional[int] = 42
+        self,
+        ro_q: AtomicOptimizer,
+        ro_qs: AtomicOptimizer,
+        sc: SparkConf,
+        seed: Optional[int] = 42,
     ):
         self.ro_q = ro_q
         self.ro_qs = ro_qs
         self.seed = seed
+        self.sc = sc
 
     def solve_query(self, msg: str) -> str:
         d = parse_msg(msg)
@@ -72,10 +113,12 @@ class RuntimeOptimizer:
             return f"parse failed for message\n {msg}"
         request_type = d["RequestType"]
         if request_type == "RuntimeLQP":
-            non_decision_input = get_non_decision_inputs_for_q_runtime(d)
+            non_decision_input = get_non_decision_inputs_for_q_runtime(d, self.sc)
             po_confs, po_objs = self.ro_q.solve(non_decision_input, seed=self.seed)
         elif request_type == "RuntimeQS":
-            non_decision_input = get_non_decision_inputs_for_qs_runtime(d, is_lqp=False)
+            non_decision_input = get_non_decision_inputs_for_qs_runtime(
+                d, is_lqp=False, sc=self.sc
+            )
             po_confs, po_objs = self.ro_qs.solve(non_decision_input, seed=self.seed)
         else:
             raise ValueError(f"Query type {request_type} is not supported")
@@ -113,23 +156,38 @@ class RuntimeOptimizer:
             sock.close()
 
     def sanity_check(self) -> None:
-        with open("assets/runtime_samples/sample_runtime_lqp.txt") as f:
-            msg = f.read().strip()
-        d = parse_msg(msg)
-        if d is None:
-            raise ValueError(f"Failed to parse message: {msg}")
-        request_type = d["RequestType"]
-        if request_type == "RuntimeLQP":
-            non_decision_input = get_non_decision_inputs_for_q_runtime(d)
-            non_decision_df = self.ro_q.extract_non_decision_df(non_decision_input)
-            (
-                graph_embeddings,
-                non_decision_tabular_features,
-            ) = self.ro_q.extract_non_decision_embeddings_from_df(non_decision_df)
-            print(graph_embeddings.shape, non_decision_tabular_features.shape)
-            # po_confs, po_objs = self.ro_q.solve(non_decision_input, seed=self.seed)
-        elif request_type == "RuntimeQS":
-            non_decision_input = get_non_decision_inputs_for_qs_runtime(d, is_lqp=False)
-            # po_confs, po_objs = self.ro_qs.solve(non_decision_input, seed=self.seed)
-        else:
-            raise ValueError(f"Query type {request_type} is not supported")
+        for file_name in ["sample_runtime_lqp.txt", "sample_runtime_qs.txt"]:
+            with open(f"assets/runtime_samples/{file_name}") as f:
+                msg = f.read().strip()
+            d = parse_msg(msg)
+            if d is None:
+                raise ValueError(f"Failed to parse message: {msg}")
+            request_type = d["RequestType"]
+            if request_type == "RuntimeLQP":
+                non_decision_df = self.ro_q.extract_non_decision_df(
+                    non_decision_input=get_non_decision_inputs_for_q_runtime(d, self.sc)
+                )
+                (
+                    graph_embeddings,
+                    non_decision_tabular_features,
+                ) = self.ro_q.extract_non_decision_embeddings_from_df(non_decision_df)
+                print(graph_embeddings, non_decision_tabular_features)
+                print(graph_embeddings.shape, non_decision_tabular_features.shape)
+                # po_confs, po_objs = self.ro_q.solve(
+                # non_decision_input, seed=self.seed)
+            elif request_type == "RuntimeQS":
+                non_decision_df = self.ro_qs.extract_non_decision_df(
+                    non_decision_input=get_non_decision_inputs_for_qs_runtime(
+                        d, is_lqp=False, sc=self.sc
+                    )
+                )
+                (
+                    graph_embeddings,
+                    non_decision_tabular_features,
+                ) = self.ro_qs.extract_non_decision_embeddings_from_df(non_decision_df)
+                print(graph_embeddings, non_decision_tabular_features)
+                print(graph_embeddings.shape, non_decision_tabular_features.shape)
+                # po_confs, po_objs = self.ro_qs.solve(
+                #   non_decision_input, seed=self.seed)
+            else:
+                raise ValueError(f"Query type {request_type} is not supported")

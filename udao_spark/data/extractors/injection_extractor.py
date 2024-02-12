@@ -1,12 +1,13 @@
 from itertools import chain
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import numpy as np
 
+from udao_trace.configuration import SparkConf
 from udao_trace.parser.spark_parser import drop_raw_plan, parse_conf
 from udao_trace.utils import JsonHandler
 
-from ...utils.constants import BETA, EPS
+from ...utils.constants import BETA, EPS, THETA_C
 from ..utils import extract_compile_time_im
 
 
@@ -61,26 +62,8 @@ def get_non_decision_inputs_for_q_compile(json_path: str) -> Dict[str, Any]:
         add_compile_tag=False,
     )
     return {
-        "lqp_str": JsonHandler.dump_to_string(drop_raw_plan(d["LQP"]), indent=None),
+        "lqp": JsonHandler.dump_to_string(drop_raw_plan(d["LQP"]), indent=None),
         **alpha,
-    }
-
-
-def get_non_decision_inputs_for_q_runtime(d: Dict) -> Dict[str, Any]:
-    alpha = extract_alpha(
-        size_in_mb=d["IM"]["inputSizeInBytes"] / 1024 / 1024,
-        rows_count=d["IM"]["inputRowCount"] * 1.0,
-        add_compile_tag=False,
-    )
-    beta = extract_beta(d["PD"])
-    gamma = extract_gamma(d)
-    theta = parse_conf(d["Configuration"])
-    return {
-        "lqp_str": JsonHandler.dump_to_string(drop_raw_plan(d["LQP"]), indent=None),
-        **alpha,
-        **beta,
-        **gamma,
-        **theta,
     }
 
 
@@ -97,40 +80,6 @@ def get_non_decision_inputs_for_qs_compile(qs: Dict) -> Dict[str, Any]:
     }
 
 
-def get_non_decision_inputs_for_qs_runtime(qs: Dict, is_lqp: bool) -> Dict[str, Any]:
-    qs_plan = (
-        {
-            "qs_lqp": JsonHandler.dump_to_string(
-                drop_raw_plan(qs["QSLogical"]), indent=None
-            )
-        }
-        if is_lqp
-        else {
-            "qs_pqp": JsonHandler.dump_to_string(
-                drop_raw_plan(qs["QSPhysical"]), indent=None
-            )
-        }
-    )
-
-    alpha = extract_alpha(
-        size_in_mb=qs["IM"]["inputSizeInBytes"] / 1024 / 1024,
-        rows_count=qs["IM"]["inputRowCount"] * 1.0,
-        add_compile_tag=False,
-    )
-    alpha_plus = {} if is_lqp else extract_alpha_plus(qs["InitialPartitionNum"])
-    beta = extract_beta(qs["PD"])
-    gamma = extract_gamma(qs)
-    conf = parse_conf(qs["Configuration"])
-    return {
-        **qs_plan,
-        **alpha,
-        **alpha_plus,
-        **beta,
-        **gamma,
-        **conf,
-    }
-
-
 def get_non_decision_inputs_for_qs_compile_dict(
     json_path: str, is_oracle: bool = False
 ) -> Dict[str, Dict[str, Any]]:
@@ -140,4 +89,64 @@ def get_non_decision_inputs_for_qs_compile_dict(
         if is_oracle
         else get_non_decision_inputs_for_qs_compile(qs)
         for qs_id, qs in d.items()
+    }
+
+
+def get_non_decision_inputs_for_q_runtime(d: Dict, sc: SparkConf) -> Dict[str, Any]:
+    alpha = extract_alpha(
+        size_in_mb=d["IM"]["inputSizeInBytes"] / 1024 / 1024,
+        rows_count=d["IM"]["inputRowCount"] * 1.0,
+        add_compile_tag=False,
+    )
+    beta = extract_beta(d["PD"])
+    gamma = extract_gamma(d)
+    conf = parse_conf(d["Configuration"])
+    theta_np = sc.deconstruct_configuration(np.array([list(conf.values())]))
+    theta = {k: v for k, v in zip(THETA_C, theta_np[0][: len(THETA_C)])}
+    return {
+        "lqp": JsonHandler.dump_to_string(drop_raw_plan(d["LQP"]), indent=None),
+        **alpha,
+        **beta,
+        **gamma,
+        **theta,
+    }
+
+
+def get_non_decision_inputs_for_qs_runtime(
+    qs: Dict, is_lqp: bool, sc: Optional[SparkConf] = None
+) -> Dict[str, Any]:
+    if is_lqp:
+        qs_plan = {
+            "qs_lqp": JsonHandler.dump_to_string(
+                drop_raw_plan(qs["QSLogical"]), indent=None
+            )
+        }
+        theta = {}
+    else:
+        if sc is None:
+            raise ValueError("sc cannot be None for runtime pqp")
+        qs_plan = {
+            "qs_pqp": JsonHandler.dump_to_string(
+                drop_raw_plan(qs["QSPhysical"]), indent=None
+            )
+        }
+        conf = parse_conf(qs["Configuration"])
+        theta_np = sc.deconstruct_configuration(np.array([list(conf.values())]))
+        theta = {k: v for k, v in zip(THETA_C, theta_np[0][: len(THETA_C)])}
+
+    alpha = extract_alpha(
+        size_in_mb=qs["IM"]["inputSizeInBytes"] / 1024 / 1024,
+        rows_count=qs["IM"]["inputRowCount"] * 1.0,
+        add_compile_tag=False,
+    )
+    alpha_plus = {} if is_lqp else extract_alpha_plus(qs["InitialPartitionNum"])
+    beta = extract_beta(qs["PD"])
+    gamma = extract_gamma(qs)
+    return {
+        **qs_plan,
+        **alpha,
+        **alpha_plus,
+        **beta,
+        **gamma,
+        **theta,
     }
