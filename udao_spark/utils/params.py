@@ -212,5 +212,7 @@ def get_runtime_optimizer_parameters() -> ArgumentParser:
                         help="Enable MLP only")
     parser.add_argument("--ag_model", type=str, default=None,
                         help="specific model name for AG")
+    parser.add_argument("--sanity_check", action="store_true",
+                        help="Enable sanity check")
     # fmt: on
     return parser

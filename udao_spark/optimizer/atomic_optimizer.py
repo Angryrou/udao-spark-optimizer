@@ -13,6 +13,7 @@ class AtomicOptimizer(BaseOptimizer):
         """
         df = pd.DataFrame.from_dict({0: non_decision_input}, orient="index")
         df.index.name = "id"
+        df["id"] = df.index
         return df
 
     def solve(

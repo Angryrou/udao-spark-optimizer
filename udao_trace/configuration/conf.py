@@ -1,4 +1,5 @@
 import math
+import re
 from abc import ABC, abstractmethod
 from typing import Dict, Iterable, List, Union
 
@@ -6,6 +7,14 @@ import numpy as np
 
 from ..utils import JsonHandler, ScaleTypes, VarTypes
 from .knob_meta import KnobMeta, KnobNumeric
+
+unit_to_multiplier = {
+    "B": 1,
+    "KB": 1024,
+    "MB": 1024**2,
+    "GB": 1024**3,
+    "TB": 1024**4,
+}
 
 
 class Conf(ABC):
@@ -80,10 +89,25 @@ class Conf(ABC):
             ), f"bool value {k_with_unit} is not true or false"
             return 1.0 if k_with_unit.lower() == "true" else 0.0
         if k_meta.unit is not None:
-            assert k_with_unit.endswith(
-                k_meta.unit
-            ), f"unit {k_meta.unit} not found in {k_with_unit}"
-            k_with_unit = k_with_unit[: -len(k_meta.unit)]
+            if k_with_unit.endswith(k_meta.unit):
+                k_with_unit = k_with_unit[: -len(k_meta.unit)]
+            elif k_with_unit.upper().endswith(k_meta.unit[-1:].upper()):
+                splits = re.split("(\d+)", k_with_unit)
+                if len(splits) == 3:
+                    k_with_unit = str(
+                        float(splits[1])
+                        * unit_to_multiplier[splits[2].upper()]
+                        / unit_to_multiplier[k_meta.unit.upper()]
+                    )
+                else:
+                    raise Exception(
+                        f"unit {k_meta.unit} cannot be parsed with {k_with_unit}"
+                    )
+            else:
+                raise Exception(
+                    f"unit {k_meta.unit} cannot be parsed with {k_with_unit}"
+                )
+
         if k_meta.ctype in (VarTypes.INT, VarTypes.CATEGORY, VarTypes.FLOAT):
             return float(k_with_unit)
         else:
