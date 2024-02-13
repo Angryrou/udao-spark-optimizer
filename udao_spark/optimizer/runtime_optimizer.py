@@ -203,7 +203,7 @@ class RuntimeOptimizer:
         if self.verbose:
             logger.info(f"> prepared return message in {(t5 - t4) // 1e6} ms")
 
-        ret_msg = json.dumps(ret_dict)
+        ret_msg = json.dumps({f"{k[0]}-{k[1]}": v for k, v in ret_dict.items()})
         logger.debug(f"Return {ret_msg}")
 
         t6 = time.perf_counter_ns()
