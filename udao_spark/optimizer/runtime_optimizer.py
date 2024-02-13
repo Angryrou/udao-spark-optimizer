@@ -268,7 +268,7 @@ class RuntimeOptimizer:
                         )
 
                         t2 = time.perf_counter_ns()
-                        dt_ms = (t2 - t1) // 1e-6
+                        dt_ms = (t2 - t1) // 1e6
                         dt_dict[f"{rt}-{request_id}"] = dt_ms
                         logger.info(f"Solved {rt}-{request_id} in {dt_ms} ms")
 
