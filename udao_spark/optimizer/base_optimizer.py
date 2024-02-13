@@ -34,6 +34,7 @@ class BaseOptimizer(ABC):
         spark_conf: SparkConf,
         decision_variables: List[str],
         ag_path: str,
+        verbose: bool = False,
     ) -> None:
         self.bm = bm
         self.ag_ms = AGServer.from_ckp_path(
@@ -100,6 +101,7 @@ class BaseOptimizer(ABC):
             ],
             "s": [k.ktype for k in spark_conf.knob_list[-len(THETA_S) :]],
         }
+        self.verbose = verbose
 
     def extract_non_decision_embeddings_from_df(
         self, df: pd.DataFrame

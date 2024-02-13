@@ -38,11 +38,7 @@ if __name__ == "__main__":
     spark_conf = SparkConf(str(base_dir / "assets/spark_configuration_aqe_on.json"))
 
     ro = RuntimeOptimizer.from_params(
-        bm,
-        ag_meta_dict,
-        spark_conf,
-        decision_variables_dict,
-        seed,
+        bm, ag_meta_dict, spark_conf, decision_variables_dict, seed, params.verbose
     )
     use_ag = not params.use_mlp
     if use_ag:
@@ -79,7 +75,10 @@ if __name__ == "__main__":
                 moo_mode=params.moo_mode,
             )
     else:
-        logger.setLevel("INFO")
+        if params.verbose:
+            logger.setLevel("DEBUG")
+        else:
+            logger.setLevel("INFO")
         ro.setup_server(
             host="0.0.0.0",
             port=12345,

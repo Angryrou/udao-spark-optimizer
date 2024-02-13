@@ -227,5 +227,7 @@ def get_runtime_optimizer_parameters() -> ArgumentParser:
     parser.add_argument("--moo_mode", type=str, default="BF",
                         choices=["BF"],
                         help="Moo mode for the runtime optimization")
+    parser.add_argument("--verbose", action="store_true",
+                        help="Enable verbose mode")
     # fmt: on
     return parser
