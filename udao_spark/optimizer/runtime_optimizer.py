@@ -101,7 +101,9 @@ class RuntimeOptimizer:
         self.sc = sc
         self.seed = seed
 
-    def get_non_decision_input_and_ro(self, msg: str) -> Tuple[Dict, AtomicOptimizer]:
+    def get_non_decision_input_and_ro(
+        self, msg: str
+    ) -> Tuple[Dict, AtomicOptimizer, int]:
         d = parse_msg(msg)
         if d is None:
             raise ValueError(f"Failed to parse message: {msg}")
@@ -110,12 +112,14 @@ class RuntimeOptimizer:
         if request_type == "RuntimeLQP":
             non_decision_input = get_non_decision_inputs_for_q_runtime(d, sc)
             ro = self.ro_q
+            n_edges = len(d["LQP"]["links"])
         elif request_type == "RuntimeQS":
             non_decision_input = get_non_decision_inputs_for_qs_runtime(d, False, sc)
             ro = self.ro_qs
+            n_edges = len(d["QSPhysical"]["links"])
         else:
             raise ValueError(f"Query type {request_type} is not supported")
-        return non_decision_input, ro
+        return non_decision_input, ro, n_edges
 
     def solve_msg(
         self,
@@ -126,7 +130,10 @@ class RuntimeOptimizer:
         n_samples: int,
         moo_mode: str,
     ) -> str:
-        non_decision_input, ro = self.get_non_decision_input_and_ro(msg)
+        non_decision_input, ro, n_edges = self.get_non_decision_input_and_ro(msg)
+        if n_edges == 0:
+            logger.warning("No changes to make when no edges in a graph")
+            return "{}"
         po_objs, po_confs = ro.solve(
             non_decision_input,
             seed=self.seed,

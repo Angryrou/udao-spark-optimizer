@@ -50,6 +50,7 @@ if __name__ == "__main__":
         for file_path in [
             "assets/runtime_samples/sample_runtime_lqp.txt",
             "assets/runtime_samples/sample_runtime_qs.txt",
+            "assets/runtime_samples/sample_runtime_qs2.txt",
         ]:
             if not Path(file_path).exists():
                 raise FileNotFoundError(f"{file_path} does not exist")
