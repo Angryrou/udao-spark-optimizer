@@ -1,5 +1,5 @@
 import time
-from typing import Dict
+from typing import Dict, List
 
 import numpy as np
 import pandas as pd
@@ -15,7 +15,6 @@ from udao.utils.logging import logger
 from udao_trace.utils import JsonHandler
 
 from ..utils.collaborators import TypeAdvisor
-from ..utils.constants import THETA_COMPILE
 from ..utils.params import QType
 from .utils import (
     GraphAverageMLPParams,
@@ -126,6 +125,7 @@ class AGServer:
         bm: str,
         graph_embeddings: np.ndarray,
         non_decision_df: pd.DataFrame,
+        decision_variables: List[str],
         sampled_theta: np.ndarray,
         model_name: str,
     ) -> Dict[str, np.ndarray]:
@@ -133,7 +133,7 @@ class AGServer:
         ge_dim = graph_embeddings.shape[1]
         ge_cols = [f"ge_{i}" for i in range(ge_dim)]
         df[ge_cols] = graph_embeddings
-        df[THETA_COMPILE] = sampled_theta
+        df[decision_variables] = sampled_theta
         dataset = TabularDataset(df[ge_cols + self.ta.get_tabular_columns()])
         start = time.perf_counter_ns()
         transformed_data = self.predictors[self.objectives[0]].transform_features(
@@ -143,8 +143,14 @@ class AGServer:
         logger.debug(f"Transformed data for AG prediction in {dt / 1e6} ms")
         return {
             obj: calibrate_negative_predictions(
-                self.predictors[obj].predict(
-                    transformed_data, model=model_name, transform_features=False
+                np.array(
+                    self.predictors[obj].predict(
+                        transformed_data,
+                        model=model_name,
+                        transform_features=False,
+                        as_pandas=False,
+                    ),
+                    dtype=np.float32,
                 ),
                 bm=bm,
                 obj=obj,

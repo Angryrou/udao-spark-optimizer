@@ -214,5 +214,12 @@ def get_runtime_optimizer_parameters() -> ArgumentParser:
                         help="specific model name for AG")
     parser.add_argument("--sanity_check", action="store_true",
                         help="Enable sanity check")
+    parser.add_argument("--sample_mode", type=str, default="random",
+                        choices=["random", "grid"],
+                        help="Inner solver for the runtime optimization")
+    parser.add_argument("--n_samples", type=int, default=1000)
+    parser.add_argument("--moo_mode", type=str, default="BF",
+                        choices=["BF"],
+                        help="Moo mode for the runtime optimization")
     # fmt: on
     return parser
