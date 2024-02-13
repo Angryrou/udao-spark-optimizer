@@ -37,7 +37,7 @@ class AtomicOptimizer(BaseOptimizer):
 
         t2 = time.perf_counter_ns()
         if self.verbose:
-            logger.info(f"extracted non_decision_df in {(t2 - t1) / 1e6} ms")
+            logger.info(f">> extracted non_decision_df in {(t2 - t1) / 1e6} ms")
 
         (
             graph_embeddings,
@@ -46,7 +46,7 @@ class AtomicOptimizer(BaseOptimizer):
 
         t3 = time.perf_counter_ns()
         if self.verbose:
-            logger.info(f"extracted non_decision_embeddings in {(t3 - t2) / 1e6} ms")
+            logger.info(f">> extracted non_decision_embeddings in {(t3 - t2) / 1e6} ms")
             logger.debug("graph_embeddings shape: %s", graph_embeddings.shape)
             logger.warning(
                 "non_decision_tabular_features is only used for "
@@ -65,7 +65,7 @@ class AtomicOptimizer(BaseOptimizer):
 
         t4 = time.perf_counter_ns()
         if self.verbose:
-            logger.info(f"sampled theta in {(t4 - t3) / 1e6} ms")
+            logger.info(f">> sampled theta in {(t4 - t3) / 1e6} ms")
 
         if use_ag:
             graph_embeddings = graph_embeddings.detach().cpu()
@@ -89,7 +89,7 @@ class AtomicOptimizer(BaseOptimizer):
 
         t5 = time.perf_counter_ns()
         if self.verbose:
-            logger.info(f"got objective values in {(t5 - t4) / 1e6} ms")
+            logger.info(f">> computed objective values in {(t5 - t4) / 1e6} ms")
 
         if moo_mode == "BF":
             po_mask = is_pareto_efficient(objs)
@@ -100,7 +100,7 @@ class AtomicOptimizer(BaseOptimizer):
 
         t6 = time.perf_counter_ns()
         if self.verbose:
-            logger.info(f"found pareto optimal points in {(t6 - t5) / 1e6} ms")
+            logger.info(f">> filtered pareto optimal points in {(t6 - t5) / 1e6} ms")
 
         n_po = len(po_objs)
         if n_po == 0:
@@ -123,6 +123,6 @@ class AtomicOptimizer(BaseOptimizer):
 
         t7 = time.perf_counter_ns()
         if self.verbose:
-            logger.info(f"constructed configurations in {(t7 - t6) / 1e6} ms")
+            logger.info(f">> constructed configurations in {(t7 - t6) / 1e6} ms")
 
         return po_objs, po_confs

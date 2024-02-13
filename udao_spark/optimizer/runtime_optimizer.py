@@ -158,17 +158,18 @@ class RuntimeOptimizer:
     ) -> str:
         t1 = time.perf_counter_ns()
         if self.filter_msg(parsed_dict):
+            logger.info("No need to solve, boost!!!")
             return "{}"
 
         t2 = time.perf_counter_ns()
         if self.verbose:
-            logger.info(f"Filtering took {(t2 - t1) // 1e6} ms")
+            logger.info(f"> filtered in {(t2 - t1) // 1e6} ms")
 
         non_decision_input, ro = self.get_non_decision_input_and_ro(parsed_dict)
 
         t3 = time.perf_counter_ns()
         if self.verbose:
-            logger.info(f"Getting non_decision_input and ro took {(t3 - t2) // 1e6} ms")
+            logger.info(f"> got non_decision_input and ro in {(t3 - t2) // 1e6} ms")
 
         po_objs, po_confs = ro.solve(
             non_decision_input,
@@ -182,7 +183,7 @@ class RuntimeOptimizer:
 
         t4 = time.perf_counter_ns()
         if self.verbose:
-            logger.info(f"Solving took {(t4 - t3) // 1e6} ms")
+            logger.info(f"> solved in {(t4 - t3) // 1e6} ms")
 
         if po_objs is None or po_confs is None or len(po_objs) == 0:
             raise SolutionNotFoundError("No Solution Found")
@@ -200,14 +201,14 @@ class RuntimeOptimizer:
 
         t5 = time.perf_counter_ns()
         if self.verbose:
-            logger.info(f"Preparing return message took {(t5 - t4) // 1e6} ms")
+            logger.info(f"> prepared return message in {(t5 - t4) // 1e6} ms")
 
         ret_msg = json.dumps(ret_dict)
         logger.debug(f"Return {ret_msg}")
 
         t6 = time.perf_counter_ns()
         if self.verbose:
-            logger.info(f"Dumping return message took {(t6 - t5) // 1e6} ms")
+            logger.info(f"> dumped return message in {(t6 - t5) // 1e6} ms")
 
         return ret_msg
 
@@ -277,7 +278,7 @@ class RuntimeOptimizer:
                     logger.debug(f"Sent response: {response}")
                 conn.close()
                 logger.info(f"Finished one session, disconnecting {addr}")
-                logger.info(f"Request time: {sorted(dt_dict)}")
+                logger.info(f"Request time: {json.dumps(dt_dict, indent=2)}")
         except Exception as e:
             logger.exception(f"Exception occurred: {e}")
             sock.close()

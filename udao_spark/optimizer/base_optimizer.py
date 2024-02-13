@@ -110,23 +110,46 @@ class BaseOptimizer(ABC):
         compute the graph_embedding and
         the normalized values of the non-decision variables
         """
+
+        t1 = time.perf_counter_ns()
+
         if df.index.name != "id":
-            raise ValueError("df must have an index named 'id'")
+            raise ValueError(">>> df must have an index named 'id'")
         n_items = len(df)
         df[self.decision_variables] = 0.0
         df[self.model_objective_columns] = 0.0
+
+        t2 = time.perf_counter_ns()
+        if self.verbose:
+            logger.info(f">>> preprocessed df in {(t2 - t1) / 1e6} ms")
+
         with th.no_grad():
             iterator = self.data_processor.make_iterator(df, df.index, split="test")
+
+        t3 = time.perf_counter_ns()
+        if self.verbose:
+            logger.info(f">>> created iterator in {(t3 - t2) / 1e6} ms")
+
         dataloader = iterator.get_dataloader(batch_size=n_items)
         batch_input, _ = next(iter(dataloader))
         if not isinstance(batch_input, QueryPlanInput):
             raise TypeError(f"Expected QueryPlanInput, got {type(batch_input)}")
+
+        t4 = time.perf_counter_ns()
+        if self.verbose:
+            logger.info(f">>> created dataloader in {(t4 - t3) / 1e6} ms")
+
         embedding_input = batch_input.embedding_input
         tabular_input = batch_input.features
         graph_embedding = self.ag_ms.ms.model.embedder(embedding_input.to(self.device))
         non_decision_tabular_features = tabular_input[
             :, : -len(self.decision_variables)
         ]
+
+        t5 = time.perf_counter_ns()
+        if self.verbose:
+            logger.info(f">>> computed graph_embedding in {(t5 - t4) / 1e6} ms")
+
         return graph_embedding, non_decision_tabular_features
 
     def summarize_obj(
@@ -231,8 +254,8 @@ class BaseOptimizer(ABC):
         )
         end_time_ns = time.perf_counter_ns()
         logger.info(
-            f"takes {(end_time_ns - start_time_ns) / 1e6} ms "
-            f"to run {len(sampled_theta)} theta"
+            f"Takes {(end_time_ns - start_time_ns) / 1e6} ms "
+            f"to compute {len(sampled_theta)} theta"
         )
 
         if "k1" in non_decision_df.columns:
