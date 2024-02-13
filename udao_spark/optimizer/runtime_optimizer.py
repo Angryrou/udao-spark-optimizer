@@ -267,7 +267,7 @@ class RuntimeOptimizer:
                         request_id = (
                             parsed_dict["QsOptId"]
                             if rt == "RuntimeQS"
-                            else parsed_dict["LqpOptId"]
+                            else parsed_dict["LqpId"]
                         )
                         dt_ms = (time.perf_counter_ns() - t1) / 1e6
                         logger.info(f"Request {rt}-{request_id} took {dt_ms:.0f} ms")
