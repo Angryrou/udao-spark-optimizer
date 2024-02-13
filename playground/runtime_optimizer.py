@@ -2,11 +2,9 @@ from pathlib import Path
 
 from udao_spark.optimizer.runtime_optimizer import R_Q, R_QS, RuntimeOptimizer
 from udao_spark.optimizer.utils import get_ag_meta
+from udao_spark.utils.logging import logger
 from udao_spark.utils.params import get_runtime_optimizer_parameters
 from udao_trace.configuration import SparkConf
-from udao_trace.utils.logging import logger
-
-logger.setLevel("INFO")
 
 if __name__ == "__main__":
     params = get_runtime_optimizer_parameters().parse_args()
@@ -50,7 +48,7 @@ if __name__ == "__main__":
     if params.sanity_check:
         logger.setLevel("DEBUG")
         for file_path in [
-            # "assets/runtime_samples/sample_runtime_lqp.txt",
+            "assets/runtime_samples/sample_runtime_lqp.txt",
             "assets/runtime_samples/sample_runtime_qs.txt",
         ]:
             if not Path(file_path).exists():

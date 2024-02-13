@@ -10,11 +10,11 @@ from torchmetrics import WeightedMeanAbsolutePercentageError
 from udao.model import UdaoModel, UdaoModule
 from udao.model.utils.losses import WMAPELoss
 from udao.optimization.utils.moo_utils import get_default_device
-from udao.utils.logging import logger
 
 from udao_trace.utils import JsonHandler
 
 from ..utils.collaborators import TypeAdvisor
+from ..utils.logging import logger
 from ..utils.params import QType
 from .utils import (
     GraphAverageMLPParams,

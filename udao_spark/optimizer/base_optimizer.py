@@ -1,4 +1,3 @@
-import logging
 import os.path
 import time
 from abc import ABC, abstractmethod
@@ -15,13 +14,12 @@ from udao_trace.configuration import SparkConf
 from udao_trace.utils import PickleHandler
 
 from ..model.model_server import AGServer
-from ..utils.constants import THETA_C, THETA_P, THETA_S
+from ..utils.constants import THETA_C, THETA_COMPILE, THETA_P, THETA_S
+from ..utils.logging import logger
 from ..utils.params import QType
 from .utils import get_cloud_cost_add_io, get_cloud_cost_wo_io
 
 ThetaType = Literal["c", "p", "s"]
-
-logger = logging.getLogger(__name__)
 
 
 class BaseOptimizer(ABC):
@@ -60,6 +58,11 @@ class BaseOptimizer(ABC):
         if decision_variables != self.tabular_columns[-len(decision_variables) :]:
             raise ValueError(
                 "Decision variables must be the last columns in tabular_features"
+            )
+        if not all(v in THETA_COMPILE for v in decision_variables):
+            raise ValueError(
+                f"Decision variables must be in {THETA_COMPILE}, "
+                f"got {decision_variables}"
             )
         self.decision_variables = decision_variables
         self.dtype = th.float32
@@ -124,7 +127,7 @@ class BaseOptimizer(ABC):
         ]
         return graph_embedding, non_decision_tabular_features
 
-    def _summarize_obj(
+    def summarize_obj(
         self,
         k1: np.ndarray,
         k2: np.ndarray,
@@ -161,7 +164,15 @@ class BaseOptimizer(ABC):
                 "cost_w_io": obj_cost_w_io,
             }
 
-    def _predict_objectives_mlp(
+    def get_latencies_and_objectives(
+        self, objs_dict: Dict[str, np.ndarray]
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        if "ana_latency" in objs_dict:
+            return objs_dict["ana_latency"], objs_dict["ana_cost_w_io"]
+        else:
+            return objs_dict["latency"], objs_dict["cost_w_io"]
+
+    def predict_objectives_mlp(
         self, graph_embedding: th.Tensor, tabular_features: th.Tensor
     ) -> th.Tensor:
         """
@@ -179,7 +190,7 @@ class BaseOptimizer(ABC):
         theta: th.Tensor,
     ) -> Dict[str, np.ndarray]:
         tabular_features = th.cat([non_decision_tabular_features, theta], dim=1)
-        objs = self._predict_objectives_mlp(graph_embeddings, tabular_features).numpy()
+        objs = self.predict_objectives_mlp(graph_embeddings, tabular_features).numpy()
         theta_c_min, theta_c_max = self.theta_minmax["c"]
         k1_min, k2_min, k3_min = theta_c_min[:3]
         k1_max, k2_max, k3_max = theta_c_max[:3]
@@ -194,11 +205,11 @@ class BaseOptimizer(ABC):
         if self.ta.q_type.startswith("qs_"):
             obj_io = objs[:, 1]
             obj_ana_lat = objs[:, 2]
-            return self._summarize_obj(k1, k2, k3, obj_ana_lat, obj_io)
+            return self.summarize_obj(k1, k2, k3, obj_ana_lat, obj_io)
         else:
             obj_lat = objs[:, 0]
             obj_io = objs[:, 1]
-            return self._summarize_obj(k1, k2, k3, obj_lat, obj_io)
+            return self.summarize_obj(k1, k2, k3, obj_lat, obj_io)
 
     def get_objective_values_ag(
         self,
@@ -241,7 +252,7 @@ class BaseOptimizer(ABC):
             else objs["latency_s"]
         )
         obj_io = objs["io_mb"]
-        return self._summarize_obj(
+        return self.summarize_obj(
             np.array(k1), np.array(k2), np.array(k3), obj_lat, obj_io
         )
 

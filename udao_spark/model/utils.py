@@ -19,10 +19,10 @@ from udao.model.module import LearningParams
 from udao.model.utils.losses import WMAPELoss
 from udao.model.utils.schedulers import UdaoLRScheduler, setup_cosine_annealing_lr
 from udao.utils.interfaces import UdaoEmbedItemShape
-from udao.utils.logging import logger
 
 from udao_trace.utils import JsonHandler
 
+from ..utils.logging import logger
 from ..utils.params import QType, UdaoParams
 
 

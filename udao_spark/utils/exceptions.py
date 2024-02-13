@@ -4,3 +4,7 @@ class NoBenchmarkError(ValueError):
 
 class NoQTypeError(ValueError):
     """raise when no valid mode is found (only q and qs)"""
+
+
+class SolutionNotFoundError(ValueError):
+    """raise when no solution is found"""

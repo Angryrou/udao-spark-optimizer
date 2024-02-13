@@ -3,9 +3,10 @@ from typing import Any, Dict, Optional, Tuple
 import numpy as np
 import pandas as pd
 import torch as th
+from udao.optimization.utils.moo_utils import is_pareto_efficient
 
-from udao_trace.utils.logging import logger
-
+from ..utils.constants import THETA_COMPILE
+from ..utils.logging import logger
 from .base_optimizer import BaseOptimizer
 
 
@@ -70,5 +71,31 @@ class AtomicOptimizer(BaseOptimizer):
                 non_decision_tabular_features.tile(n_samples, 1),
                 th.tensor(sampled_theta, dtype=self.dtype),
             )
-        print(objs_dict)
-        return None, None
+        lat, cost = self.get_latencies_and_objectives(objs_dict)
+        objs = np.vstack([lat, cost]).T
+        if moo_mode == "BF":
+            po_mask = is_pareto_efficient(objs)
+        else:
+            raise ValueError(f"moo_mode {moo_mode} is not supported")
+        po_objs = objs[po_mask]
+        po_theta = sampled_theta[po_mask]
+
+        n_po = len(po_objs)
+        if n_po == 0:
+            return None, None
+
+        logger.debug(f"po_objs: {po_objs}, po_theta: {po_theta}")
+        non_decision_knobs = [
+            v for v in THETA_COMPILE if v not in self.decision_variables
+        ]
+        n_vars = len(self.decision_variables)
+        n_consts = len(non_decision_knobs)
+        po_theta_full = np.hstack([np.zeros((n_po, n_consts)), po_theta])
+        if use_ag:
+            po_confs = self.sc.construct_configuration(po_theta_full)[:, -n_vars:]
+        else:
+            po_confs = self.sc.construct_configuration_from_norm(po_theta_full)[
+                :, -n_vars:
+            ]
+        logger.debug(f"found {len(po_objs)} po points, po_confs: {po_confs}")
+        return po_objs, po_confs

@@ -4,7 +4,6 @@ from typing import Dict, List
 import numpy as np
 
 from udao_trace.utils import JsonHandler
-from udao_trace.utils.logging import logger
 
 from .constants import (
     ALPHA,
@@ -18,6 +17,7 @@ from .constants import (
     THETA_S,
 )
 from .exceptions import NoBenchmarkError, NoQTypeError
+from .logging import logger
 from .params import ExtractParams, QType
 
 

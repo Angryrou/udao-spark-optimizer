@@ -8,17 +8,14 @@ import pandas as pd
 import torch as th
 from udao.optimization.concepts import BoolVariable, FloatVariable, IntegerVariable
 
-from udao_spark.optimizer.base_optimizer import BaseOptimizer
-from udao_spark.optimizer.moo_algos.div_and_conq_moo import DivAndConqMOO
-from udao_spark.optimizer.moo_algos.evo_optimizer import EvoOptimizer
-from udao_spark.optimizer.moo_algos.ws_optimizer import WSOptimizer
-from udao_spark.optimizer.utils import (
-    even_weights,
-    save_results,
-    weighted_utopia_nearest_impl,
-)
 from udao_trace.utils.interface import VarTypes
-from udao_trace.utils.logging import logger
+
+from ..utils.logging import logger
+from .base_optimizer import BaseOptimizer
+from .moo_algos.div_and_conq_moo import DivAndConqMOO
+from .moo_algos.evo_optimizer import EvoOptimizer
+from .moo_algos.ws_optimizer import WSOptimizer
+from .utils import even_weights, save_results, weighted_utopia_nearest_impl
 
 
 class HierarchicalOptimizer(BaseOptimizer):
@@ -41,7 +38,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         place: str = "",
     ) -> np.ndarray:
         tabular_features = th.cat([non_decision_tabular_features, theta], dim=1)
-        objs = self._predict_objectives_mlp(graph_embeddings, tabular_features).numpy()
+        objs = self.predict_objectives_mlp(graph_embeddings, tabular_features).numpy()
         obj_io = objs[:, 1]
         obj_ana_lat = objs[:, 2]
         theta_c_min, theta_c_max = self.theta_minmax["c"]
@@ -50,7 +47,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         k1 = (theta[:, 0].numpy() - k1_min) * (k1_max - k1_min) + k1_min
         k2 = (theta[:, 1].numpy() - k2_min) * (k2_max - k2_min) + k2_min
         k3 = (theta[:, 2].numpy() - k3_min) * (k3_max - k3_min) + k3_min
-        objs_dict = self._summarize_obj(k1, k2, k3, obj_ana_lat, obj_io)
+        objs_dict = self.summarize_obj(k1, k2, k3, obj_ana_lat, obj_io)
 
         obj_cost_w_io = objs_dict["ana_cost_w_io"]
 
@@ -77,7 +74,7 @@ class HierarchicalOptimizer(BaseOptimizer):
             f"takes {(end_time_ns - start_time_ns) / 1e6} ms "
             f"to run {len(sampled_theta)} theta"
         )
-        objs_dict = self._summarize_obj(
+        objs_dict = self.summarize_obj(
             sampled_theta[:, 0],
             sampled_theta[:, 1],
             sampled_theta[:, 2],

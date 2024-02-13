@@ -1,25 +1,19 @@
 import json
-import logging
 import struct
 from socket import AF_INET, SOCK_STREAM, socket
 from typing import Dict, Optional, Tuple
 
 from udao_trace.configuration import SparkConf
-from udao_trace.utils.logging import _get_logger
+from udao_trace.parser.spark_parser import THETA_P, THETA_S
 
 from ..data.extractors.injection_extractor import (
     get_non_decision_inputs_for_q_runtime,
     get_non_decision_inputs_for_qs_runtime,
 )
+from ..utils.logging import logger
 from ..utils.params import QType
 from .atomic_optimizer import AtomicOptimizer
-
-logger = _get_logger(
-    name="server",
-    std_level=logging.DEBUG,
-    file_level=logging.DEBUG,
-    log_file_path="runtime_optimizer.log",
-)
+from .utils import utopia_nearest
 
 
 def recv_msg(sock: socket) -> Optional[str]:
@@ -133,7 +127,7 @@ class RuntimeOptimizer:
         moo_mode: str,
     ) -> str:
         non_decision_input, ro = self.get_non_decision_input_and_ro(msg)
-        po_confs, po_objs = ro.solve(
+        po_objs, po_confs = ro.solve(
             non_decision_input,
             seed=self.seed,
             use_ag=use_ag,
@@ -142,7 +136,24 @@ class RuntimeOptimizer:
             n_samples=n_samples,
             moo_mode=moo_mode,
         )
-        return ""
+        if po_objs is None or po_confs is None or len(po_objs) == 0:
+            logger.warning(f"No solution found for message: {msg}")
+            logger.info(f"Returning 'NSF' for message: {msg}")
+            return "NSF"  # No Solution Found
+
+        if len(po_objs) == 1:
+            ret_obj, ret_conf = po_objs[0], po_confs[0]
+        else:
+            ret_obj, ret_conf = utopia_nearest(po_objs, po_confs)
+        if ro.ta.q_type == R_Q:
+            ret_dict = {k: v for k, v in zip(THETA_P + THETA_S, ret_conf)}
+        elif ro.ta.q_type == R_QS:
+            ret_dict = {k: v for k, v in zip(THETA_S, ret_conf)}
+        else:
+            raise ValueError(f"QType {ro.ta.q_type} is not supported")
+        ret_msg = json.dumps(ret_dict)
+        logger.info(f"Return {ret_msg} for message {msg}")
+        return ret_msg
 
     def setup_server(
         self,
