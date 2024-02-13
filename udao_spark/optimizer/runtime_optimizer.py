@@ -144,8 +144,7 @@ class RuntimeOptimizer:
             moo_mode=moo_mode,
         )
         if po_objs is None or po_confs is None or len(po_objs) == 0:
-            logger.warning(f"No solution found for message: {msg}")
-            logger.info(f"Returning 'NSF' for message: {msg}")
+            logger.warning("NFS for message")
             return "NSF"  # No Solution Found
 
         if len(po_objs) == 1:
@@ -159,7 +158,7 @@ class RuntimeOptimizer:
         else:
             raise ValueError(f"QType {ro.ta.q_type} is not supported")
         ret_msg = json.dumps(ret_dict)
-        logger.info(f"Return {ret_msg} for message {msg}")
+        logger.debug(f"Return {ret_msg}")
         return ret_msg
 
     def setup_server(
@@ -186,7 +185,7 @@ class RuntimeOptimizer:
 
                 while True:
                     msg = recv_msg(conn)
-                    logger.info(f"Received message: {msg}")
+                    logger.debug(f"Received message: {msg}")
                     if not msg:
                         logger.warning(f"No message received, disconnecting {addr}")
                         break
@@ -207,7 +206,7 @@ class RuntimeOptimizer:
                             + "\n"
                         )
                     conn.sendall(response.encode("utf-8"))
-                    logger.info(f"Sent response: {response}")
+                    logger.debug(f"Sent response: {response}")
 
                 conn.close()
         except Exception as e:

@@ -6,7 +6,7 @@ from typing import Optional
 
 def _get_logger(
     name: str = "udao_spark",
-    std_level: int = logging.DEBUG,
+    std_level: int = logging.INFO,
     file_level: int = logging.INFO,
     log_file_path: Optional[str] = None,
 ) -> logging.Logger:

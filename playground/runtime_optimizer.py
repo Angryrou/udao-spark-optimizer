@@ -63,6 +63,7 @@ if __name__ == "__main__":
                 moo_mode=params.moo_mode,
             )
     else:
+        logger.setLevel("INFO")
         ro.setup_server(
             host="0.0.0.0",
             port=12345,
