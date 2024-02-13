@@ -184,15 +184,20 @@ class RuntimeOptimizer:
                         logger.warning(f"No message received, disconnecting {addr}")
                         break
                     if debug:
-                        response = "xxx\n"
+                        response = (
+                            json.dumps({THETA_S[0]: "0.34", THETA_S[1]: "512KB"}) + "\n"
+                        )
                     else:
-                        response = self.solve_msg(
-                            msg,
-                            use_ag=use_ag,
-                            ag_model=ag_model,
-                            sample_mode=sample_mode,
-                            n_samples=n_samples,
-                            moo_mode=moo_mode,
+                        response = (
+                            self.solve_msg(
+                                msg,
+                                use_ag=use_ag,
+                                ag_model=ag_model,
+                                sample_mode=sample_mode,
+                                n_samples=n_samples,
+                                moo_mode=moo_mode,
+                            )
+                            + "\n"
                         )
                     conn.sendall(response.encode("utf-8"))
                     logger.info(f"Sent response: {response}")
