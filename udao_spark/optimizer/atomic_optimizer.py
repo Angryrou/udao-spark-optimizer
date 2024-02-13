@@ -72,7 +72,7 @@ class AtomicOptimizer(BaseOptimizer):
                 th.tensor(sampled_theta, dtype=self.dtype),
             )
         lat, cost = self.get_latencies_and_objectives(objs_dict)
-        objs = np.vstack([lat, cost]).T
+        objs = np.vstack([lat, cost]).T.astype(np.float32)
         if moo_mode == "BF":
             po_mask = is_pareto_efficient(objs)
         else:

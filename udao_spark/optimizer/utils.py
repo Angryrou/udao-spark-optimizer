@@ -201,6 +201,8 @@ def utopia_nearest(
     if len(po_objs) == 1:
         logger.warning("Only one Pareto point, return it directly")
         return po_objs[0], po_confs[0]
+    if po_objs.dtype != np.float32:
+        po_objs = po_objs.astype(np.float32)
 
     objs_min, objs_max = po_objs.min(axis=0), po_objs.max(axis=0)
     objs_range = objs_max - objs_min
