@@ -203,7 +203,7 @@ class RuntimeOptimizer:
         if self.verbose:
             logger.info(f"> prepared return message in {(t5 - t4) // 1e6} ms")
 
-        ret_msg = json.dumps({f"{k[0]}-{k[1]}": v for k, v in ret_dict.items()})
+        ret_msg = json.dumps(ret_dict)
         logger.debug(f"Return {ret_msg}")
 
         t6 = time.perf_counter_ns()
@@ -249,10 +249,6 @@ class RuntimeOptimizer:
                     else:
                         t1 = time.perf_counter_ns()
                         parsed_dict = parse_msg(msg)
-                        logger.info(
-                            f"Parsed message: {parsed_dict}, "
-                            f"took {(time.perf_counter_ns() - t1) // 1e6} ms"
-                        )
                         response = (
                             self.solve_msg(
                                 parsed_dict,
@@ -270,9 +266,11 @@ class RuntimeOptimizer:
                             if rt == "RuntimeQS"
                             else parsed_dict["LqpId"]
                         )
-                        dt_ms = (time.perf_counter_ns() - t1) / 1e6
-                        logger.info(f"Request {rt}-{request_id} took {dt_ms:.0f} ms")
-                        dt_dict[(rt, request_id)] = dt_ms
+
+                        t2 = time.perf_counter_ns()
+                        dt_ms = (t2 - t1) // 1e-6
+                        dt_dict[f"{rt}-{request_id}"] = dt_ms
+                        logger.info(f"Solved {rt}-{request_id} in {dt_ms} ms")
 
                     conn.sendall(response.encode("utf-8"))
                     logger.debug(f"Sent response: {response}")
