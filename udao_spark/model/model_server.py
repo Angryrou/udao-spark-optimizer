@@ -1,5 +1,5 @@
 import time
-from typing import Dict, List
+from typing import Dict, List, Union
 
 import numpy as np
 import pandas as pd
@@ -127,7 +127,7 @@ class AGServer:
         non_decision_df: pd.DataFrame,
         decision_variables: List[str],
         sampled_theta: np.ndarray,
-        model_name: str,
+        model_name: Union[str, Dict[str, str]],
     ) -> Dict[str, np.ndarray]:
         df = non_decision_df.copy()
         ge_dim = graph_embeddings.shape[1]
@@ -146,7 +146,9 @@ class AGServer:
                 np.array(
                     self.predictors[obj].predict(
                         transformed_data,
-                        model=model_name,
+                        model=model_name
+                        if isinstance(model_name, str)
+                        else model_name[obj],
                         transform_features=False,
                         as_pandas=False,
                     ),

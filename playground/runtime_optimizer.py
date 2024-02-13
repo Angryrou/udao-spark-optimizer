@@ -45,6 +45,22 @@ if __name__ == "__main__":
         seed,
     )
     use_ag = not params.use_mlp
+    if use_ag:
+        ag_model_dict = {
+            R_Q: {
+                "latency_s": params.ag_model_q_latency
+                or "WeightedEnsemble_L2FastPO_Pareto1",
+                "io_mb": params.ag_model_q_io or "CatBoost",
+            },
+            R_QS: {
+                "ana_latency_s": params.ag_model_qs_ana_latency
+                or "WeightedEnsemble_L2FastPO_Pareto1",
+                "io_mb": params.ag_model_qs_io or "CatBoost",
+            },
+        }
+    else:
+        ag_model_dict = {R_Q: {}, R_QS: {}}
+
     if params.sanity_check:
         logger.setLevel("DEBUG")
         for file_path in [
@@ -57,7 +73,7 @@ if __name__ == "__main__":
             ro.sanity_check(
                 file_path=file_path,
                 use_ag=use_ag,
-                ag_model=params.ag_model,
+                ag_model_dict=ag_model_dict,
                 sample_mode=params.sample_mode,
                 n_samples=params.n_samples,
                 moo_mode=params.moo_mode,
@@ -69,7 +85,7 @@ if __name__ == "__main__":
             port=12345,
             debug=debug,
             use_ag=use_ag,
-            ag_model=params.ag_model,
+            ag_model_dict=ag_model_dict,
             sample_mode=params.sample_mode,
             n_samples=params.n_samples,
             moo_mode=params.moo_mode,

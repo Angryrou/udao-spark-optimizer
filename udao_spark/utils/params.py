@@ -210,8 +210,14 @@ def get_runtime_optimizer_parameters() -> ArgumentParser:
     # fmt: off
     parser.add_argument("--use_mlp", action="store_true",
                         help="Enable MLP only")
-    parser.add_argument("--ag_model", type=str, default=None,
-                        help="specific model name for AG")
+    parser.add_argument("--ag_model_q_latency", type=str, default=None,
+                        help="specific model name for AG for Q_R latency")
+    parser.add_argument("--ag_model_q_io", type=str, default=None,
+                        help="specific model name for AG for Q_R IO")
+    parser.add_argument("--ag_model_qs_ana_latency", type=str, default=None,
+                        help="specific model name for AG for QS_R ana_latency")
+    parser.add_argument("--ag_model_qs_io", type=str, default=None,
+                        help="specific model name for AG for QS_R IO")
     parser.add_argument("--sanity_check", action="store_true",
                         help="Enable sanity check")
     parser.add_argument("--sample_mode", type=str, default="random",

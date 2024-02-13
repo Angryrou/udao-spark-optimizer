@@ -1,7 +1,7 @@
 import os.path
 import time
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Literal, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -216,7 +216,7 @@ class BaseOptimizer(ABC):
         graph_embeddings: np.ndarray,
         non_decision_df: pd.DataFrame,
         sampled_theta: np.ndarray,
-        model_name: str,
+        model_name: Union[str, Dict[str, str]],
     ) -> Dict[str, np.ndarray]:
         start_time_ns = time.perf_counter_ns()
         objs = self.ag_ms.predict_with_ag(

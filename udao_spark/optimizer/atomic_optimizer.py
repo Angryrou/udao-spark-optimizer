@@ -25,7 +25,7 @@ class AtomicOptimizer(BaseOptimizer):
         non_decision_input: Dict[str, Any],
         seed: Optional[int] = None,
         use_ag: bool = True,
-        ag_model: Optional[str] = None,
+        ag_model: Dict[str, str] = dict(),
         sample_mode: str = "random_sample",
         n_samples: int = 1,
         moo_mode: str = "BF",
@@ -50,11 +50,6 @@ class AtomicOptimizer(BaseOptimizer):
             raise ValueError(f"sample_mode {sample_mode} is not supported")
 
         if use_ag:
-            if ag_model is None:
-                logger.warning(
-                    "ag_model is not specified, choosing the ensembled model"
-                )
-                ag_model = "WeightedEnsemble_L2"
             graph_embeddings = graph_embeddings.detach().cpu()
             objs_dict = self.get_objective_values_ag(
                 graph_embeddings.tile(n_samples, 1).numpy(),
