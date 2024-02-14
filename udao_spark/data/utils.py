@@ -8,7 +8,6 @@ import torch as th
 from udao.data import BaseIterator
 from udao.data.handler.data_handler import DataHandler
 from udao.data.utils.utils import DatasetType, train_test_val_split_on_column
-from udao.utils.logging import logger
 
 from udao_spark.utils.constants import (
     ALPHA_LQP_RAW,
@@ -27,6 +26,7 @@ from udao_trace.utils import BenchmarkType, JsonHandler, ParquetHandler, PickleH
 from udao_trace.workload import Benchmark
 
 from ..utils.collaborators import PathWatcher, TypeAdvisor
+from ..utils.logging import logger
 from ..utils.params import UdaoParams
 from .handlers.data_processor import create_udao_data_processor
 

@@ -2,14 +2,13 @@ from pathlib import Path
 
 from udao_spark.optimizer.runtime_optimizer import R_Q, R_QS, RuntimeOptimizer
 from udao_spark.optimizer.utils import get_ag_meta
+from udao_spark.utils.logging import logger
 from udao_spark.utils.params import get_runtime_optimizer_parameters
 from udao_trace.configuration import SparkConf
-from udao_trace.utils.logging import logger
-
-logger.setLevel("INFO")
 
 if __name__ == "__main__":
     params = get_runtime_optimizer_parameters().parse_args()
+    debug = params.debug
     logger.info(f"get parameters: {params}")
     bm, seed = params.benchmark, params.seed
     hp_choice, graph_choice = params.hp_choice, params.graph_choice
@@ -39,10 +38,55 @@ if __name__ == "__main__":
     spark_conf = SparkConf(str(base_dir / "assets/spark_configuration_aqe_on.json"))
 
     ro = RuntimeOptimizer.from_params(
-        bm, ag_meta_dict, spark_conf, decision_variables_dict, seed
+        bm,
+        ag_meta_dict,
+        spark_conf,
+        decision_variables_dict,
+        seed,
     )
+    use_ag = not params.use_mlp
+    if use_ag:
+        ag_model_dict = {
+            R_Q: {
+                "latency_s": params.ag_model_q_latency
+                or "WeightedEnsemble_L2FastPO_Pareto1",
+                "io_mb": params.ag_model_q_io or "CatBoost",
+            },
+            R_QS: {
+                "ana_latency_s": params.ag_model_qs_ana_latency
+                or "WeightedEnsemble_L2FastPO_Pareto1",
+                "io_mb": params.ag_model_qs_io or "CatBoost",
+            },
+        }
+    else:
+        ag_model_dict = {R_Q: {}, R_QS: {}}
 
     if params.sanity_check:
-        ro.sanity_check()
+        logger.setLevel("DEBUG")
+        for file_path in [
+            "assets/runtime_samples/sample_runtime_lqp.txt",
+            "assets/runtime_samples/sample_runtime_qs.txt",
+            "assets/runtime_samples/sample_runtime_qs2.txt",
+        ]:
+            if not Path(file_path).exists():
+                raise FileNotFoundError(f"{file_path} does not exist")
+            ro.sanity_check(
+                file_path=file_path,
+                use_ag=use_ag,
+                ag_model_dict=ag_model_dict,
+                sample_mode=params.sample_mode,
+                n_samples=params.n_samples,
+                moo_mode=params.moo_mode,
+            )
     else:
-        ro.setup_server(host="0.0.0.0", port=12345, debug=True)
+        logger.setLevel("INFO")
+        ro.setup_server(
+            host="0.0.0.0",
+            port=12345,
+            debug=debug,
+            use_ag=use_ag,
+            ag_model_dict=ag_model_dict,
+            sample_mode=params.sample_mode,
+            n_samples=params.n_samples,
+            moo_mode=params.moo_mode,
+        )

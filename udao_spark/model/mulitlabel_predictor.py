@@ -9,7 +9,7 @@ from autogluon.core.utils.loaders import load_pkl
 from autogluon.core.utils.savers import save_pkl
 from autogluon.tabular import TabularDataset, TabularPredictor
 
-logger = logging.getLogger(__name__)
+from udao_spark.utils.logging import logger
 
 
 class MultilabelPredictor(object):

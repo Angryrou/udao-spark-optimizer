@@ -1,6 +1,7 @@
 import os.path
+import time
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Literal, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -13,8 +14,10 @@ from udao_trace.configuration import SparkConf
 from udao_trace.utils import PickleHandler
 
 from ..model.model_server import AGServer
-from ..utils.constants import THETA_C, THETA_P, THETA_S
+from ..utils.constants import THETA_C, THETA_COMPILE, THETA_P, THETA_S
+from ..utils.logging import logger
 from ..utils.params import QType
+from .utils import get_cloud_cost_add_io, get_cloud_cost_wo_io
 
 ThetaType = Literal["c", "p", "s"]
 
@@ -55,6 +58,11 @@ class BaseOptimizer(ABC):
         if decision_variables != self.tabular_columns[-len(decision_variables) :]:
             raise ValueError(
                 "Decision variables must be the last columns in tabular_features"
+            )
+        if not all(v in THETA_COMPILE for v in decision_variables):
+            raise ValueError(
+                f"Decision variables must be in {THETA_COMPILE}, "
+                f"got {decision_variables}"
             )
         self.decision_variables = decision_variables
         self.dtype = th.float32
@@ -119,7 +127,52 @@ class BaseOptimizer(ABC):
         ]
         return graph_embedding, non_decision_tabular_features
 
-    def _predict_objectives_mlp(
+    def summarize_obj(
+        self,
+        k1: np.ndarray,
+        k2: np.ndarray,
+        k3: np.ndarray,
+        obj_lat: np.ndarray,  # lat or ana_lat
+        obj_io: np.ndarray,
+    ) -> Dict[str, np.ndarray]:
+        obj_cost_wo_io = get_cloud_cost_wo_io(
+            lat=obj_lat,
+            cores=k1,
+            mem=k1 * k2,
+            nexec=k3,
+        )
+        obj_cost_w_io = get_cloud_cost_add_io(obj_cost_wo_io, obj_io)
+        if not isinstance(obj_cost_wo_io, np.ndarray) or not isinstance(
+            obj_cost_w_io, np.ndarray
+        ):
+            raise TypeError(
+                f"Expected np.ndarray, "
+                f"got {type(obj_cost_wo_io)} and {type(obj_cost_w_io)}"
+            )
+        if "ana_latency_s" in self.ta.get_ag_objectives():
+            return {
+                "ana_latency": obj_lat,
+                "io": obj_io,
+                "ana_cost_wo_io": obj_cost_wo_io,
+                "ana_cost_w_io": obj_cost_w_io,
+            }
+        else:
+            return {
+                "latency": obj_lat,
+                "io": obj_io,
+                "cost_wo_io": obj_cost_wo_io,
+                "cost_w_io": obj_cost_w_io,
+            }
+
+    def get_latencies_and_objectives(
+        self, objs_dict: Dict[str, np.ndarray]
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        if "ana_latency" in objs_dict:
+            return objs_dict["ana_latency"], objs_dict["ana_cost_w_io"]
+        else:
+            return objs_dict["latency"], objs_dict["cost_w_io"]
+
+    def predict_objectives_mlp(
         self, graph_embedding: th.Tensor, tabular_features: th.Tensor
     ) -> th.Tensor:
         """
@@ -130,18 +183,96 @@ class BaseOptimizer(ABC):
             graph_embedding, tabular_features.to(self.device)
         )
 
-    def sample_theta_all(self, n_samples: int, seed: Optional[int]) -> th.Tensor:
+    def get_objective_values_mlp(
+        self,
+        graph_embeddings: th.Tensor,
+        non_decision_tabular_features: th.Tensor,
+        theta: th.Tensor,
+    ) -> Dict[str, np.ndarray]:
+        tabular_features = th.cat([non_decision_tabular_features, theta], dim=1)
+        objs = self.predict_objectives_mlp(graph_embeddings, tabular_features).numpy()
+        theta_c_min, theta_c_max = self.theta_minmax["c"]
+        k1_min, k2_min, k3_min = theta_c_min[:3]
+        k1_max, k2_max, k3_max = theta_c_max[:3]
+
+        k1_norm = tabular_features[:, -len(THETA_C + THETA_P + THETA_S)].numpy()
+        k2_norm = tabular_features[:, -len(THETA_C + THETA_P + THETA_S) + 1].numpy()
+        k3_norm = tabular_features[:, -len(THETA_C + THETA_P + THETA_S) + 2].numpy()
+        k1 = (k1_norm - k1_min) * (k1_max - k1_min) + k1_min
+        k2 = (k2_norm - k2_min) * (k2_max - k2_min) + k2_min
+        k3 = (k3_norm - k3_min) * (k3_max - k3_min) + k3_min
+
+        if self.ta.q_type.startswith("qs_"):
+            obj_io = objs[:, 1]
+            obj_ana_lat = objs[:, 2]
+            return self.summarize_obj(k1, k2, k3, obj_ana_lat, obj_io)
+        else:
+            obj_lat = objs[:, 0]
+            obj_io = objs[:, 1]
+            return self.summarize_obj(k1, k2, k3, obj_lat, obj_io)
+
+    def get_objective_values_ag(
+        self,
+        graph_embeddings: np.ndarray,
+        non_decision_df: pd.DataFrame,
+        sampled_theta: np.ndarray,
+        model_name: Union[str, Dict[str, str]],
+    ) -> Dict[str, np.ndarray]:
+        start_time_ns = time.perf_counter_ns()
+        objs = self.ag_ms.predict_with_ag(
+            self.bm,
+            graph_embeddings,
+            non_decision_df,
+            self.decision_variables,
+            sampled_theta,
+            model_name,
+        )
+        end_time_ns = time.perf_counter_ns()
+        logger.info(
+            f"takes {(end_time_ns - start_time_ns) / 1e6} ms "
+            f"to run {len(sampled_theta)} theta"
+        )
+
+        if "k1" in non_decision_df.columns:
+            k1 = non_decision_df["k1"].values
+            k2 = non_decision_df["k2"].values
+            k3 = non_decision_df["k3"].values
+        elif "k1" in self.decision_variables:
+            if sampled_theta.ndim == 1:
+                raise ValueError("sampled_theta must be 2D")
+            k1 = sampled_theta[:, 0]
+            k2 = sampled_theta[:, 1]
+            k3 = sampled_theta[:, 2]
+        else:
+            raise ValueError("k1, k2, k3 not found")
+
+        obj_lat = (
+            objs["ana_latency_s"]
+            if self.ta.q_type.startswith("qs_")
+            else objs["latency_s"]
+        )
+        obj_io = objs["io_mb"]
+        return self.summarize_obj(
+            np.array(k1), np.array(k2), np.array(k3), obj_lat, obj_io
+        )
+
+    def sample_theta_all(
+        self, n_samples: int, seed: Optional[int], normalize: bool
+    ) -> np.ndarray:
         if seed is not None:
             np.random.seed(seed)
         samples = np.random.randint(
             low=self.theta_all_minmax[0],
-            high=self.theta_all_minmax[1] + 1,
+            high=self.theta_all_minmax[1],
             size=(n_samples, len(self.sc.knob_min)),
         )
-        samples_normalized = (samples - self.theta_all_minmax[0]) / (
-            self.theta_all_minmax[1] - self.theta_all_minmax[0]
-        )
-        return th.tensor(samples_normalized, dtype=self.dtype)
+        if normalize:
+            samples_normalized = (samples - self.theta_all_minmax[0]) / (
+                self.theta_all_minmax[1] - self.theta_all_minmax[0]
+            )
+            return samples_normalized
+        else:
+            return samples
 
     def sample_theta_x(
         self,
@@ -165,9 +296,31 @@ class BaseOptimizer(ABC):
         else:
             return samples
 
+    def foo_samples(
+        self, n_stages: int, seed: Optional[int], normalize: bool
+    ) -> np.ndarray:
+        # a naive way to sample
+        theta_c = np.tile(
+            self.sample_theta_x(
+                1, "c", seed if seed is not None else None, normalize=normalize
+            ),
+            (n_stages, 1),
+        )
+        theta_p = self.sample_theta_x(
+            n_stages, "p", seed + 1 if seed is not None else None, normalize=normalize
+        )
+        theta_s = self.sample_theta_x(
+            n_stages, "s", seed + 2 if seed is not None else None, normalize=normalize
+        )
+        theta = np.concatenate([theta_c, theta_p, theta_s], axis=1)
+        return theta
+
     @abstractmethod
     def solve(
-        self, non_decision_input: Dict[str, Any], seed: Optional[int] = None
+        self,
+        non_decision_input: Dict[str, Any],
+        seed: Optional[int] = None,
+        use_ag: bool = True,
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         pass
 

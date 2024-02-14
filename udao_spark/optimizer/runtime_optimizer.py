@@ -1,25 +1,19 @@
 import json
-import logging
 import struct
 from socket import AF_INET, SOCK_STREAM, socket
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 from udao_trace.configuration import SparkConf
-from udao_trace.utils.logging import _get_logger
+from udao_trace.parser.spark_parser import THETA_P, THETA_S
 
 from ..data.extractors.injection_extractor import (
     get_non_decision_inputs_for_q_runtime,
     get_non_decision_inputs_for_qs_runtime,
 )
+from ..utils.logging import logger
 from ..utils.params import QType
 from .atomic_optimizer import AtomicOptimizer
-
-logger = _get_logger(
-    name="server",
-    std_level=logging.DEBUG,
-    file_level=logging.DEBUG,
-    log_file_path="runtime_optimizer.log",
-)
+from .utils import utopia_nearest
 
 
 def recv_msg(sock: socket) -> Optional[str]:
@@ -104,28 +98,80 @@ class RuntimeOptimizer:
     ):
         self.ro_q = ro_q
         self.ro_qs = ro_qs
-        self.seed = seed
         self.sc = sc
+        self.seed = seed
 
-    def solve_query(self, msg: str) -> str:
+    def get_non_decision_input_and_ro(
+        self, msg: str
+    ) -> Tuple[Dict, AtomicOptimizer, int]:
         d = parse_msg(msg)
         if d is None:
-            return f"parse failed for message\n {msg}"
+            raise ValueError(f"Failed to parse message: {msg}")
         request_type = d["RequestType"]
+        sc = self.sc
         if request_type == "RuntimeLQP":
-            non_decision_input = get_non_decision_inputs_for_q_runtime(d, self.sc)
-            po_confs, po_objs = self.ro_q.solve(non_decision_input, seed=self.seed)
+            non_decision_input = get_non_decision_inputs_for_q_runtime(d, sc)
+            ro = self.ro_q
+            n_edges = len(d["LQP"]["links"])
         elif request_type == "RuntimeQS":
-            non_decision_input = get_non_decision_inputs_for_qs_runtime(
-                d, is_lqp=False, sc=self.sc
-            )
-            po_confs, po_objs = self.ro_qs.solve(non_decision_input, seed=self.seed)
+            non_decision_input = get_non_decision_inputs_for_qs_runtime(d, False, sc)
+            ro = self.ro_qs
+            n_edges = len(d["QSPhysical"]["links"])
         else:
             raise ValueError(f"Query type {request_type} is not supported")
+        return non_decision_input, ro, n_edges
 
-        return ""
+    def solve_msg(
+        self,
+        msg: str,
+        use_ag: bool,
+        ag_model_dict: Dict[QType, Dict[str, str]],
+        sample_mode: str,
+        n_samples: int,
+        moo_mode: str,
+    ) -> str:
+        non_decision_input, ro, n_edges = self.get_non_decision_input_and_ro(msg)
+        if n_edges == 0:
+            logger.warning("No changes to make when no edges in a graph")
+            return "{}"
+        po_objs, po_confs = ro.solve(
+            non_decision_input,
+            seed=self.seed,
+            use_ag=use_ag,
+            ag_model=ag_model_dict[ro.ta.q_type],
+            sample_mode=sample_mode,
+            n_samples=n_samples,
+            moo_mode=moo_mode,
+        )
+        if po_objs is None or po_confs is None or len(po_objs) == 0:
+            logger.warning("NFS for message")
+            return "NSF"  # No Solution Found
 
-    def setup_server(self, host: str, port: int, debug: bool = False) -> None:
+        if len(po_objs) == 1:
+            ret_obj, ret_conf = po_objs[0], po_confs[0]
+        else:
+            ret_obj, ret_conf = utopia_nearest(po_objs, po_confs)
+        if ro.ta.q_type == R_Q:
+            ret_dict = {k: v for k, v in zip(THETA_P + THETA_S, ret_conf)}
+        elif ro.ta.q_type == R_QS:
+            ret_dict = {k: v for k, v in zip(THETA_S, ret_conf)}
+        else:
+            raise ValueError(f"QType {ro.ta.q_type} is not supported")
+        ret_msg = json.dumps(ret_dict)
+        logger.debug(f"Return {ret_msg}")
+        return ret_msg
+
+    def setup_server(
+        self,
+        host: str,
+        port: int,
+        debug: bool,
+        use_ag: bool,
+        ag_model_dict: Dict[QType, Dict[str, str]],
+        sample_mode: str,
+        n_samples: int,
+        moo_mode: str,
+    ) -> None:
         sock = socket(AF_INET, SOCK_STREAM)
         sock.bind((host, port))
         sock.listen(1)
@@ -139,55 +185,50 @@ class RuntimeOptimizer:
 
                 while True:
                     msg = recv_msg(conn)
-                    logger.info(f"Received message: {msg}")
+                    logger.debug(f"Received message: {msg}")
                     if not msg:
                         logger.warning(f"No message received, disconnecting {addr}")
                         break
                     if debug:
-                        response = "xxx\n"
+                        response = (
+                            json.dumps({THETA_S[0]: "0.34", THETA_S[1]: "512KB"}) + "\n"
+                        )
                     else:
-                        response = self.solve_query(msg)
+                        response = (
+                            self.solve_msg(
+                                msg,
+                                use_ag=use_ag,
+                                ag_model_dict=ag_model_dict,
+                                sample_mode=sample_mode,
+                                n_samples=n_samples,
+                                moo_mode=moo_mode,
+                            )
+                            + "\n"
+                        )
                     conn.sendall(response.encode("utf-8"))
-                    logger.info(f"Sent response: {response}")
+                    logger.debug(f"Sent response: {response}")
 
                 conn.close()
         except Exception as e:
             logger.exception(f"Exception occurred: {e}")
             sock.close()
 
-    def sanity_check(self) -> None:
-        for file_name in ["sample_runtime_lqp.txt", "sample_runtime_qs.txt"]:
-            with open(f"assets/runtime_samples/{file_name}") as f:
-                msg = f.read().strip()
-            d = parse_msg(msg)
-            if d is None:
-                raise ValueError(f"Failed to parse message: {msg}")
-            request_type = d["RequestType"]
-            if request_type == "RuntimeLQP":
-                non_decision_df = self.ro_q.extract_non_decision_df(
-                    non_decision_input=get_non_decision_inputs_for_q_runtime(d, self.sc)
-                )
-                (
-                    graph_embeddings,
-                    non_decision_tabular_features,
-                ) = self.ro_q.extract_non_decision_embeddings_from_df(non_decision_df)
-                print(graph_embeddings, non_decision_tabular_features)
-                print(graph_embeddings.shape, non_decision_tabular_features.shape)
-                # po_confs, po_objs = self.ro_q.solve(
-                # non_decision_input, seed=self.seed)
-            elif request_type == "RuntimeQS":
-                non_decision_df = self.ro_qs.extract_non_decision_df(
-                    non_decision_input=get_non_decision_inputs_for_qs_runtime(
-                        d, is_lqp=False, sc=self.sc
-                    )
-                )
-                (
-                    graph_embeddings,
-                    non_decision_tabular_features,
-                ) = self.ro_qs.extract_non_decision_embeddings_from_df(non_decision_df)
-                print(graph_embeddings, non_decision_tabular_features)
-                print(graph_embeddings.shape, non_decision_tabular_features.shape)
-                # po_confs, po_objs = self.ro_qs.solve(
-                #   non_decision_input, seed=self.seed)
-            else:
-                raise ValueError(f"Query type {request_type} is not supported")
+    def sanity_check(
+        self,
+        file_path: str,
+        use_ag: bool,
+        ag_model_dict: Dict[QType, Dict[str, str]],
+        sample_mode: str,
+        n_samples: int,
+        moo_mode: str,
+    ) -> None:
+        with open(file_path) as f:
+            msg = f.read().strip()
+        self.solve_msg(
+            msg,
+            use_ag=use_ag,
+            ag_model_dict=ag_model_dict,
+            sample_mode=sample_mode,
+            n_samples=n_samples,
+            moo_mode=moo_mode,
+        )

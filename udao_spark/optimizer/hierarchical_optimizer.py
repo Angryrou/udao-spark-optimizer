@@ -8,19 +8,14 @@ import pandas as pd
 import torch as th
 from udao.optimization.concepts import BoolVariable, FloatVariable, IntegerVariable
 
-from udao_spark.optimizer.base_optimizer import BaseOptimizer
-from udao_spark.optimizer.moo_algos.div_and_conq_moo import DivAndConqMOO
-from udao_spark.optimizer.moo_algos.evo_optimizer import EvoOptimizer
-from udao_spark.optimizer.moo_algos.ws_optimizer import WSOptimizer
-from udao_spark.optimizer.utils import (
-    even_weights,
-    get_cloud_cost_add_io,
-    get_cloud_cost_wo_io,
-    save_results,
-    weighted_utopia_nearest_impl,
-)
 from udao_trace.utils.interface import VarTypes
-from udao_trace.utils.logging import logger
+
+from ..utils.logging import logger
+from .base_optimizer import BaseOptimizer
+from .moo_algos.div_and_conq_moo import DivAndConqMOO
+from .moo_algos.evo_optimizer import EvoOptimizer
+from .moo_algos.ws_optimizer import WSOptimizer
+from .utils import even_weights, save_results, weighted_utopia_nearest_impl
 
 
 class HierarchicalOptimizer(BaseOptimizer):
@@ -35,24 +30,6 @@ class HierarchicalOptimizer(BaseOptimizer):
         df.sort_index(inplace=True)
         return df
 
-    def get_objective_values_mlp(
-        self,
-        graph_embeddings: th.Tensor,
-        non_decision_tabular_features: th.Tensor,
-        theta: th.Tensor,
-    ) -> Dict[str, np.ndarray]:
-        tabular_features = th.cat([non_decision_tabular_features, theta], dim=1)
-        objs = self._predict_objectives_mlp(graph_embeddings, tabular_features).numpy()
-        obj_io = objs[:, 1]
-        obj_ana_lat = objs[:, 2]
-        theta_c_min, theta_c_max = self.theta_minmax["c"]
-        k1_min, k2_min, k3_min = theta_c_min[:3]
-        k1_max, k2_max, k3_max = theta_c_max[:3]
-        k1 = (theta[:, 0].numpy() - k1_min) * (k1_max - k1_min) + k1_min
-        k2 = (theta[:, 1].numpy() - k2_min) * (k2_max - k2_min) + k2_min
-        k3 = (theta[:, 2].numpy() - k3_min) * (k3_max - k3_min) + k3_min
-        return self._summarize_obj(k1, k2, k3, obj_ana_lat, obj_io)
-
     def get_objective_values_mlp_arr(
         self,
         graph_embeddings: th.Tensor,
@@ -61,7 +38,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         place: str = "",
     ) -> np.ndarray:
         tabular_features = th.cat([non_decision_tabular_features, theta], dim=1)
-        objs = self._predict_objectives_mlp(graph_embeddings, tabular_features).numpy()
+        objs = self.predict_objectives_mlp(graph_embeddings, tabular_features).numpy()
         obj_io = objs[:, 1]
         obj_ana_lat = objs[:, 2]
         theta_c_min, theta_c_max = self.theta_minmax["c"]
@@ -70,64 +47,11 @@ class HierarchicalOptimizer(BaseOptimizer):
         k1 = (theta[:, 0].numpy() - k1_min) * (k1_max - k1_min) + k1_min
         k2 = (theta[:, 1].numpy() - k2_min) * (k2_max - k2_min) + k2_min
         k3 = (theta[:, 2].numpy() - k3_min) * (k3_max - k3_min) + k3_min
-        objs_dict = self._summarize_obj(k1, k2, k3, obj_ana_lat, obj_io)
+        objs_dict = self.summarize_obj(k1, k2, k3, obj_ana_lat, obj_io)
 
         obj_cost_w_io = objs_dict["ana_cost_w_io"]
 
         return np.vstack((obj_ana_lat, obj_cost_w_io)).T
-
-    def _summarize_obj(
-        self,
-        k1: np.ndarray,
-        k2: np.ndarray,
-        k3: np.ndarray,
-        obj_ana_lat: np.ndarray,
-        obj_io: np.ndarray,
-    ) -> Dict[str, np.ndarray]:
-        obj_ana_cost_wo_io = get_cloud_cost_wo_io(
-            lat=obj_ana_lat,
-            cores=k1,
-            mem=k1 * k2,
-            nexec=k3,
-        )
-        obj_ana_cost_w_io = get_cloud_cost_add_io(obj_ana_cost_wo_io, obj_io)
-        if not isinstance(obj_ana_cost_wo_io, np.ndarray) or not isinstance(
-            obj_ana_cost_w_io, np.ndarray
-        ):
-            raise TypeError(
-                f"Expected np.ndarray, "
-                f"got {type(obj_ana_cost_wo_io)} and {type(obj_ana_cost_w_io)}"
-            )
-        return {
-            "ana_latency": obj_ana_lat,
-            "io": obj_io,
-            "ana_cost_wo_io": obj_ana_cost_wo_io,
-            "ana_cost_w_io": obj_ana_cost_w_io,
-        }
-
-    def get_objective_values_ag(
-        self,
-        graph_embeddings: np.ndarray,
-        non_decision_df: pd.DataFrame,
-        sampled_theta: np.ndarray,
-        model_name: str,
-    ) -> Dict[str, np.ndarray]:
-        start_time_ns = time.perf_counter_ns()
-        objs = self.ag_ms.predict_with_ag(
-            self.bm, graph_embeddings, non_decision_df, sampled_theta, model_name
-        )
-        end_time_ns = time.perf_counter_ns()
-        logger.info(
-            f"takes {(end_time_ns - start_time_ns) / 1e6} ms "
-            f"to run {len(sampled_theta)} theta"
-        )
-        return self._summarize_obj(
-            sampled_theta[:, 0],
-            sampled_theta[:, 1],
-            sampled_theta[:, 2],
-            np.array(objs["ana_latency_s"]),
-            np.array(objs["io_mb"]),
-        )
 
     def get_objective_values_ag_arr(
         self,
@@ -138,14 +62,19 @@ class HierarchicalOptimizer(BaseOptimizer):
     ) -> np.ndarray:
         start_time_ns = time.perf_counter_ns()
         objs = self.ag_ms.predict_with_ag(
-            self.bm, graph_embeddings, non_decision_df, sampled_theta, model_name
+            self.bm,
+            graph_embeddings,
+            non_decision_df,
+            self.decision_variables,
+            sampled_theta,
+            model_name,
         )
         end_time_ns = time.perf_counter_ns()
         logger.info(
             f"takes {(end_time_ns - start_time_ns) / 1e6} ms "
             f"to run {len(sampled_theta)} theta"
         )
-        objs_dict = self._summarize_obj(
+        objs_dict = self.summarize_obj(
             sampled_theta[:, 0],
             sampled_theta[:, 1],
             sampled_theta[:, 2],
@@ -157,25 +86,6 @@ class HierarchicalOptimizer(BaseOptimizer):
         ana_cost_w_io = objs_dict["ana_cost_w_io"]
 
         return np.vstack((ana_latency, ana_cost_w_io)).T
-
-    def foo_samples(
-        self, n_stages: int, seed: Optional[int], normalize: bool
-    ) -> np.ndarray:
-        # a naive way to sample
-        theta_c = np.tile(
-            self.sample_theta_x(
-                1, "c", seed if seed is not None else None, normalize=normalize
-            ),
-            (n_stages, 1),
-        )
-        theta_p = self.sample_theta_x(
-            n_stages, "p", seed + 1 if seed is not None else None, normalize=normalize
-        )
-        theta_s = self.sample_theta_x(
-            n_stages, "s", seed + 2 if seed is not None else None, normalize=normalize
-        )
-        theta = np.concatenate([theta_c, theta_p, theta_s], axis=1)
-        return theta
 
     def solve(
         self,
