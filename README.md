@@ -29,7 +29,6 @@ pip install -r requirements.txt
 ## Additional dependencies for compile-time optimization (CPU/GPU/MacOS-intel)
 
 ```bash
-conda install -c conda-forge pygmo
 pip install scikit-learn-intelex # only for intel chips
 ```
 
