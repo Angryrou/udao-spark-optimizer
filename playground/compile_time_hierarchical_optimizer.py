@@ -93,7 +93,8 @@ if __name__ == "__main__":
             param1 = params.n_samples
             param2 = params.n_ws
         elif "div_and_conq_moo" in params.moo_algo:
-            param1, param2 = 0, 0
+            param1 = params.n_c_samples
+            param2 = params.n_p_samples
         else:
             raise Exception(f"algo {params.moo_algo} is not supported!")
 
@@ -109,4 +110,5 @@ if __name__ == "__main__":
             param1=param1,
             param2=param2,
             time_limit=params.time_limit,
+            is_oracle=is_oracle,
         )

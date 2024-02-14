@@ -176,6 +176,11 @@ def get_compile_time_optimizer_parameters() -> ArgumentParser:
                         choices=["div_and_conq_moo%B", "div_and_conq_moo%GD",
                             "evo", "ws", "ppf"],
                         help="Algorithm for the compile-time optimization",)
+    parser.add_argument("--n_c_samples", type=int, default=100,
+                        help="the number of random samples of theta_c")
+    parser.add_argument("--n_p_samples", type=int, default=100,
+                        help="the number of random samples of theta_p")
+
     parser.add_argument("--sample_mode", type=str, default="grid",
                         choices=["grid", "random"],
                         help="Sample type for div_and_conq_moo")
