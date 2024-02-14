@@ -2,7 +2,7 @@
 
 # Initialize variables with default values
 query="9 1"
-conf="16g 5 4 40 48m 200 true 0.6 64MB 0.2 0b 10MB 200 256MB 5.0 128MB 4MB 0.2 1024KB"
+conf="1 1g 16 16 48m 200 true 0.6 64MB 0.2 0MB 10MB 200 256MB 5.0 128MB 4MB 0.2 1024KB"
 name="unnamed"
 xpath="./outs"
 verbose_mode=false
