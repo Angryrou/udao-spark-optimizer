@@ -29,6 +29,8 @@ if __name__ == "__main__":
                         help="Total available cluster cores")
     parser.add_argument("--seed", type=int, default=42,
                         help="Seed for randomization")
+    parser.add_argument("--trace_header", type=str, default="spark_collector",
+                        help="Header for the trace")
     # fmt: on
     args = parser.parse_args()
 
@@ -38,7 +40,7 @@ if __name__ == "__main__":
         scale_factor=args.scale_factor,
         cluster_name=ClusterName[args.cluster_name],
         parametric_bash_file=args.parametric_bash_file,
-        header="spark_collector",
+        header=args.trace_header,
         debug=args.debug,
     )
 
