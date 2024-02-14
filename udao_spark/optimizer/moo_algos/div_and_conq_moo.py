@@ -583,7 +583,7 @@ class DivAndConqMOO:
             qs_values_inds = np.where(indices_arr[:, 0] == stage_id)[0].tolist()
             qs_values = tuned_f_th[qs_values_inds]
             po_ind = is_pareto_efficient(qs_values)
-            po_theta_c = tuned_conf_th[po_ind, : self.c_samples.shape[1]].tolist()
+            po_theta_c = tuned_conf_th[qs_values_inds][po_ind, : self.c_samples.shape[1]].tolist()
             local_opt_theta_c_list.append(po_theta_c)
 
         return sum(local_opt_theta_c_list, [])
