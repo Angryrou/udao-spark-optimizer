@@ -27,7 +27,7 @@ class AtomicOptimizer(BaseOptimizer):
         seed: Optional[int] = None,
         use_ag: bool = True,
         ag_model: Dict[str, str] = dict(),
-        sample_mode: str = "random_sample",
+        sample_mode: str = "random",
         n_samples: int = 1,
         moo_mode: str = "BF",
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
