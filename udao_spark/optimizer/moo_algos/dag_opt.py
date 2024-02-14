@@ -15,10 +15,10 @@ from multiprocessing import Pool
 from typing import Any, List, Tuple
 
 import numpy as np
-import pygmo as pg  # type: ignore
 import torch as th
 from tqdm import tqdm  # type: ignore
 
+from udao_spark.optimizer.utils import is_pareto_efficient
 
 class DAGOpt:
     def __init__(
@@ -144,7 +144,7 @@ class DAGOpt:
             )
 
         start_filter_global = time.time()
-        po_query_ind = pg.non_dominated_front_2d(boundary_query_objs)
+        po_query_ind = is_pareto_efficient(boundary_query_objs)
         po_query_objs = boundary_query_objs[po_query_ind]
         po_query_confs = all_confs_qs[po_query_ind]
         uniq_po_query_objs, uniq_po_query_inds = np.unique(
@@ -237,7 +237,7 @@ class DAGOpt:
         start_filter_global = time.time()
         query_f_arr = np.concatenate(query_f_list)
         query_conf_arr = np.concatenate(query_conf_list)
-        po_query_ind = pg.non_dominated_front_2d(query_f_arr)
+        po_query_ind = is_pareto_efficient(query_f_arr)
         po_query_objs = query_f_arr[po_query_ind]
         po_query_confs = query_conf_arr[po_query_ind]
         if self.verbose:
@@ -373,7 +373,7 @@ class DAGOpt:
         start_filter_global = time.time()
         query_f_arr = np.concatenate(query_f_list)
         query_conf_arr = np.concatenate(query_conf_list)
-        po_query_ind = pg.non_dominated_front_2d(query_f_arr)
+        po_query_ind = is_pareto_efficient(query_f_arr)
         po_query_objs = query_f_arr[po_query_ind]
         po_query_confs = query_conf_arr[po_query_ind]
 
@@ -506,7 +506,7 @@ class DAGOpt:
         all_confs: List[Tuple[Any, ...]],
     ) -> Tuple[np.ndarray, np.ndarray]:
         arr_points = np.array(all_objs)
-        po_inds = pg.non_dominated_front_2d(arr_points).tolist()
+        po_inds = is_pareto_efficient(arr_points).tolist()
         po_objs = arr_points[po_inds]
 
         po_confs = np.array(all_confs)[po_inds]

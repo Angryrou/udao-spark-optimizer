@@ -15,7 +15,7 @@ import numpy as np
 from ..optimizer.utils import is_pareto_efficient
 
 
-def test_utopia_nearest() -> None:
+def test_is_pareto_efficient() -> None:
     po_objs = np.array(
         [
             [1.1, 2.8],
