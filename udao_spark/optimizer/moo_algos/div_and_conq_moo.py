@@ -17,20 +17,16 @@ import time
 from dataclasses import dataclass
 from multiprocessing import Pool
 
-# from torch.multiprocessing import Pool
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
-# import numba as nb
 import numpy as np
 import pandas as pd
-import pygmo as pg  # type: ignore
 import torch as th
 
-# th.multiprocessing.set_sharing_strategy('file_system')
-# from numba.typed import List
 from sklearn.cluster import KMeans
 
 from udao_spark.optimizer.moo_algos.dag_opt import DAGOpt
+from udao_spark.optimizer.utils import is_pareto_efficient
 
 # Detect the CPU architecture
 cpu_arch = platform.machine()
@@ -586,7 +582,7 @@ class DivAndConqMOO:
         for stage_id in range(self.n_stages):
             qs_values_inds = np.where(indices_arr[:, 0] == stage_id)[0].tolist()
             qs_values = tuned_f_th[qs_values_inds]
-            po_ind = pg.non_dominated_front_2d(qs_values).astype(int)
+            po_ind = is_pareto_efficient(qs_values)
             po_theta_c = tuned_conf_th[po_ind, : self.c_samples.shape[1]].tolist()
             local_opt_theta_c_list.append(po_theta_c)
 
@@ -798,7 +794,7 @@ class DivAndConqMOO:
     ) -> Tuple[Union[th.Tensor, np.ndarray], Union[th.Tensor, np.ndarray], np.ndarray]:
         stage_id = int(i / rep_c_samples.shape[0])
         c_id = label_rep_theta_c_mapping[int(i % rep_c_samples.shape[0])]
-        po_ind = pg.non_dominated_front_2d(sub_f).tolist()
+        po_ind = is_pareto_efficient(sub_f)
         po_objs = sub_f[po_ind]
         po_confs = sub_conf[po_ind]
 
