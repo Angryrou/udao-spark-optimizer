@@ -1,3 +1,4 @@
+import time
 from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
@@ -26,20 +27,33 @@ class AtomicOptimizer(BaseOptimizer):
         seed: Optional[int] = None,
         use_ag: bool = True,
         ag_model: Dict[str, str] = dict(),
-        sample_mode: str = "random_sample",
+        sample_mode: str = "random",
         n_samples: int = 1,
         moo_mode: str = "BF",
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+        t1 = time.perf_counter_ns()
+
         non_decision_df = self.extract_non_decision_df(non_decision_input)
+
+        t2 = time.perf_counter_ns()
+        if self.verbose:
+            logger.info(f">> extracted non_decision_df in {(t2 - t1) / 1e6} ms")
+
         (
             graph_embeddings,
             non_decision_tabular_features,
         ) = self.extract_non_decision_embeddings_from_df(non_decision_df)
-        logger.info("graph_embeddings shape: %s", graph_embeddings.shape)
-        logger.warning(
-            "non_decision_tabular_features is only used for MLP inferencing, shape: %s",
-            non_decision_tabular_features.shape,
-        )
+
+        t3 = time.perf_counter_ns()
+        if self.verbose:
+            logger.info(f">> extracted non_decision_embeddings in {(t3 - t2) / 1e6} ms")
+            logger.debug("graph_embeddings shape: %s", graph_embeddings.shape)
+            logger.warning(
+                "non_decision_tabular_features is only used for "
+                "MLP inference, shape: %s",
+                non_decision_tabular_features.shape,
+            )
+
         if sample_mode == "random":
             sampled_theta = self.sample_theta_all(
                 n_samples=n_samples, seed=seed, normalize=not use_ag
@@ -48,6 +62,10 @@ class AtomicOptimizer(BaseOptimizer):
             raise NotImplementedError
         else:
             raise ValueError(f"sample_mode {sample_mode} is not supported")
+
+        t4 = time.perf_counter_ns()
+        if self.verbose:
+            logger.info(f">> sampled theta in {(t4 - t3) / 1e6} ms")
 
         if use_ag:
             graph_embeddings = graph_embeddings.detach().cpu()
@@ -68,12 +86,21 @@ class AtomicOptimizer(BaseOptimizer):
             )
         lat, cost = self.get_latencies_and_objectives(objs_dict)
         objs = np.vstack([lat, cost]).T.astype(np.float32)
+
+        t5 = time.perf_counter_ns()
+        if self.verbose:
+            logger.info(f">> computed objective values in {(t5 - t4) / 1e6} ms")
+
         if moo_mode == "BF":
             po_mask = is_pareto_efficient(objs)
         else:
             raise ValueError(f"moo_mode {moo_mode} is not supported")
         po_objs = objs[po_mask]
         po_theta = sampled_theta[po_mask]
+
+        t6 = time.perf_counter_ns()
+        if self.verbose:
+            logger.info(f">> filtered pareto optimal points in {(t6 - t5) / 1e6} ms")
 
         n_po = len(po_objs)
         if n_po == 0:
@@ -93,4 +120,9 @@ class AtomicOptimizer(BaseOptimizer):
                 :, -n_vars:
             ]
         logger.debug(f"found {len(po_objs)} po points, po_confs: {po_confs}")
+
+        t7 = time.perf_counter_ns()
+        if self.verbose:
+            logger.info(f">> constructed configurations in {(t7 - t6) / 1e6} ms")
+
         return po_objs, po_confs

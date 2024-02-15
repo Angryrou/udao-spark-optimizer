@@ -1,18 +1,25 @@
+import json
 import os.path
 import time
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
+import dgl
 import numpy as np
 import pandas as pd
 import torch as th
 from udao.data.handler.data_processor import DataProcessor
 from udao.data.iterators.query_plan_iterator import QueryPlanInput
+from udao.data.predicate_embedders.utils import prepare_operation
+from udao.data.utils.query_plan import add_positional_encoding
 from udao.optimization.utils.moo_utils import Point, get_default_device
 
 from udao_trace.configuration import SparkConf
 from udao_trace.utils import PickleHandler
 
+from ..data.extractors.query_structure_extractor import (
+    extract_query_plan_features_from_serialized_json,
+)
 from ..model.model_server import AGServer
 from ..utils.constants import THETA_C, THETA_COMPILE, THETA_P, THETA_S
 from ..utils.logging import logger
@@ -34,6 +41,7 @@ class BaseOptimizer(ABC):
         spark_conf: SparkConf,
         decision_variables: List[str],
         ag_path: str,
+        verbose: bool = False,
     ) -> None:
         self.bm = bm
         self.ag_ms = AGServer.from_ckp_path(
@@ -52,7 +60,14 @@ class BaseOptimizer(ABC):
             raise ValueError("DataHandler must contain tabular_features and objectives")
         self.data_processor = data_processor
         feature_extractors = self.data_processor.feature_extractors
+        feature_processors = self.data_processor.feature_processors
+
+        self.query_structure = self.data_processor.feature_extractors["query_structure"]
+        self.query_normalizer_cbo = feature_processors["query_structure"][0].normalizer
+        self.op_enc_extractor = feature_extractors["op_enc"]
+
         self.tabular_columns = feature_extractors["tabular_features"].columns
+        self.tabular_normalizer = feature_processors["tabular_features"][0].normalizer
         self.model_objective_columns = feature_extractors["objectives"].columns
         self.sc = spark_conf
         if decision_variables != self.tabular_columns[-len(decision_variables) :]:
@@ -100,6 +115,70 @@ class BaseOptimizer(ABC):
             ],
             "s": [k.ktype for k in spark_conf.knob_list[-len(THETA_S) :]],
         }
+        self.verbose = verbose
+
+    def fast_extraction(self, df: pd.DataFrame) -> Tuple[dgl.DGLGraph, th.Tensor]:
+        """not general but fast for our case"""
+        bg = []
+        for j in df[self.ta.get_graph_column()].values:
+            d = json.loads(j)
+            structure, op_features = extract_query_plan_features_from_serialized_json(
+                self.ta, j
+            )
+            op_gid = [
+                self.query_structure.operation_types.get(n.split()[0])
+                for n in structure.node_id2name.values()
+            ]
+            g = structure.graph
+            g.ndata["op_gid"] = th.tensor(op_gid, dtype=th.int32)
+            cbo_df = pd.DataFrame.from_dict(op_features.features_dict, dtype="float32")
+            g.ndata["cbo"] = th.tensor(
+                self.query_normalizer_cbo.transform(cbo_df), dtype=self.dtype
+            )
+            g.ndata["op_enc"] = th.tensor(
+                self.op_enc_extractor.embedder.transform(
+                    [
+                        prepare_operation(op["predicate"])
+                        for op in d["operators"].values()
+                    ]
+                ),
+                dtype=self.dtype,
+            )
+            # if self.ag_ms.ms.model_sign == "graph_gtn":
+            g = add_positional_encoding(
+                g, self.query_structure.positional_encoding_size
+            )
+            bg.append(g)
+
+        embedding_input = dgl.batch(bg)
+        tabular_input_df = self.tabular_normalizer.transform(
+            df[self.tabular_columns].copy()
+        )
+        tabular_input = th.tensor(tabular_input_df.values, dtype=self.dtype)
+
+        return embedding_input, tabular_input
+
+    def general_extraction(self, df: pd.DataFrame) -> Tuple[dgl.DGLGraph, th.Tensor]:
+        t1 = time.perf_counter_ns()
+        with th.no_grad():
+            iterator = self.data_processor.make_iterator(df, df.index, split="test")
+        t2 = time.perf_counter_ns()
+        if self.verbose:
+            logger.info(f">>> created iterator in {(t2 - t1) / 1e6} ms")
+
+        n_items = len(df)
+        dataloader = iterator.get_dataloader(batch_size=n_items)
+        batch_input, _ = next(iter(dataloader))
+        if not isinstance(batch_input, QueryPlanInput):
+            raise TypeError(f"Expected QueryPlanInput, got {type(batch_input)}")
+
+        t3 = time.perf_counter_ns()
+        if self.verbose:
+            logger.info(f">>> created dataloader in {(t3 - t2) / 1e6} ms")
+
+        embedding_input = batch_input.embedding_input
+        tabular_input = batch_input.features
+        return embedding_input, tabular_input
 
     def extract_non_decision_embeddings_from_df(
         self, df: pd.DataFrame
@@ -108,23 +187,34 @@ class BaseOptimizer(ABC):
         compute the graph_embedding and
         the normalized values of the non-decision variables
         """
+
+        t1 = time.perf_counter_ns()
+
         if df.index.name != "id":
-            raise ValueError("df must have an index named 'id'")
-        n_items = len(df)
+            raise ValueError(">>> df must have an index named 'id'")
+
         df[self.decision_variables] = 0.0
         df[self.model_objective_columns] = 0.0
-        with th.no_grad():
-            iterator = self.data_processor.make_iterator(df, df.index, split="test")
-        dataloader = iterator.get_dataloader(batch_size=n_items)
-        batch_input, _ = next(iter(dataloader))
-        if not isinstance(batch_input, QueryPlanInput):
-            raise TypeError(f"Expected QueryPlanInput, got {type(batch_input)}")
-        embedding_input = batch_input.embedding_input
-        tabular_input = batch_input.features
+
+        t2 = time.perf_counter_ns()
+        if self.verbose:
+            logger.info(f">>> preprocessed df in {(t2 - t1) / 1e6} ms")
+        # embedding_input, tabular_input = self.general_extraction(df)
+        embedding_input, tabular_input = self.fast_extraction(df)
+
+        t3 = time.perf_counter_ns()
+        if self.verbose:
+            logger.info(f">>> fast_extraction in {(t3 - t2) / 1e6} ms")
+
         graph_embedding = self.ag_ms.ms.model.embedder(embedding_input.to(self.device))
         non_decision_tabular_features = tabular_input[
             :, : -len(self.decision_variables)
         ]
+
+        t4 = time.perf_counter_ns()
+        if self.verbose:
+            logger.info(f">>> computed graph_embedding in {(t4 - t3) / 1e6} ms")
+
         return graph_embedding, non_decision_tabular_features
 
     def summarize_obj(
@@ -229,8 +319,8 @@ class BaseOptimizer(ABC):
         )
         end_time_ns = time.perf_counter_ns()
         logger.info(
-            f"takes {(end_time_ns - start_time_ns) / 1e6} ms "
-            f"to run {len(sampled_theta)} theta"
+            f"Takes {(end_time_ns - start_time_ns) / 1e6} ms "
+            f"to compute {len(sampled_theta)} theta"
         )
 
         if "k1" in non_decision_df.columns:

@@ -38,11 +38,7 @@ if __name__ == "__main__":
     spark_conf = SparkConf(str(base_dir / "assets/spark_configuration_aqe_on.json"))
 
     ro = RuntimeOptimizer.from_params(
-        bm,
-        ag_meta_dict,
-        spark_conf,
-        decision_variables_dict,
-        seed,
+        bm, ag_meta_dict, spark_conf, decision_variables_dict, seed, params.verbose
     )
     use_ag = not params.use_mlp
     if use_ag:
@@ -62,7 +58,6 @@ if __name__ == "__main__":
         ag_model_dict = {R_Q: {}, R_QS: {}}
 
     if params.sanity_check:
-        logger.setLevel("DEBUG")
         for file_path in [
             "assets/runtime_samples/sample_runtime_lqp.txt",
             "assets/runtime_samples/sample_runtime_qs.txt",
@@ -70,6 +65,7 @@ if __name__ == "__main__":
         ]:
             if not Path(file_path).exists():
                 raise FileNotFoundError(f"{file_path} does not exist")
+            logger.info(f"----- sanity check for {file_path} -----")
             ro.sanity_check(
                 file_path=file_path,
                 use_ag=use_ag,
@@ -79,7 +75,6 @@ if __name__ == "__main__":
                 moo_mode=params.moo_mode,
             )
     else:
-        logger.setLevel("INFO")
         ro.setup_server(
             host="0.0.0.0",
             port=12345,

@@ -1,5 +1,6 @@
 import json
 import struct
+import time
 from socket import AF_INET, SOCK_STREAM, socket
 from typing import Dict, Optional, Tuple
 
@@ -10,6 +11,7 @@ from ..data.extractors.injection_extractor import (
     get_non_decision_inputs_for_q_runtime,
     get_non_decision_inputs_for_qs_runtime,
 )
+from ..utils.exceptions import SolutionNotFoundError
 from ..utils.logging import logger
 from ..utils.params import QType
 from .atomic_optimizer import AtomicOptimizer
@@ -41,17 +43,17 @@ def recvall(sock: socket, n: int) -> Optional[bytearray]:
             logger.warning("Packet is empty, returning None")
             return None
         data.extend(packet)
-    logger.debug(f"Received data: {data}, with length: {len(data)}")
+    logger.debug(f"Received the whole data with length: {len(data)}")
     return data
 
 
-def parse_msg(msg: str) -> Optional[Dict]:
+def parse_msg(msg: str) -> Dict:
     try:
         d: Dict = json.loads(msg)
+        return d
     except json.JSONDecodeError as e:
         logger.error(f"Failed to parse message: {msg}, error: {e}")
-        return None
-    return d
+        raise ValueError(f"Failed to parse message: {msg}")
 
 
 R_Q: QType = "q_all"
@@ -67,6 +69,7 @@ class RuntimeOptimizer:
         spark_conf: SparkConf,
         decision_variables_dict: Dict,
         seed: Optional[int] = 42,
+        verbose: bool = False,
     ) -> "RuntimeOptimizer":
         optimizer_dict = {
             q_type: AtomicOptimizer(
@@ -79,6 +82,7 @@ class RuntimeOptimizer:
                 spark_conf=spark_conf,
                 decision_variables=decision_variables_dict[q_type],
                 ag_path=ag_meta_dict[q_type]["ag_path"],
+                verbose=verbose,
             )
             for q_type in [R_Q, R_QS]
         }
@@ -87,6 +91,7 @@ class RuntimeOptimizer:
             ro_qs=optimizer_dict[R_QS],
             sc=spark_conf,
             seed=seed,
+            verbose=verbose,
         )
 
     def __init__(
@@ -95,45 +100,77 @@ class RuntimeOptimizer:
         ro_qs: AtomicOptimizer,
         sc: SparkConf,
         seed: Optional[int] = 42,
+        verbose: bool = False,
     ):
         self.ro_q = ro_q
         self.ro_qs = ro_qs
         self.sc = sc
         self.seed = seed
+        self.verbose = verbose
 
-    def get_non_decision_input_and_ro(
-        self, msg: str
-    ) -> Tuple[Dict, AtomicOptimizer, int]:
-        d = parse_msg(msg)
-        if d is None:
-            raise ValueError(f"Failed to parse message: {msg}")
+    def get_non_decision_input_and_ro(self, d: Dict) -> Tuple[Dict, AtomicOptimizer]:
         request_type = d["RequestType"]
         sc = self.sc
         if request_type == "RuntimeLQP":
             non_decision_input = get_non_decision_inputs_for_q_runtime(d, sc)
             ro = self.ro_q
-            n_edges = len(d["LQP"]["links"])
         elif request_type == "RuntimeQS":
             non_decision_input = get_non_decision_inputs_for_qs_runtime(d, False, sc)
             ro = self.ro_qs
-            n_edges = len(d["QSPhysical"]["links"])
         else:
             raise ValueError(f"Query type {request_type} is not supported")
-        return non_decision_input, ro, n_edges
+        return non_decision_input, ro
+
+    def filter_msg(self, d: Dict) -> bool:
+        request_type = d["RequestType"]
+        if request_type == "RuntimeLQP":
+            if len(d["LQP"]["links"]) == 0:
+                logger.warning("No changes to make when no edges in a graph")
+                return True
+            if (
+                len(
+                    [
+                        k
+                        for k, v in d["LQP"]["operators"].items()
+                        if "Join" in v["className"]
+                    ]
+                )
+                == 0
+            ):
+                logger.warning("No changes to make when no joins in a LQP")
+                return True
+        elif request_type == "RuntimeQS":
+            if len(d["QSPhysical"]["links"]) == 0:
+                logger.warning("No changes to make when no edges in a graph")
+                return True
+        else:
+            raise ValueError(f"Query type {request_type} is not supported")
+        return False
 
     def solve_msg(
         self,
-        msg: str,
+        parsed_dict: Dict,
         use_ag: bool,
         ag_model_dict: Dict[QType, Dict[str, str]],
         sample_mode: str,
         n_samples: int,
         moo_mode: str,
     ) -> str:
-        non_decision_input, ro, n_edges = self.get_non_decision_input_and_ro(msg)
-        if n_edges == 0:
-            logger.warning("No changes to make when no edges in a graph")
+        t1 = time.perf_counter_ns()
+        if self.filter_msg(parsed_dict):
+            logger.info("No need to solve, boost!!!")
             return "{}"
+
+        t2 = time.perf_counter_ns()
+        if self.verbose:
+            logger.info(f"> filtered in {(t2 - t1) // 1e6} ms")
+
+        non_decision_input, ro = self.get_non_decision_input_and_ro(parsed_dict)
+
+        t3 = time.perf_counter_ns()
+        if self.verbose:
+            logger.info(f"> got non_decision_input and ro in {(t3 - t2) // 1e6} ms")
+
         po_objs, po_confs = ro.solve(
             non_decision_input,
             seed=self.seed,
@@ -143,9 +180,13 @@ class RuntimeOptimizer:
             n_samples=n_samples,
             moo_mode=moo_mode,
         )
+
+        t4 = time.perf_counter_ns()
+        if self.verbose:
+            logger.info(f"> solved in {(t4 - t3) // 1e6} ms")
+
         if po_objs is None or po_confs is None or len(po_objs) == 0:
-            logger.warning("NFS for message")
-            return "NSF"  # No Solution Found
+            raise SolutionNotFoundError("No Solution Found")
 
         if len(po_objs) == 1:
             ret_obj, ret_conf = po_objs[0], po_confs[0]
@@ -157,8 +198,18 @@ class RuntimeOptimizer:
             ret_dict = {k: v for k, v in zip(THETA_S, ret_conf)}
         else:
             raise ValueError(f"QType {ro.ta.q_type} is not supported")
+
+        t5 = time.perf_counter_ns()
+        if self.verbose:
+            logger.info(f"> prepared return message in {(t5 - t4) // 1e6} ms")
+
         ret_msg = json.dumps(ret_dict)
         logger.debug(f"Return {ret_msg}")
+
+        t6 = time.perf_counter_ns()
+        if self.verbose:
+            logger.info(f"> dumped return message in {(t6 - t5) // 1e6} ms")
+
         return ret_msg
 
     def setup_server(
@@ -183,6 +234,8 @@ class RuntimeOptimizer:
                 conn, addr = sock.accept()
                 logger.info(f"Connected by {addr}")
 
+                dt_dict = {}
+
                 while True:
                     msg = recv_msg(conn)
                     logger.debug(f"Received message: {msg}")
@@ -194,9 +247,11 @@ class RuntimeOptimizer:
                             json.dumps({THETA_S[0]: "0.34", THETA_S[1]: "512KB"}) + "\n"
                         )
                     else:
+                        t1 = time.perf_counter_ns()
+                        parsed_dict = parse_msg(msg)
                         response = (
                             self.solve_msg(
-                                msg,
+                                parsed_dict,
                                 use_ag=use_ag,
                                 ag_model_dict=ag_model_dict,
                                 sample_mode=sample_mode,
@@ -205,10 +260,23 @@ class RuntimeOptimizer:
                             )
                             + "\n"
                         )
+                        rt = parsed_dict["RequestType"]
+                        request_id = (
+                            parsed_dict["QsOptId"]
+                            if rt == "RuntimeQS"
+                            else parsed_dict["LqpId"]
+                        )
+
+                        t2 = time.perf_counter_ns()
+                        dt_ms = (t2 - t1) // 1e6
+                        dt_dict[f"{rt}-{request_id}"] = dt_ms
+                        logger.info(f"Solved {rt}-{request_id} in {dt_ms} ms")
+
                     conn.sendall(response.encode("utf-8"))
                     logger.debug(f"Sent response: {response}")
-
                 conn.close()
+                logger.info(f"Finished one session, disconnecting {addr}")
+                logger.info(f"Request time: {json.dumps(dt_dict, indent=2)}")
         except Exception as e:
             logger.exception(f"Exception occurred: {e}")
             sock.close()
@@ -224,8 +292,9 @@ class RuntimeOptimizer:
     ) -> None:
         with open(file_path) as f:
             msg = f.read().strip()
+        parsed_dict = parse_msg(msg)
         self.solve_msg(
-            msg,
+            parsed_dict,
             use_ag=use_ag,
             ag_model_dict=ag_model_dict,
             sample_mode=sample_mode,
