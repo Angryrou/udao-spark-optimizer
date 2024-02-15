@@ -206,7 +206,7 @@ if __name__ == "__main__":
             # },
             excluded_model_types=["KNN"],
             tuning_data=val_data,
-            # presets='good_quality',
+            presets=ag_sign.split(","),
             use_bag_holdout=True,
             infer_limit=infer_limit,
             infer_limit_batch_size=infer_limit_batch_size,
