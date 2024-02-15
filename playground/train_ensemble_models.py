@@ -145,6 +145,7 @@ if __name__ == "__main__":
         ag_sign,
         infer_limit,
         infer_limit_batch_size,
+        time_limit,
     )
     weights_path = ag_meta["graph_weights_path"]
     ag_path = ag_meta["ag_path"] + "/"
