@@ -34,7 +34,7 @@
     },
     "tuned-0215": {
       "gtn": {
-        "qs_lqp_compile": "cache_and_ckp/tpch_22x2273/qs_lqp_compile/ea0378f56dcf/graph_gtn_931827a1d64e/learning_49d80a1a5e09/99-val_latency_s_WMAPE=0.148-val_io_mb_WMAPE=0.090-val_ana_latency_s_WMAPE=0.112.ckpt",
+        "qs_lqp_compile": "cache_and_ckp/tpch_22x2273/qs_lqp_compile/ea0378f56dcf/graph_gtn_931827a1d64e/learning_49d80a1a5e09/99-val_latency_s_WMAPE=0.148-val_io_mb_WMAPE=0.090-val_ana_latency_s_WMAPE=0.112.ckpt"
       }
     }
   }
