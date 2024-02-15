@@ -131,15 +131,10 @@ class BaseOptimizer(ABC):
             ]
             g = structure.graph
             g.ndata["op_gid"] = th.tensor(op_gid, dtype=th.int32)
-            cbo_np = np.array(
-                [
-                    op_features.features_dict["rows_count"],
-                    op_features.features_dict["size"],
-                ],
-                dtype=np.float32,
-            ).T
-            cbo_np_norm = self.query_normalizer_cbo.transform(cbo_np)
-            g.ndata["cbo"] = th.tensor(cbo_np_norm, dtype=self.dtype)
+            cbo_df = pd.DataFrame.from_dict(op_features.features_dict, dtype="float32")
+            g.ndata["cbo"] = th.tensor(
+                self.query_normalizer_cbo.transform(cbo_df), dtype=self.dtype
+            )
             g.ndata["op_enc"] = th.tensor(
                 self.op_enc_extractor.embedder.transform(
                     [
@@ -149,10 +144,10 @@ class BaseOptimizer(ABC):
                 ),
                 dtype=self.dtype,
             )
-            if self.ag_ms.ms.model_sign == "graph_gtn":
-                g = add_positional_encoding(
-                    g, self.query_structure.positional_encoding_size
-                )
+            # if self.ag_ms.ms.model_sign == "graph_gtn":
+            g = add_positional_encoding(
+                g, self.query_structure.positional_encoding_size
+            )
             bg.append(g)
 
         embedding_input = dgl.batch(bg)
@@ -161,6 +156,28 @@ class BaseOptimizer(ABC):
         )
         tabular_input = th.tensor(tabular_input_df.values, dtype=self.dtype)
 
+        return embedding_input, tabular_input
+
+    def general_extraction(self, df: pd.DataFrame) -> Tuple[dgl.DGLGraph, th.Tensor]:
+        t1 = time.perf_counter_ns()
+        with th.no_grad():
+            iterator = self.data_processor.make_iterator(df, df.index, split="test")
+        t2 = time.perf_counter_ns()
+        if self.verbose:
+            logger.info(f">>> created iterator in {(t2 - t1) / 1e6} ms")
+
+        n_items = len(df)
+        dataloader = iterator.get_dataloader(batch_size=n_items)
+        batch_input, _ = next(iter(dataloader))
+        if not isinstance(batch_input, QueryPlanInput):
+            raise TypeError(f"Expected QueryPlanInput, got {type(batch_input)}")
+
+        t3 = time.perf_counter_ns()
+        if self.verbose:
+            logger.info(f">>> created dataloader in {(t3 - t2) / 1e6} ms")
+
+        embedding_input = batch_input.embedding_input
+        tabular_input = batch_input.features
         return embedding_input, tabular_input
 
     def extract_non_decision_embeddings_from_df(
@@ -175,51 +192,28 @@ class BaseOptimizer(ABC):
 
         if df.index.name != "id":
             raise ValueError(">>> df must have an index named 'id'")
-        n_items = len(df)
+
         df[self.decision_variables] = 0.0
         df[self.model_objective_columns] = 0.0
 
         t2 = time.perf_counter_ns()
         if self.verbose:
             logger.info(f">>> preprocessed df in {(t2 - t1) / 1e6} ms")
-
-        with th.no_grad():
-            iterator = self.data_processor.make_iterator(df, df.index, split="test")
+        # embedding_input, tabular_input = self.general_extraction(df)
+        embedding_input, tabular_input = self.fast_extraction(df)
 
         t3 = time.perf_counter_ns()
         if self.verbose:
-            logger.info(f">>> created iterator in {(t3 - t2) / 1e6} ms")
-
-        dataloader = iterator.get_dataloader(batch_size=n_items)
-        batch_input, _ = next(iter(dataloader))
-        if not isinstance(batch_input, QueryPlanInput):
-            raise TypeError(f"Expected QueryPlanInput, got {type(batch_input)}")
-
-        t4 = time.perf_counter_ns()
-        if self.verbose:
-            logger.info(f">>> created dataloader in {(t4 - t3) / 1e6} ms")
-
-        embedding_input = batch_input.embedding_input
-        tabular_input = batch_input.features
-
-        tt1 = time.perf_counter_ns()
-        embedding_input2, tabular_input2 = self.fast_extraction(df)
-        tt2 = time.perf_counter_ns()
-        if self.verbose:
-            logger.info(f">>> fast_extraction in {(tt2 - tt1) / 1e6} ms")
-
-        assert th.allclose(tabular_input, tabular_input2)
-        for k, v in embedding_input2.ndata.items():
-            assert th.allclose(v, embedding_input.ndata[k])
+            logger.info(f">>> fast_extraction in {(t3 - t2) / 1e6} ms")
 
         graph_embedding = self.ag_ms.ms.model.embedder(embedding_input.to(self.device))
         non_decision_tabular_features = tabular_input[
             :, : -len(self.decision_variables)
         ]
 
-        t5 = time.perf_counter_ns()
+        t4 = time.perf_counter_ns()
         if self.verbose:
-            logger.info(f">>> computed graph_embedding in {(t5 - t4) / 1e6} ms")
+            logger.info(f">>> computed graph_embedding in {(t4 - t3) / 1e6} ms")
 
         return graph_embedding, non_decision_tabular_features
 
