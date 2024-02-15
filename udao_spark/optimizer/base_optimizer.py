@@ -41,7 +41,7 @@ class BaseOptimizer(ABC):
         spark_conf: SparkConf,
         decision_variables: List[str],
         ag_path: str,
-        verbose: bool = True,
+        verbose: bool = False,
     ) -> None:
         self.bm = bm
         self.ag_ms = AGServer.from_ckp_path(
