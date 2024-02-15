@@ -174,7 +174,7 @@ if __name__ == "__main__":
         )
         predictor.fit(
             train_data=train_data,
-            num_stack_levels=2,
+            # num_stack_levels=1,
             # num_bag_folds=4,
             # hyperparameters={
             #     "NN_TORCH": {},
