@@ -135,7 +135,7 @@ if __name__ == "__main__":
     num_gpus, ag_sign = params.num_gpus, params.ag_sign
     infer_limit = params.infer_limit
     infer_limit_batch_size = params.infer_limit_batch_size
-    time_limit = params.time_limit
+    time_limit = params.ag_time_limit
 
     ag_meta = get_ag_meta(
         bm,

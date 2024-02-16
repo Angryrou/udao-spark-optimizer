@@ -156,7 +156,7 @@ def get_ag_parameters() -> ArgumentParser:
                         help="Inference limit, e.g., 1e-5")
     parser.add_argument("--infer_limit_batch_size", type=int, default=None,
                         help="Inference limit batch size, e.g., 50000")
-    parser.add_argument("--time_limit", type=int, default=None,
+    parser.add_argument("--ag_time_limit", type=int, default=None,
                         help="Time limit in seconds for the AG")
     # fmt: on
 
