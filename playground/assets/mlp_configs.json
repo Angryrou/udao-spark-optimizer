@@ -34,7 +34,11 @@
     },
     "tuned-0215": {
       "gtn": {
-        "qs_lqp_compile": "cache_and_ckp/tpch_22x2273/qs_lqp_compile/ea0378f56dcf/graph_gtn_931827a1d64e/learning_49d80a1a5e09/99-val_latency_s_WMAPE=0.148-val_io_mb_WMAPE=0.090-val_ana_latency_s_WMAPE=0.112.ckpt"
+        "q_compile": "cache_and_ckp/tpch_22x2273/q_compile/ea0378f56dcf/graph_gtn_fccc00d9f160/learning_49d80a1a5e09/99-val_latency_s_WMAPE=0.175-val_io_mb_WMAPE=0.229.ckpt",
+        "q_all": "cache_and_ckp/tpch_22x2273/q_all/ea0378f56dcf/graph_gtn_e6d1b3a655fb/learning_1d20f22457c5/49-val_latency_s_WMAPE=0.130-val_io_mb_WMAPE=0.132.ckpt",
+        "qs_lqp_compile": "cache_and_ckp/tpch_22x2273/qs_lqp_compile/ea0378f56dcf/graph_gtn_931827a1d64e/learning_49d80a1a5e09/99-val_latency_s_WMAPE=0.148-val_io_mb_WMAPE=0.090-val_ana_latency_s_WMAPE=0.112.ckpt",
+        "qs_lqp_runtime": "cache_and_ckp/tpch_22x2273/qs_lqp_runtime/ea0378f56dcf/graph_gtn_07151d1a2f2b/learning_49d80a1a5e09/99-val_latency_s_WMAPE=0.143-val_io_mb_WMAPE=0.082-val_ana_latency_s_WMAPE=0.107.ckpt",
+        "qs_pqp_runtime": "cache_and_ckp/tpch_22x2273/qs_pqp_runtime/ea0378f56dcf/graph_gtn_00056929be83/learning_49d80a1a5e09/99-val_latency_s_WMAPE=0.191-val_io_mb_WMAPE=0.086-val_ana_latency_s_WMAPE=0.132.ckpt"
       }
     }
   }
