@@ -172,6 +172,8 @@ def get_compile_time_optimizer_parameters() -> ArgumentParser:
 
     parser.add_argument("--save_data", action="store_true",
                         help="Enable to save data")
+    parser.add_argument("--save_data_header", type=str, default="./output",
+                        help="the head of data save path")
     parser.add_argument("--moo_algo", type=str, default="div_and_conq_moo%B",
                         choices=["div_and_conq_moo%B", "div_and_conq_moo%GD",
                             "evo", "ws", "ppf"],

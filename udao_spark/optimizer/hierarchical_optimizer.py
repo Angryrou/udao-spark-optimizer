@@ -102,6 +102,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         param2: int = -1,
         time_limit: int = -1,
         is_oracle: bool = False,
+        save_data_header: str = "./output",
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         non_decision_df = self.extract_non_decision_df(non_decision_input)
         (
@@ -143,6 +144,7 @@ class HierarchicalOptimizer(BaseOptimizer):
                 algo,
                 save_data,
                 query_id,
+                save_data_header=save_data_header,
             )
 
         elif algo == "analyze_model_accuracy":
@@ -160,6 +162,7 @@ class HierarchicalOptimizer(BaseOptimizer):
                 algo,
                 query_id,
                 save_data,
+                save_data_header=save_data_header,
             )
 
         elif "div_and_conq_moo" in algo:
@@ -181,6 +184,7 @@ class HierarchicalOptimizer(BaseOptimizer):
                 param1,
                 param2,
                 is_oracle,
+                save_data_header
             )
 
         elif algo == "evo":
@@ -201,6 +205,7 @@ class HierarchicalOptimizer(BaseOptimizer):
                 param1,
                 param2,
                 time_limit,
+                save_data_header
             )
 
         elif algo == "ws":
@@ -221,6 +226,7 @@ class HierarchicalOptimizer(BaseOptimizer):
                 param1,
                 param2,
                 time_limit,
+                save_data_header,
             )
 
         else:
@@ -299,6 +305,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         algo: str,
         save_data: bool = False,
         query_id: Optional[str] = None,
+        save_data_header: str = "./output",
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         fake_objs = np.array([-1])
         start_infer = time.time()
@@ -364,7 +371,7 @@ class HierarchicalOptimizer(BaseOptimizer):
 
                 if save_data:
                     data_path = (
-                        f"./output/test/latest_model_{self.device.type}/"
+                        f"{save_data_header}/latest_model_{self.device.type}/"
                         f"test/{algo}_update/time_-1/"
                         f"query_{query_id}_n_{n_stages}/"
                         f"n_rows_{n_repeat * n_stages}"
@@ -403,6 +410,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         algo: str,
         query_id: Optional[str],
         save_data: bool,
+        save_data_header: str,
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         theta_s: Union[th.Tensor, np.ndarray]
         theta_s = self.sample_theta_x(
@@ -474,7 +482,7 @@ class HierarchicalOptimizer(BaseOptimizer):
                 conf_qs0.reshape(1, -1).astype(float)
             ).squeeze()
             data_path = (
-                f"./output/test/latest_model_{self.device.type}/{algo}/time_-1/"
+                f"{save_data_header}/latest_model_{self.device.type}/{algo}/time_-1/"
                 f"query_{query_id}_n_{n_stages}/c_{conf2[0]}_{conf2[1]}_{conf2[2]}/grid"
             )
             save_results(data_path, test_query_objs, mode="F")
@@ -499,6 +507,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         n_c_samples: int,
         n_p_samples: int,
         is_oracle: bool,
+        save_data_header: str
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         start = time.time()
         theta_c: Union[th.Tensor, np.ndarray]
@@ -750,7 +759,7 @@ class HierarchicalOptimizer(BaseOptimizer):
                 -1, len_theta_per_qs
             )
             data_path = (
-                f"./output/test/latest_model_{self.device.type}/ag/oracle_{is_oracle}/{algo}/{n_c_samples}_{n_p_samples}/time_-1/"
+                f"{save_data_header}/latest_model_{self.device.type}/ag/oracle_{is_oracle}/{algo}/{n_c_samples}_{n_p_samples}/time_-1/"
                 f"query_{query_id}_n_{n_stages}/{sample_mode}/{dag_opt_algo}"
             )
         else:
@@ -758,7 +767,7 @@ class HierarchicalOptimizer(BaseOptimizer):
                 -1, len_theta_per_qs
             )
             data_path = (
-                f"./output/test/latest_model_{self.device.type}/mlp/oracle_{is_oracle}/{algo}/{n_c_samples}_{n_p_samples}/time_-1/"
+                f"{save_data_header}/latest_model_{self.device.type}/mlp/oracle_{is_oracle}/{algo}/{n_c_samples}_{n_p_samples}/time_-1/"
                 f"query_{query_id}_n_{n_stages}/{sample_mode}/{dag_opt_algo}"
             )
 
@@ -790,6 +799,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         pop_size: int,
         nfe: int,
         time_limit: int,
+        save_data_header: str,
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         start = time.time()
         if use_ag:
@@ -877,12 +887,12 @@ class HierarchicalOptimizer(BaseOptimizer):
 
         if use_ag:
             data_path = (
-                f"./output/test/latest_model_{self.device.type}/ag/{algo}/{pop_size}_{nfe}/time_{time_limit}/"
+                f"{save_data_header}/latest_model_{self.device.type}/ag/{algo}/{pop_size}_{nfe}/time_{time_limit}/"
                 f"query_{query_id}_n_{n_stages}/"
             )
         else:
             data_path = (
-                f"./output/test/latest_model_{self.device.type}/mlp/{algo}/{pop_size}_{nfe}/time_{time_limit}/"
+                f"{save_data_header}/latest_model_{self.device.type}/mlp/{algo}/{pop_size}_{nfe}/time_{time_limit}/"
                 f"query_{query_id}_n_{n_stages}/"
             )
 
@@ -913,6 +923,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         n_samples_per_param: int,
         n_ws: int,
         time_limit: int,
+        save_data_header: str
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         start = time.time()
         if use_ag:
@@ -1013,12 +1024,12 @@ class HierarchicalOptimizer(BaseOptimizer):
 
         if use_ag:
             data_path = (
-                f"./output/test/latest_model_{self.device.type}/ag/{algo}/{n_samples_per_param}_{n_ws}/time_{time_limit}/"
+                f"{save_data_header}/latest_model_{self.device.type}/ag/{algo}/{n_samples_per_param}_{n_ws}/time_{time_limit}/"
                 f"query_{query_id}_n_{n_stages}/"
             )
         else:
             data_path = (
-                f"./output/test/latest_model_{self.device.type}/mlp/{algo}/{n_samples_per_param}_{n_ws}/time_{time_limit}/"
+                f"{save_data_header}/latest_model_{self.device.type}/mlp/{algo}/{n_samples_per_param}_{n_ws}/time_{time_limit}/"
                 f"query_{query_id}_n_{n_stages}/"
             )
 
