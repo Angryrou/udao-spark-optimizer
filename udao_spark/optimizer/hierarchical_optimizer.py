@@ -750,7 +750,7 @@ class HierarchicalOptimizer(BaseOptimizer):
                 -1, len_theta_per_qs
             )
             data_path = (
-                f"./output/test/drop_pygmo/latest_model_{self.device.type}/ag/oracle_{is_oracle}/{algo}/{n_c_samples}_{n_p_samples}/time_-1/"
+                f"./output/test/latest_model_{self.device.type}/ag/oracle_{is_oracle}/{algo}/{n_c_samples}_{n_p_samples}/time_-1/"
                 f"query_{query_id}_n_{n_stages}/{sample_mode}/{dag_opt_algo}"
             )
         else:
@@ -758,7 +758,7 @@ class HierarchicalOptimizer(BaseOptimizer):
                 -1, len_theta_per_qs
             )
             data_path = (
-                f"./output/test/drop_pygmo/latest_model_{self.device.type}/mlp/oracle_{is_oracle}/{algo}/{n_c_samples}_{n_p_samples}/time_-1/"
+                f"./output/test/latest_model_{self.device.type}/mlp/oracle_{is_oracle}/{algo}/{n_c_samples}_{n_p_samples}/time_-1/"
                 f"query_{query_id}_n_{n_stages}/{sample_mode}/{dag_opt_algo}"
             )
 
