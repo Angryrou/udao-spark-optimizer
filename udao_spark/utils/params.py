@@ -168,8 +168,10 @@ def get_compile_time_optimizer_parameters() -> ArgumentParser:
     # fmt: off
     parser.add_argument("--use_mlp", action="store_true",
                         help="Enable MLP only")
-    parser.add_argument("--ag_model", type=str, default=None,
-                        help="specific model name for AG")
+    parser.add_argument("--ag_model_qs_ana_latency", type=str, default=None,
+                        help="specific model name for AG for QS_R ana_latency")
+    parser.add_argument("--ag_model_qs_io", type=str, default=None,
+                        help="specific model name for AG for QS_R IO")
 
     parser.add_argument("--save_data", action="store_true",
                         help="Enable to save data")

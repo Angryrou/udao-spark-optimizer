@@ -79,7 +79,7 @@ class DivAndConqMOO:
         params: Params,
         use_ag: bool,
         sample_funcs: Callable[[Any, Any, Any, Any], Any],
-        ag_model: Optional[str] = None,
+        ag_model: Dict[str, str],
         seed: Optional[int] = None,
     ) -> None:
         self.n_stages = n_stages
@@ -542,7 +542,7 @@ class DivAndConqMOO:
         )
         # non_decision_features = self.non_decision_tabular_features
         mesh_non_decision_tabular_features: Union[th.Tensor, pd.DataFrame]
-        if self.use_ag and isinstance(self.ag_model, str):
+        if self.use_ag:
             assert isinstance(self.non_decision_tabular_features, pd.DataFrame)
             mesh_theta = mesh_theta.numpy()
 
@@ -747,7 +747,7 @@ class DivAndConqMOO:
         )
 
         mesh_non_decision_tabular_features: Union[th.Tensor, pd.DataFrame]
-        if self.use_ag and isinstance(self.ag_model, str):
+        if self.use_ag:
             assert isinstance(self.non_decision_tabular_features, pd.DataFrame)
 
             mesh_non_decision_tabular_features = self.non_decision_tabular_features.loc[
@@ -834,7 +834,7 @@ class DivAndConqMOO:
                 f"all theta_c is {time.time() - start_filter}"
             )
 
-        if self.use_ag and isinstance(self.ag_model, str):
+        if self.use_ag:
             assert isinstance(f_list[0], np.ndarray)
             assert isinstance(conf_list[0], np.ndarray)
             all_confs_th = np.concatenate(conf_list)
@@ -889,7 +889,7 @@ class DivAndConqMOO:
         mesh_theta: th.Tensor,
     ) -> np.ndarray:
         print(f"n_evals is {n_evals}")
-        if self.use_ag and isinstance(self.ag_model, str):
+        if self.use_ag:
             y_hat = self.obj_model(
                 mesh_graph_embeddings.cpu().numpy(),
                 mesh_non_decision_tabular_features,
