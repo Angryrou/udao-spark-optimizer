@@ -184,7 +184,7 @@ class HierarchicalOptimizer(BaseOptimizer):
                 param1,
                 param2,
                 is_oracle,
-                save_data_header
+                save_data_header,
             )
 
         elif algo == "evo":
@@ -205,7 +205,7 @@ class HierarchicalOptimizer(BaseOptimizer):
                 param1,
                 param2,
                 time_limit,
-                save_data_header
+                save_data_header,
             )
 
         elif algo == "ws":
@@ -507,7 +507,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         n_c_samples: int,
         n_p_samples: int,
         is_oracle: bool,
-        save_data_header: str
+        save_data_header: str,
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         start = time.time()
         theta_c: Union[th.Tensor, np.ndarray]
@@ -923,7 +923,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         n_samples_per_param: int,
         n_ws: int,
         time_limit: int,
-        save_data_header: str
+        save_data_header: str,
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         start = time.time()
         if use_ag:
