@@ -15,7 +15,6 @@ from multiprocessing import Pool
 from typing import Any, List, Tuple, Union
 
 import numpy as np
-import pygmo as pg  # type: ignore
 import torch as th
 from tqdm import tqdm  # type: ignore
 

@@ -15,13 +15,11 @@ import signal
 import time
 from dataclasses import dataclass
 from multiprocessing import Pool
-
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
 import torch as th
-
 from sklearn.cluster import KMeans
 
 from udao_spark.optimizer.moo_algos.dag_opt import DAGOpt
@@ -860,7 +858,7 @@ class DivAndConqMOO:
         c_id = label_rep_theta_c_mapping[int(i % rep_c_samples.shape[0])]
         po_ind = is_pareto_efficient(sub_f)
         po_objs = sub_f[po_ind]
-        po_confs = sub_conf[po_ind]
+        po_confs = sub_conf[po_ind, :]
 
         time.time()
         qs_ids = (
