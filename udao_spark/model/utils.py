@@ -277,7 +277,7 @@ def get_tuned_trainer(
         dirpath=ckp_learning_header,
         filename="{epoch}-" + filename_suffix,
         auto_insert_metric_name=False,
-        every_n_train_steps=30 if params.epochs <= 10 else None,
+        every_n_train_steps=30 if params.epochs <= 30 else None,
     )
     scheduler = UdaoLRScheduler(setup_cosine_annealing_lr, warmup.UntunedLinearWarmup)
     trainer = pl.Trainer(
