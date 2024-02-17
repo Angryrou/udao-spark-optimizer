@@ -66,6 +66,7 @@ def get_ag_meta(
     ag_sign: str,
     infer_limit: Optional[float],
     infer_limit_batch_size: Optional[int],
+    time_limit: Optional[int],
 ) -> Dict[str, str]:
     graph_weights_path = get_weights_path_dict(bm, hp_choice, graph_choice, q_type)
     ag_prefix, model_sign, model_params_path, data_processor_path = get_graph_ckp_info(
@@ -79,6 +80,9 @@ def get_ag_meta(
         ag_full_name = "{}_{}_infer_limit_{}_batch_size_{}".format(
             ag_sign, hp_choice, infer_limit, infer_limit_batch_size
         )
+
+    if time_limit is not None:
+        ag_full_name += f"_time_limit_{time_limit}s"
 
     ag_path = "AutogluonModels/{}/{}/{}/{}".format(
         ag_prefix, q_type, graph_choice, ag_full_name

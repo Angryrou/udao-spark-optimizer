@@ -135,6 +135,7 @@ if __name__ == "__main__":
     num_gpus, ag_sign = params.num_gpus, params.ag_sign
     infer_limit = params.infer_limit
     infer_limit_batch_size = params.infer_limit_batch_size
+    time_limit = params.ag_time_limit
 
     ag_meta = get_ag_meta(
         bm,
@@ -144,6 +145,7 @@ if __name__ == "__main__":
         ag_sign,
         infer_limit,
         infer_limit_batch_size,
+        time_limit,
     )
     weights_path = ag_meta["graph_weights_path"]
     ag_path = ag_meta["ag_path"] + "/"
@@ -172,7 +174,7 @@ if __name__ == "__main__":
         )
         predictor.fit(
             train_data=train_data,
-            # num_stack_levels=3,
+            # num_stack_levels=1,
             # num_bag_folds=4,
             # hyperparameters={
             #     "NN_TORCH": {},
@@ -206,11 +208,13 @@ if __name__ == "__main__":
             # },
             excluded_model_types=["KNN"],
             tuning_data=val_data,
-            # presets='good_quality',
+            presets_lat=ag_sign.split(","),
+            presets_io=None,
             use_bag_holdout=True,
             infer_limit=infer_limit,
             infer_limit_batch_size=infer_limit_batch_size,
             num_gpus=num_gpus,
+            time_limit=time_limit,
         )
 
     for obj in predictor.predictors.keys():

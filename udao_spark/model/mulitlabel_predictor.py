@@ -91,7 +91,9 @@ class MultilabelPredictor(object):
                 **kwargs,
             )
 
-    def fit(self, train_data, tuning_data=None, **kwargs):
+    def fit(self, train_data, tuning_data=None,
+            presets_lat="medium_quality",
+            presets_io="medium_quality", **kwargs):
         """Fits a separate TabularPredictor to predict each of the labels.
 
         Parameters
@@ -125,7 +127,12 @@ class MultilabelPredictor(object):
             if tuning_data is not None:
                 tuning_data = tuning_data_og.drop(labels_to_drop, axis=1)
             print(f"Fitting TabularPredictor for label: {label} ...")
-            predictor.fit(train_data=train_data, tuning_data=tuning_data, **kwargs)
+            if "io" in label:
+                predictor.fit(train_data=train_data, tuning_data=tuning_data,
+                              presets=presets_io, **kwargs)
+            else:
+                predictor.fit(train_data=train_data, tuning_data=tuning_data,
+                              presets=presets_lat, **kwargs)
             self.predictors[label] = predictor.path
             if save_metrics:
                 self.eval_metrics[label] = predictor.eval_metric
