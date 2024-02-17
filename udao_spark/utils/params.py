@@ -146,8 +146,8 @@ def get_graph_gtn_params() -> ArgumentParser:
 def get_ag_parameters() -> ArgumentParser:
     parser = get_base_parser()
     # fmt: off
-    parser.add_argument("--hp_choice", type=str, default="default",
-                        choices=["default", "tuned-0202", "tuned-0215"])
+    parser.add_argument("--hp_choice", type=str, default="tuned-0215",
+                        choices=["tuned-0215"])
     parser.add_argument("--graph_choice", type=str, default="gtn",
                         choices=["avg", "gtn"])
     parser.add_argument("--ag_sign", type=str, default="medium_quality")

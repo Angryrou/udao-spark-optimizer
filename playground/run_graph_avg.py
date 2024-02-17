@@ -19,6 +19,8 @@ logger.setLevel("INFO")
 if __name__ == "__main__":
     params = get_graph_avg_params().parse_args()
     set_deterministic_torch(params.seed)
+    if params.benchmark == "tpcds":
+        th.set_float32_matmul_precision("medium")  # type: ignore
     print(params)
     device = "gpu" if th.cuda.is_available() else "cpu"
     tensor_dtypes = th.float32
