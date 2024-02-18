@@ -34,7 +34,9 @@ if __name__ == "__main__":
         + ["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9"]
         + ["s10", "s11"]
     )
+    base_dir = Path(__file__).parent
     df, ag_server = get_non_decision_inputs(
+        base_dir=base_dir,
         params=params,
         decision_vars=decision_variables,
     )

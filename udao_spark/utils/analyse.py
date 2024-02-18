@@ -29,7 +29,7 @@ def extract_non_decision_df(non_decision_input_dict: Dict) -> pd.DataFrame:
 
 
 def get_non_decision_inputs(
-    params: Namespace, decision_vars: List[str]
+    base_dir: Path, params: Namespace, decision_vars: List[str]
 ) -> Tuple[pd.DataFrame, AGServer]:
     # prepare parameters
     bm, q_type = params.benchmark, params.q_type
@@ -61,7 +61,6 @@ def get_non_decision_inputs(
         raise e
 
     # prepare the traces
-    base_dir = Path(__file__).parent
     spark_conf = SparkConf(str(base_dir / "assets/spark_configuration_aqe_on.json"))
     sample_header = str(base_dir / "assets/samples")
     raw_traces = [
