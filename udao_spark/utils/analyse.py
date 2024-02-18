@@ -92,7 +92,9 @@ def get_non_decision_inputs(
     (
         graph_embeddings,
         non_decision_tabular_features,
-    ) = atomic_optimizer.extract_non_decision_embeddings_from_df(non_decision_df)
+    ) = atomic_optimizer.extract_non_decision_embeddings_from_df(
+        non_decision_df, ercilla=False
+    )
     graph_embeddings = graph_embeddings.detach().cpu()
     df = non_decision_df.copy()
     ge_dim = graph_embeddings.shape[1]
