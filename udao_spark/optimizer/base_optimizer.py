@@ -52,12 +52,14 @@ class BaseOptimizer(ABC):
             os.path.dirname(data_processor_path), os.path.basename(data_processor_path)
         )
         if not isinstance(data_processor, DataProcessor):
-            raise TypeError(f"Expected DataHandler, got {type(data_processor)}")
+            raise TypeError(f"Expected DataProcessor, got {type(data_processor)}")
         if (
             "tabular_features" not in data_processor.feature_extractors
             or "objectives" not in data_processor.feature_extractors
         ):
-            raise ValueError("DataHandler must contain tabular_features and objectives")
+            raise ValueError(
+                "DataProcessor must contain tabular_features and objectives"
+            )
         self.data_processor = data_processor
         feature_extractors = self.data_processor.feature_extractors
         feature_processors = self.data_processor.feature_processors

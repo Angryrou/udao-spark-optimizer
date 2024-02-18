@@ -21,7 +21,7 @@ from .utils import (
     GraphTransformerMLPParams,
     calibrate_negative_predictions,
     get_graph_avg_mlp,
-    get_graph_gtn_mlp,
+    get_graph_transformer_mlp,
 )
 
 
@@ -43,7 +43,7 @@ class ModelServer:
                 JsonHandler.load_json(model_params_path)
             )
             objectives = graph_gtn_ml_params.iterator_shape.output_names
-            model = get_graph_gtn_mlp(graph_gtn_ml_params)
+            model = get_graph_transformer_mlp(graph_gtn_ml_params)
             logger.info("GRAPH MODEL DETAILS:\n")
             logger.info(model)
         else:

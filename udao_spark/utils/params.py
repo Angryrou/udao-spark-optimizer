@@ -113,7 +113,7 @@ def get_graph_avg_params() -> ArgumentParser:
     return parser
 
 
-def get_graph_gtn_params() -> ArgumentParser:
+def get_graph_transformer_params() -> ArgumentParser:
     parser = _get_graph_base_parser()
     # fmt: off
     # Embedder parameters

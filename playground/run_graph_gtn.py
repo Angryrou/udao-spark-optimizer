@@ -11,16 +11,16 @@ from udao_spark.data.utils import checkpoint_model_structure, get_split_iterator
 from udao_spark.model.utils import (
     GraphTransformerMLPParams,
     MyLearningParams,
-    get_graph_gtn_mlp,
+    get_graph_transformer_mlp,
     get_tuned_trainer,
 )
 from udao_spark.utils.collaborators import PathWatcher, TypeAdvisor
-from udao_spark.utils.params import ExtractParams, get_graph_gtn_params
+from udao_spark.utils.params import ExtractParams, get_graph_transformer_params
 from udao_trace.utils import JsonHandler
 
 logger.setLevel("INFO")
 if __name__ == "__main__":
-    params = get_graph_gtn_params().parse_args()
+    params = get_graph_transformer_params().parse_args()
     set_deterministic_torch(params.seed)
     if params.benchmark == "tpcds":
         th.set_float32_matmul_precision("medium")  # type: ignore
@@ -75,7 +75,7 @@ if __name__ == "__main__":
         }
     )
 
-    model = get_graph_gtn_mlp(model_params)
+    model = get_graph_transformer_mlp(model_params)
     # prepare the model structure path
     tabular_columns = ta.get_tabular_columns()
     objectives = ta.get_objectives()
@@ -91,6 +91,7 @@ if __name__ == "__main__":
         learning_params,
         device,
         num_workers=0 if params.debug else params.num_workers,
+        debug=params.debug,
     )
     test_results = trainer.test(
         model=module,

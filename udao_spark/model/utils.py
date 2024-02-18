@@ -1,9 +1,11 @@
 import glob
 import hashlib
+from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+import dgl
 import lightning.pytorch as pl
 import numpy as np
 import pytorch_warmup as warmup
@@ -15,6 +17,7 @@ from torchmetrics import WeightedMeanAbsolutePercentageError
 from udao.data import BaseIterator
 from udao.data.utils.utils import DatasetType
 from udao.model import MLP, GraphAverager, GraphTransformer, UdaoModel, UdaoModule
+from udao.model.embedders.layers.multi_head_attention import AttentionLayerName
 from udao.model.module import LearningParams
 from udao.model.utils.losses import WMAPELoss
 from udao.model.utils.schedulers import UdaoLRScheduler, setup_cosine_annealing_lr
@@ -86,6 +89,11 @@ class GraphTransformerMLPParams(UdaoParams):
     readout: str = "mean"
     type_embedding_dim: int = 8
     embedding_normalizer: Optional[str] = None
+    attention_layer_name: AttentionLayerName = "GTN"
+    # For QF (QueryFormer)
+    max_dist: Optional[int] = None
+    # For RAAL
+    non_siblings_map: Optional[Dict[int, Dict[int, List[int]]]] = None
     # MLP
     n_layers: int = 2
     hidden_dim: int = 32
@@ -108,6 +116,7 @@ class GraphTransformerMLPParams(UdaoParams):
         return {
             k: v if not isinstance(v, UdaoEmbedItemShape) else v.__dict__
             for k, v in self.__dict__.items()
+            if v is not None and k != "non_siblings_map"
         }
 
     def hash(self) -> str:
@@ -129,7 +138,7 @@ class GraphTransformerMLPParams(UdaoParams):
         ).encode("utf-8")
         sha256_hash = hashlib.sha256(attributes_tuple)
         hex12 = sha256_hash.hexdigest()[:12]
-        return "graph_gtn_" + hex12
+        return f"graph_{self.attention_layer_name.lower()}_" + hex12
 
 
 @dataclass
@@ -180,7 +189,7 @@ def get_graph_avg_mlp(params: GraphAverageMLPParams) -> UdaoModel:
     return model
 
 
-def get_graph_gtn_mlp(params: GraphTransformerMLPParams) -> UdaoModel:
+def get_graph_transformer_mlp(params: GraphTransformerMLPParams) -> UdaoModel:
     model = UdaoModel.from_config(
         embedder_cls=GraphTransformer,
         regressor_cls=MLP,
@@ -195,6 +204,9 @@ def get_graph_gtn_mlp(params: GraphTransformerMLPParams) -> UdaoModel:
             "op_groups": params.op_groups,  # ["type", "cbo", "op_enc"]
             "type_embedding_dim": params.type_embedding_dim,  # 8
             "embedding_normalizer": params.embedding_normalizer,  # None
+            "attention_layer_name": params.attention_layer_name,  # "GTN"
+            "max_dist": params.max_dist,  # None
+            "non_siblings_map": params.non_siblings_map,  # None
         },
         regressor_params={
             "n_layers": params.n_layers,  # 3
@@ -239,6 +251,7 @@ def get_tuned_trainer(
     params: MyLearningParams,
     device: str,
     num_workers: int = 0,
+    debug: bool = False,
 ) -> Tuple[Trainer, UdaoModule, str]:
     ckp_learning_header = f"{ckp_header}/{params.hash()}"
     ckp_weight_path = weights_found(ckp_learning_header)
@@ -273,11 +286,14 @@ def get_tuned_trainer(
             for obj in objectives
         ]
     )
+    every_n_train_steps: Optional[int] = None
+    if not debug and params.epochs <= 30:
+        every_n_train_steps = 30
     checkpoint_callback = ModelCheckpoint(
         dirpath=ckp_learning_header,
         filename="{epoch}-" + filename_suffix,
         auto_insert_metric_name=False,
-        every_n_train_steps=30 if params.epochs <= 30 else None,
+        every_n_train_steps=every_n_train_steps,
     )
     scheduler = UdaoLRScheduler(setup_cosine_annealing_lr, warmup.UntunedLinearWarmup)
     trainer = pl.Trainer(
@@ -310,6 +326,23 @@ def get_graph_ckp_info(weights_path: str) -> Tuple[str, str, str, str]:
     data_processor_path = "/".join(splits[:4] + ["data_processor.pkl"])
     model_params_path = "/".join(splits[:5] + ["model_struct_params.json"])
     return ag_prefix, model_sign, model_params_path, data_processor_path
+
+
+def get_non_siblings_map(
+    dgl_dict: Dict[int, dgl.DGLGraph]
+) -> Dict[int, Dict[int, List[int]]]:
+    non_siblings_map = {}
+    for i, g in dgl_dict.items():
+        srcs, dsts, eids = g.edges(form="all", order="srcdst")
+        child_dep: Dict[int, List[int]] = defaultdict(list)
+        for src, dst in zip(srcs.numpy(), dsts.numpy()):
+            child_dep[dst].append(src)
+        total_nids = set(range(g.num_nodes()))
+        non_sibling = {}
+        for src, dst, eid in zip(srcs.numpy(), dsts.numpy(), eids.numpy()):
+            non_sibling[eid] = total_nids.difference(set(child_dep[dst]))
+        non_siblings_map[i] = {k: list(v) for k, v in non_sibling.items()}
+    return non_siblings_map
 
 
 LAT_MIN_MAP = {
