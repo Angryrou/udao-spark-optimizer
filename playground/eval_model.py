@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from udao_spark.utils.analyse import get_non_decision_inputs
+from udao_spark.utils.analyzer import get_non_decision_inputs
 from udao_trace.configuration import SparkConf
 
 
