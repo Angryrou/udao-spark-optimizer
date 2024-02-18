@@ -2,7 +2,7 @@ import json
 import os.path
 import time
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Literal, Optional, Tuple, Union
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import dgl
 import numpy as np
@@ -306,7 +306,7 @@ class BaseOptimizer(ABC):
         graph_embeddings: np.ndarray,
         non_decision_df: pd.DataFrame,
         sampled_theta: np.ndarray,
-        model_name: Union[str, Dict[str, str]],
+        model_name: Dict[str, str],
     ) -> Dict[str, np.ndarray]:
         start_time_ns = time.perf_counter_ns()
         objs = self.ag_ms.predict_with_ag(

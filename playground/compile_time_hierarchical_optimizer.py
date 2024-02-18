@@ -99,11 +99,17 @@ if __name__ == "__main__":
         else:
             raise Exception(f"algo {params.moo_algo} is not supported!")
 
+        ag_model = {
+            "ana_latency_s": params.ag_model_qs_ana_latency
+            or "WeightedEnsemble_L2_FULL",
+            "io_mb": params.ag_model_qs_io or "CatBoost",
+        }
+
         po_points = hier_optimizer.solve(
             non_decision_input,
             seed=params.seed,
             use_ag=use_ag,
-            ag_model=params.ag_model,
+            ag_model=ag_model,
             algo=params.moo_algo,
             save_data=params.save_data,
             query_id=query_id,

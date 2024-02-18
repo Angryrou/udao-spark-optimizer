@@ -58,7 +58,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         graph_embeddings: np.ndarray,
         non_decision_df: pd.DataFrame,
         sampled_theta: np.ndarray,
-        model_name: str,
+        model_name: Dict[str, str],
         cost_choice: str = "ana_cost_w_io",
     ) -> np.ndarray:
         start_time_ns = time.perf_counter_ns()
@@ -93,7 +93,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         non_decision_input: Dict[str, Any],
         seed: Optional[int] = None,
         use_ag: bool = True,
-        ag_model: str = "",
+        ag_model: Dict = dict(),
         algo: str = "naive_example",
         save_data: bool = False,
         query_id: Optional[str] = None,
@@ -241,7 +241,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         use_ag: bool,
         graph_embeddings: th.Tensor,
         n_stages: int,
-        ag_model: str,
+        ag_model: Dict[str, str],
         non_decision_df: pd.DataFrame,
         non_decision_tabular_features: th.Tensor,
         seed: Optional[int],
@@ -254,11 +254,6 @@ class HierarchicalOptimizer(BaseOptimizer):
                     f"does not match n_stages {n_stages}"
                 )
             sampled_theta = self.foo_samples(n_stages, seed, normalize=False)
-            if ag_model is None:
-                logger.warning(
-                    "ag_model is not specified, choosing the ensembled model"
-                )
-                ag_model = "WeightedEnsemble_L2"
             objs_dict = self.get_objective_values_ag(
                 graph_embeddings.numpy(), non_decision_df, sampled_theta, ag_model
             )
@@ -298,7 +293,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         use_ag: bool,
         graph_embeddings: th.Tensor,
         n_stages: int,
-        ag_model: str,
+        ag_model: Dict[str, str],
         non_decision_df: pd.DataFrame,
         non_decision_tabular_features: th.Tensor,
         seed: Optional[int],
@@ -343,11 +338,6 @@ class HierarchicalOptimizer(BaseOptimizer):
                     normalize=normalize,
                 )
                 theta = np.concatenate([theta_c, theta_p, theta_s], axis=1)
-                if ag_model is None:
-                    logger.warning(
-                        "ag_model is not specified, choosing the ensembled model"
-                    )
-                    ag_model = "WeightedEnsemble_L2"
                 mesh_graph_embeddings = th.repeat_interleave(
                     graph_embeddings, n_repeat, dim=0
                 )
@@ -406,7 +396,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         n_stages: int,
         seed: Optional[int],
         use_ag: bool,
-        ag_model: str,
+        ag_model: Dict[str, str],
         algo: str,
         query_id: Optional[str],
         save_data: bool,
@@ -499,7 +489,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         n_stages: int,
         seed: Optional[int],
         use_ag: bool,
-        ag_model: str,
+        ag_model: Dict[str, str],
         algo: str,
         query_id: Optional[str],
         save_data: bool,
@@ -714,8 +704,10 @@ class HierarchicalOptimizer(BaseOptimizer):
 
         non_decision_features: Union[th.Tensor, pd.DataFrame]
         obj_model: Union[
+            Callable[
+                [np.ndarray, pd.DataFrame, np.ndarray, Dict[str, str]], np.ndarray
+            ],
             Callable[[th.Tensor, th.Tensor, th.Tensor, str], np.ndarray],
-            Callable[[np.ndarray, pd.DataFrame, np.ndarray, str], np.ndarray],
         ]
         if use_ag:
             obj_model = self.get_objective_values_ag_arr
@@ -792,7 +784,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         n_stages: int,
         seed: Optional[int],
         use_ag: bool,
-        ag_model: str,
+        ag_model: Dict[str, str],
         algo: str,
         query_id: Optional[str],
         save_data: bool,
@@ -833,8 +825,10 @@ class HierarchicalOptimizer(BaseOptimizer):
             }
         non_decision_features: Union[th.Tensor, pd.DataFrame]
         obj_model: Union[
+            Callable[
+                [np.ndarray, pd.DataFrame, np.ndarray, Dict[str, str]], np.ndarray
+            ],
             Callable[[th.Tensor, th.Tensor, th.Tensor, str], np.ndarray],
-            Callable[[np.ndarray, pd.DataFrame, np.ndarray, str], np.ndarray],
         ]
         if use_ag:
             obj_model = self.get_objective_values_ag_arr
@@ -916,7 +910,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         n_stages: int,
         seed: Optional[int],
         use_ag: bool,
-        ag_model: str,
+        ag_model: Dict[str, str],
         algo: str,
         query_id: Optional[str],
         save_data: bool,
@@ -966,8 +960,10 @@ class HierarchicalOptimizer(BaseOptimizer):
 
         non_decision_features: Union[th.Tensor, pd.DataFrame]
         obj_model: Union[
+            Callable[
+                [np.ndarray, pd.DataFrame, np.ndarray, Dict[str, str]], np.ndarray
+            ],
             Callable[[th.Tensor, th.Tensor, th.Tensor, str], np.ndarray],
-            Callable[[np.ndarray, pd.DataFrame, np.ndarray, str], np.ndarray],
         ]
         if use_ag:
             obj_model = self.get_objective_values_ag_arr

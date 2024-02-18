@@ -12,7 +12,7 @@
 import signal
 from dataclasses import dataclass
 from types import FrameType
-from typing import Any, Callable, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -47,7 +47,7 @@ class WSOptimizer:
         s_vars: List[Variable],
         params: Params,
         use_ag: bool,
-        ag_model: str,
+        ag_model: Dict[str, str],
     ) -> None:
         self.n_stages = n_stages
         self.query_id = query_id
