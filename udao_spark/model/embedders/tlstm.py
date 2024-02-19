@@ -37,9 +37,8 @@ class ChildSumTreeLSTMCell(nn.Module):
 
 
 class TreeLSTM(BaseGraphEmbedder):
-    """Averager Embedder network.
-    Computes an embedding for each operation using a linear layer,
-    then averages the embeddings of all operations in the graph.
+    """TreeLSTM Embedder network.
+    we extended the work to support other channels of inputs.
     """
 
     @dataclass

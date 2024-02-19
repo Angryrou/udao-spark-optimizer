@@ -141,6 +141,24 @@ def get_tree_lstm_params() -> ArgumentParser:
     return parser
 
 
+def get_qppnet_params() -> ArgumentParser:
+    parser = _get_graph_base_parser()
+    # fmt: off
+    # Embedder parameters
+    parser.add_argument("--output_size", type=int, default=32,
+                        help="Embedder output size")
+    parser.add_argument("--type_embedding_dim", type=int, default=8,
+                        help="Type embedding dimension")
+    parser.add_argument("--embedding_normalizer", type=str, default=None,
+                        help="Embedding normalizer")
+    parser.add_argument("--num_layers", type=int, default=5,
+                        help="Number of layers in Neural Unit of QPPNet")
+    parser.add_argument("--hidden_size", type=int, default=128,
+                        help="Hidden dimension of layers in the Neural Unit")
+    # fmt: on
+    return parser
+
+
 def get_graph_transformer_params() -> ArgumentParser:
     parser = _get_graph_base_parser()
     # fmt: off

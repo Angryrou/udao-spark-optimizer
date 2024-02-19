@@ -29,7 +29,9 @@ from udao_trace.utils import JsonHandler
 
 from ..utils.logging import logger
 from ..utils.params import QType, UdaoParams
+from .embedders.qppnet import QPPNet
 from .embedders.tlstm import TreeLSTM
+from .regressors.qppnet_out import QPPNetOut
 
 
 @dataclass
@@ -310,6 +312,74 @@ def get_tree_lstm_mlp(params: TreeLSTMParams) -> UdaoModel:
     return model
 
 
+@dataclass
+class QPPNetParams(UdaoParams):
+    iterator_shape: UdaoEmbedItemShape
+    op_groups: List[str]
+    op_node2id: Dict[str, int]
+
+    num_layers: int = 5
+    hidden_size: int = 128
+    output_size: int = 32
+    type_embedding_dim: int = 8
+    embedding_normalizer: Optional[str] = None
+
+    @classmethod
+    def from_dict(cls, data_dict: Dict[str, Any]) -> "QPPNetParams":
+        if "iterator_shape" not in data_dict:
+            raise ValueError("iterator_shape not found in data_dict")
+        if not isinstance(data_dict["iterator_shape"], UdaoEmbedItemShape):
+            iterator_shape_dict = data_dict["iterator_shape"]
+            data_dict["iterator_shape"] = UdaoEmbedItemShape(
+                embedding_input_shape=iterator_shape_dict["embedding_input_shape"],
+                feature_names=iterator_shape_dict["feature_names"],
+                output_names=iterator_shape_dict["output_names"],
+            )
+        return cls(**data_dict)
+
+    def to_dict(self) -> Dict[str, object]:
+        return {
+            k: v if not isinstance(v, UdaoEmbedItemShape) else v.__dict__
+            for k, v in self.__dict__.items()
+            if v is not None
+        }
+
+    def hash(self) -> str:
+        attributes_tuple = str(
+            (
+                str(self.iterator_shape),
+                tuple(self.op_groups),
+                self.output_size,
+                self.type_embedding_dim,
+                self.embedding_normalizer,
+                self.num_layers,
+                self.hidden_size,
+            )
+        ).encode("utf-8")
+        sha256_hash = hashlib.sha256(attributes_tuple)
+        hex12 = sha256_hash.hexdigest()[:12]
+        return "qppnet_" + hex12
+
+
+def get_qppnet(params: QPPNetParams) -> UdaoModel:
+    model = UdaoModel.from_config(
+        embedder_cls=QPPNet,
+        regressor_cls=QPPNetOut,
+        iterator_shape=params.iterator_shape,
+        embedder_params={
+            "output_size": params.output_size,  # 128
+            "op_groups": params.op_groups,  # ["type", "cbo", "op_enc"]
+            "type_embedding_dim": params.type_embedding_dim,  # 8
+            "embedding_normalizer": params.embedding_normalizer,  # None
+            "num_layers": params.num_layers,  # 5
+            "hidden_size": params.hidden_size,  # 128
+            "op_node2id": params.op_node2id,
+        },
+        regressor_params={},
+    )
+    return model
+
+
 def weights_found(ckp_learning_header: str) -> Optional[str]:
     files = glob.glob(f"{ckp_learning_header}/*.ckpt")
     if len(files) == 0:
@@ -362,6 +432,11 @@ def get_tuned_trainer(
         trainer = pl.Trainer(accelerator=device, logger=tb_logger)
         return trainer, module, ckp_learning_header
     logger.info("Model weights not found, training...")
+
+    loss_weights: Optional[Dict[str, float]] = None
+    if isinstance(model.embedder, QPPNet):
+        loss_weights = {obj: 1.0 if obj == "latency_s" else 0.0 for obj in objectives}
+
     module = UdaoModule(
         model,
         objectives,
@@ -371,6 +446,7 @@ def get_tuned_trainer(
             min_lr=params.min_lr,  # 1e-5
             weight_decay=params.weight_decay,  # 1e-2
         ),
+        loss_weights=loss_weights,
         metrics=[WeightedMeanAbsolutePercentageError],
     )
     filename_suffix = "-".join(
