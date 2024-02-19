@@ -9,12 +9,14 @@ import dgl
 import lightning.pytorch as pl
 import numpy as np
 import pytorch_warmup as warmup
+import torch as th
 from autogluon.core.metrics import make_scorer
 from lightning import Trainer
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.loggers import TensorBoardLogger
 from torchmetrics import WeightedMeanAbsolutePercentageError
 from udao.data import BaseIterator
+from udao.data.utils.query_plan import QueryPlanStructure
 from udao.data.utils.utils import DatasetType
 from udao.model import MLP, GraphAverager, GraphTransformer, UdaoModel, UdaoModule
 from udao.model.embedders.layers.multi_head_attention import AttentionLayerName
@@ -110,13 +112,24 @@ class GraphTransformerMLPParams(UdaoParams):
                 feature_names=iterator_shape_dict["feature_names"],
                 output_names=iterator_shape_dict["output_names"],
             )
+        if "attention_layer_name" in data_dict:
+            if (
+                data_dict["attention_layer_name"] == "RAAL"
+                and "non_siblings_map" not in data_dict
+            ):
+                raise ValueError("non_siblings_map not found for RAAL")
+            if (
+                data_dict["attention_layer_name"] == "QF"
+                and "max_dist" not in data_dict
+            ):
+                raise ValueError("max_dist not found for QF")
         return cls(**data_dict)
 
     def to_dict(self) -> Dict[str, object]:
         return {
             k: v if not isinstance(v, UdaoEmbedItemShape) else v.__dict__
             for k, v in self.__dict__.items()
-            if v is not None and k != "non_siblings_map"
+            if v is not None and k not in ["non_siblings_map"]
         }
 
     def hash(self) -> str:
@@ -343,6 +356,70 @@ def get_non_siblings_map(
             non_sibling[eid] = total_nids.difference(set(child_dep[dst]))
         non_siblings_map[i] = {k: list(v) for k, v in non_sibling.items()}
     return non_siblings_map
+
+
+def add_distance_to_graphs(
+    dgl_dict: Dict[int, QueryPlanStructure]
+) -> Tuple[Dict[int, QueryPlanStructure], int]:
+    dst2src_dep_dict = {}  # src2dst
+    d_dict = {}  # d
+    for i, query in dgl_dict.items():
+        g = query.graph
+        dep, d = {}, {}
+        srcs, dsts = g.edges()
+        for src, dst in zip(srcs.numpy(), dsts.numpy()):
+            if dst not in dep:
+                dep[dst] = [src]
+            else:
+                dep[dst].append(src)
+            d[(src, dst)] = [1]
+        dst2src_dep_dict[i] = dep
+
+        g_src_nids = th.where(g.in_degrees() == 0)[0]
+        for g_src_nid in g_src_nids:  # get entry ids
+            for rank in dgl.bfs_nodes_generator(g, g_src_nid):  # bfs ranks
+                for dst_nid in rank.numpy():
+                    if dst_nid not in dep:
+                        continue
+                    src_nids_cur = dep[dst_nid]
+                    d_ = 1
+                    while len(src_nids_cur) > 0:
+                        src_nids_next = []
+                        for src_nid in src_nids_cur:
+                            if d_ == 1:
+                                assert 1 in d[(src_nid, dst_nid)]
+                            if src_nid in dep:
+                                src_nids_next += dep[src_nid]
+                            if (src_nid, dst_nid) in d and d_ not in d[
+                                (src_nid, dst_nid)
+                            ]:
+                                d[(src_nid, dst_nid)].append(d_)
+                            else:
+                                d[(src_nid, dst_nid)] = [d_]
+                        d_ += 1
+                        src_nids_cur = src_nids_next
+        d_dict[i] = d
+
+    new_dgl_dict = {}
+    for i, d in d_dict.items():
+        sids, dids, ds = [], [], []
+        for sd, d_list in d.items():
+            for d_i in d_list:
+                sids.append(sd[0])
+                dids.append(sd[1])
+                ds.append(d_i)
+        new_g = dgl.graph((sids, dids))
+        new_g.edata["dist"] = th.tensor(ds, dtype=th.int32)
+        for k in dgl_dict[i].graph.ndata.keys():
+            new_g.ndata[k] = dgl_dict[i].graph.ndata[k]
+        new_dgl_dict[i] = new_g
+
+    for i, new_g in new_dgl_dict.items():
+        dgl_dict[i].graph = new_g
+
+    max_dist = max([v.edata["dist"].max().item() for v in new_dgl_dict.values()])
+
+    return dgl_dict, max_dist
 
 
 LAT_MIN_MAP = {
