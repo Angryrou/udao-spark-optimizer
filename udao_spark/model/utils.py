@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import dgl
 import lightning.pytorch as pl
+import networkx as nx
 import numpy as np
 import pytorch_warmup as warmup
 import torch as th
@@ -514,66 +515,52 @@ def get_non_siblings_map(
     return non_siblings_map
 
 
-def add_distance_to_graphs(
+def add_dist_to_graphs(
     dgl_dict: Dict[int, QueryPlanStructure]
 ) -> Tuple[Dict[int, QueryPlanStructure], int]:
-    dst2src_dep_dict = {}  # src2dst
-    d_dict = {}  # d
+    new_g_dict = {}
     for i, query in dgl_dict.items():
         g = query.graph
-        dep, d = {}, {}
-        srcs, dsts = g.edges()
-        for src, dst in zip(srcs.numpy(), dsts.numpy()):
-            if dst not in dep:
-                dep[dst] = [src]
-            else:
-                dep[dst].append(src)
-            d[(src, dst)] = [1]
-        dst2src_dep_dict[i] = dep
+        g_nx = dgl.to_networkx(g).to_directed()
+        lengths = dict(nx.all_pairs_dijkstra_path_length(g_nx, weight="weight"))
 
-        g_src_nids = th.where(g.in_degrees() == 0)[0]
-        for g_src_nid in g_src_nids:  # get entry ids
-            for rank in dgl.bfs_nodes_generator(g, g_src_nid):  # bfs ranks
-                for dst_nid in rank.numpy():
-                    if dst_nid not in dep:
-                        continue
-                    src_nids_cur = dep[dst_nid]
-                    d_ = 1
-                    while len(src_nids_cur) > 0:
-                        src_nids_next = []
-                        for src_nid in src_nids_cur:
-                            if d_ == 1:
-                                assert 1 in d[(src_nid, dst_nid)], f"{g}"
-                            if src_nid in dep:
-                                src_nids_next += dep[src_nid]
-                            if (src_nid, dst_nid) in d and d_ not in d[
-                                (src_nid, dst_nid)
-                            ]:
-                                d[(src_nid, dst_nid)].append(d_)
-                            else:
-                                d[(src_nid, dst_nid)] = [d_]
-                        d_ += 1
-                        src_nids_cur = src_nids_next
-        d_dict[i] = d
+        # Step 2: Initialize g_new with the same number of nodes as g
+        g_new = dgl.graph(([], []), num_nodes=g.number_of_nodes())
 
-    new_dgl_dict = {}
-    for i, d in d_dict.items():
-        sids, dids, ds = [], [], []
-        for sd, d_list in d.items():
-            for d_i in d_list:
-                sids.append(sd[0])
-                dids.append(sd[1])
-                ds.append(d_i)
-        new_g = dgl.graph((sids, dids))
-        new_g.edata["dist"] = th.tensor(ds, dtype=th.int32)
-        for k in dgl_dict[i].graph.ndata.keys():
-            new_g.ndata[k] = dgl_dict[i].graph.ndata[k]
-        new_dgl_dict[i] = new_g
+        # Transfer node features from g to g_new
+        for feature_name in g.ndata:
+            g_new.ndata[feature_name] = g.ndata[feature_name]
 
-    for i, new_g in new_dgl_dict.items():
+        # Step 3: Add edges and shortest path distances to g_new
+        src_list = []
+        dst_list = []
+        distances = []
+
+        for src, dsts in lengths.items():
+            for dst, dist in dsts.items():
+                # Skip self-loops
+                if src != dst:
+                    src_list.append(src)
+                    dst_list.append(dst)
+                    distances.append(dist)
+
+        # Convert lists to tensors for DGL
+        src_tensor = th.tensor(src_list, dtype=th.long)
+        dst_tensor = th.tensor(dst_list, dtype=th.long)
+        distances_tensor = th.tensor(distances, dtype=th.int32)
+
+        # Add edges to g_new
+        g_new.add_edges(src_tensor, dst_tensor)
+
+        # Add edge distances to g_new
+        g_new.edata["dist"] = distances_tensor
+
+        new_g_dict[i] = g_new
+
+    for i, new_g in new_g_dict.items():
         dgl_dict[i].graph = new_g
 
-    max_dist = max([v.edata["dist"].max().item() for v in new_dgl_dict.values()])
+    max_dist = max([v.edata["dist"].max().item() for v in new_g_dict.values()])
 
     return dgl_dict, max_dist
 

@@ -12,7 +12,7 @@ from udao_spark.data.utils import checkpoint_model_structure, get_split_iterator
 from udao_spark.model.utils import (
     GraphTransformerMLPParams,
     MyLearningParams,
-    add_distance_to_graphs,
+    add_dist_to_graphs,
     get_graph_transformer_mlp,
     get_tuned_trainer,
 )
@@ -54,7 +54,7 @@ if __name__ == "__main__":
     if not isinstance(dp, DataProcessor):
         raise TypeError(f"Expected DataProcessor, got {type(dp)}")
     template_plans = dp.feature_extractors["query_structure"].template_plans
-    new_template_plans, max_dist = add_distance_to_graphs(template_plans)
+    new_template_plans, max_dist = add_dist_to_graphs(template_plans)
     for k, v in split_iterators.items():
         split_iterators[k].query_structure_container.template_plans = new_template_plans
     # Model definition and training
