@@ -29,6 +29,35 @@ from udao_trace.utils import JsonHandler
 
 from ..utils.logging import logger
 from ..utils.params import QType, UdaoParams
+from .embedders.tlstm import TreeLSTM
+
+
+@dataclass
+class MyLearningParams(UdaoParams):
+    epochs: int = 2
+    batch_size: int = 512
+    init_lr: float = 1e-1
+    min_lr: float = 1e-5
+    weight_decay: float = 1e-2
+
+    @classmethod
+    def from_dict(cls, data_dict: Dict[str, Any]) -> "MyLearningParams":
+        return cls(**data_dict)
+
+    def hash(self) -> str:
+        attributes_tuple = ",".join(
+            f"{x:g}" if isinstance(x, float) else str(x)
+            for x in (
+                self.epochs,
+                self.batch_size,
+                self.init_lr,
+                self.min_lr,
+                self.weight_decay,
+            )
+        ).encode("utf-8")
+        sha256_hash = hashlib.sha256(attributes_tuple)
+        hex12 = sha256_hash.hexdigest()[:12]
+        return "learning_" + hex12
 
 
 @dataclass
@@ -78,6 +107,26 @@ class GraphAverageMLPParams(UdaoParams):
         sha256_hash = hashlib.sha256(attributes_tuple)
         hex12 = sha256_hash.hexdigest()[:12]
         return "graph_avg_" + hex12
+
+
+def get_graph_avg_mlp(params: GraphAverageMLPParams) -> UdaoModel:
+    model = UdaoModel.from_config(
+        embedder_cls=GraphAverager,
+        regressor_cls=MLP,
+        iterator_shape=params.iterator_shape,
+        embedder_params={
+            "output_size": params.output_size,  # 32
+            "op_groups": params.op_groups,  # ["type", "cbo", "op_enc"]
+            "type_embedding_dim": params.type_embedding_dim,  # 8
+            "embedding_normalizer": params.embedding_normalizer,  # None
+        },
+        regressor_params={
+            "n_layers": params.n_layers,  # 3
+            "hidden_dim": params.hidden_dim,  # 512
+            "dropout": params.dropout,  # 0.1
+        },
+    )
+    return model
 
 
 @dataclass
@@ -154,54 +203,6 @@ class GraphTransformerMLPParams(UdaoParams):
         return f"graph_{self.attention_layer_name.lower()}_" + hex12
 
 
-@dataclass
-class MyLearningParams(UdaoParams):
-    epochs: int = 2
-    batch_size: int = 512
-    init_lr: float = 1e-1
-    min_lr: float = 1e-5
-    weight_decay: float = 1e-2
-
-    @classmethod
-    def from_dict(cls, data_dict: Dict[str, Any]) -> "MyLearningParams":
-        return cls(**data_dict)
-
-    def hash(self) -> str:
-        attributes_tuple = ",".join(
-            f"{x:g}" if isinstance(x, float) else str(x)
-            for x in (
-                self.epochs,
-                self.batch_size,
-                self.init_lr,
-                self.min_lr,
-                self.weight_decay,
-            )
-        ).encode("utf-8")
-        sha256_hash = hashlib.sha256(attributes_tuple)
-        hex12 = sha256_hash.hexdigest()[:12]
-        return "learning_" + hex12
-
-
-def get_graph_avg_mlp(params: GraphAverageMLPParams) -> UdaoModel:
-    model = UdaoModel.from_config(
-        embedder_cls=GraphAverager,
-        regressor_cls=MLP,
-        iterator_shape=params.iterator_shape,
-        embedder_params={
-            "output_size": params.output_size,  # 32
-            "op_groups": params.op_groups,  # ["type", "cbo", "op_enc"]
-            "type_embedding_dim": params.type_embedding_dim,  # 8
-            "embedding_normalizer": params.embedding_normalizer,  # None
-        },
-        regressor_params={
-            "n_layers": params.n_layers,  # 3
-            "hidden_dim": params.hidden_dim,  # 512
-            "dropout": params.dropout,  # 0.1
-        },
-    )
-    return model
-
-
 def get_graph_transformer_mlp(params: GraphTransformerMLPParams) -> UdaoModel:
     model = UdaoModel.from_config(
         embedder_cls=GraphTransformer,
@@ -220,6 +221,85 @@ def get_graph_transformer_mlp(params: GraphTransformerMLPParams) -> UdaoModel:
             "attention_layer_name": params.attention_layer_name,  # "GTN"
             "max_dist": params.max_dist,  # None
             "non_siblings_map": params.non_siblings_map,  # None
+        },
+        regressor_params={
+            "n_layers": params.n_layers,  # 3
+            "hidden_dim": params.hidden_dim,  # 512
+            "dropout": params.dropout,  # 0.1
+        },
+    )
+    return model
+
+
+@dataclass
+class TreeLSTMParams(UdaoParams):
+    iterator_shape: UdaoEmbedItemShape
+    op_groups: List[str]
+    output_size: int = 32
+    lstm_hidden_dim: int = 32
+    lstm_dropout: float = 0.0
+    readout: str = "mean"
+    type_embedding_dim: int = 8
+    embedding_normalizer: Optional[str] = None
+    # MLP
+    n_layers: int = 2
+    hidden_dim: int = 32
+    dropout: float = 0.1
+
+    @classmethod
+    def from_dict(cls, data_dict: Dict[str, Any]) -> "TreeLSTMParams":
+        if "iterator_shape" not in data_dict:
+            raise ValueError("iterator_shape not found in data_dict")
+        if not isinstance(data_dict["iterator_shape"], UdaoEmbedItemShape):
+            iterator_shape_dict = data_dict["iterator_shape"]
+            data_dict["iterator_shape"] = UdaoEmbedItemShape(
+                embedding_input_shape=iterator_shape_dict["embedding_input_shape"],
+                feature_names=iterator_shape_dict["feature_names"],
+                output_names=iterator_shape_dict["output_names"],
+            )
+        return cls(**data_dict)
+
+    def to_dict(self) -> Dict[str, object]:
+        return {
+            k: v if not isinstance(v, UdaoEmbedItemShape) else v.__dict__
+            for k, v in self.__dict__.items()
+            if v is not None
+        }
+
+    def hash(self) -> str:
+        attributes_tuple = str(
+            (
+                str(self.iterator_shape),
+                tuple(self.op_groups),
+                self.output_size,
+                self.lstm_hidden_dim,
+                self.lstm_dropout,
+                self.readout,
+                self.type_embedding_dim,
+                self.embedding_normalizer,
+                self.n_layers,
+                self.hidden_dim,
+                self.dropout,
+            )
+        ).encode("utf-8")
+        sha256_hash = hashlib.sha256(attributes_tuple)
+        hex12 = sha256_hash.hexdigest()[:12]
+        return "tree_lstm_" + hex12
+
+
+def get_tree_lstm_mlp(params: TreeLSTMParams) -> UdaoModel:
+    model = UdaoModel.from_config(
+        embedder_cls=TreeLSTM,
+        regressor_cls=MLP,
+        iterator_shape=params.iterator_shape,
+        embedder_params={
+            "output_size": params.output_size,  # 128
+            "hidden_dim": params.lstm_hidden_dim,  #
+            "dropout": params.lstm_dropout,  # 0.0
+            "readout": params.readout,  # "mean"
+            "op_groups": params.op_groups,  # ["type", "cbo", "op_enc"]
+            "type_embedding_dim": params.type_embedding_dim,  # 8
+            "embedding_normalizer": params.embedding_normalizer,  # None
         },
         regressor_params={
             "n_layers": params.n_layers,  # 3
@@ -387,7 +467,7 @@ def add_distance_to_graphs(
                         src_nids_next = []
                         for src_nid in src_nids_cur:
                             if d_ == 1:
-                                assert 1 in d[(src_nid, dst_nid)]
+                                assert 1 in d[(src_nid, dst_nid)], f"{g}"
                             if src_nid in dep:
                                 src_nids_next += dep[src_nid]
                             if (src_nid, dst_nid) in d and d_ not in d[
