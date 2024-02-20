@@ -3,6 +3,7 @@ from typing import cast
 
 import torch as th
 from udao.data import QueryPlanIterator
+from udao.data.handler.data_processor import DataProcessor
 from udao.data.utils.query_plan import random_flip_positional_encoding
 from udao.model.utils.utils import set_deterministic_torch
 from udao.utils.logging import logger
@@ -12,12 +13,13 @@ from udao_spark.model.utils import (
     GraphTransformerMLPParams,
     MyLearningParams,
     get_graph_transformer_mlp,
+    get_non_siblings_map,
     get_tuned_trainer,
     save_mlp_training_results,
 )
 from udao_spark.utils.collaborators import PathWatcher, TypeAdvisor
 from udao_spark.utils.params import ExtractParams, get_graph_transformer_params
-from udao_trace.utils import JsonHandler
+from udao_trace.utils import JsonHandler, PickleHandler
 
 logger.setLevel("INFO")
 if __name__ == "__main__":
@@ -49,6 +51,14 @@ if __name__ == "__main__":
     split_iterators["train"].set_augmentations(
         [train_iterator.make_graph_augmentation(random_flip_positional_encoding)]
     )
+    dp = PickleHandler.load(pw.cc_extract_prefix, "data_processor.pkl")
+    if not isinstance(dp, DataProcessor):
+        raise TypeError(f"Expected DataProcessor, got {type(dp)}")
+    template_plans = dp.feature_extractors["query_structure"].template_plans
+    non_siblings_map = get_non_siblings_map(
+        {k: query.graph for k, query in template_plans.items()}
+    )
+
     # Model definition and training
     model_params = GraphTransformerMLPParams.from_dict(
         {
@@ -64,6 +74,8 @@ if __name__ == "__main__":
             "n_layers": params.n_layers,
             "hidden_dim": params.hidden_dim,
             "dropout": params.dropout,
+            "attention_layer_name": "RAAL",
+            "non_siblings_map": non_siblings_map,
         }
     )
     learning_params = MyLearningParams.from_dict(

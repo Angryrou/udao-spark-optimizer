@@ -113,7 +113,53 @@ def get_graph_avg_params() -> ArgumentParser:
     return parser
 
 
-def get_graph_gtn_params() -> ArgumentParser:
+def get_tree_lstm_params() -> ArgumentParser:
+    parser = _get_graph_base_parser()
+    # fmt: off
+    # Embedder parameters
+    parser.add_argument("--output_size", type=int, default=32,
+                        help="Embedder output size")
+    parser.add_argument("--lstm_hidden_dim", type=int, default=32,
+                        help="Hidden dimension of the LSTM")
+    parser.add_argument("--lstm_dropout", type=float, default=0.0,
+                        help="Dropout rate in the LSTM")
+    parser.add_argument("--readout", type=str, default="mean",
+                        choices=["mean", "max", "sum"],
+                        help="Readout function")
+    parser.add_argument("--type_embedding_dim", type=int, default=8,
+                        help="Type embedding dimension")
+    parser.add_argument("--embedding_normalizer", type=str, default=None,
+                        help="Embedding normalizer")
+    # Regressor parameters
+    parser.add_argument("--n_layers", type=int, default=2,
+                        help="Number of layers in the regressor")
+    parser.add_argument("--hidden_dim", type=int, default=32,
+                        help="Hidden dimension of the regressor")
+    parser.add_argument("--dropout", type=float, default=0.1,
+                        help="Dropout rate")
+    # fmt: on
+    return parser
+
+
+def get_qppnet_params() -> ArgumentParser:
+    parser = _get_graph_base_parser()
+    # fmt: off
+    # Embedder parameters
+    parser.add_argument("--output_size", type=int, default=32,
+                        help="Embedder output size")
+    parser.add_argument("--type_embedding_dim", type=int, default=8,
+                        help="Type embedding dimension")
+    parser.add_argument("--embedding_normalizer", type=str, default=None,
+                        help="Embedding normalizer")
+    parser.add_argument("--num_layers", type=int, default=5,
+                        help="Number of layers in Neural Unit of QPPNet")
+    parser.add_argument("--hidden_size", type=int, default=128,
+                        help="Hidden dimension of layers in the Neural Unit")
+    # fmt: on
+    return parser
+
+
+def get_graph_transformer_params() -> ArgumentParser:
     parser = _get_graph_base_parser()
     # fmt: off
     # Embedder parameters
