@@ -601,7 +601,7 @@ def save_mlp_training_results(
             preds = trainer.predict(
                 model=module,
                 dataloaders=iterator.get_dataloader(
-                    batch_size=params.batch_size,
+                    batch_size=len(iterator.objectives.data),
                     num_workers=0 if params.debug else params.num_workers,
                     shuffle=False,
                 ),
