@@ -1,14 +1,17 @@
 import glob
 import hashlib
+import os.path
+from argparse import Namespace
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 import dgl
 import lightning.pytorch as pl
 import networkx as nx
 import numpy as np
+import pandas as pd
 import pytorch_warmup as warmup
 import torch as th
 from autogluon.core.metrics import make_scorer
@@ -16,7 +19,7 @@ from lightning import Trainer
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.loggers import TensorBoardLogger
 from torchmetrics import WeightedMeanAbsolutePercentageError
-from udao.data import BaseIterator
+from udao.data import BaseIterator, QueryPlanIterator
 from udao.data.utils.query_plan import QueryPlanStructure
 from udao.data.utils.utils import DatasetType
 from udao.model import MLP, GraphAverager, GraphTransformer, UdaoModel, UdaoModule
@@ -26,7 +29,7 @@ from udao.model.utils.losses import WMAPELoss
 from udao.model.utils.schedulers import UdaoLRScheduler, setup_cosine_annealing_lr
 from udao.utils.interfaces import UdaoEmbedItemShape
 
-from udao_trace.utils import JsonHandler
+from udao_trace.utils import JsonHandler, PickleHandler
 
 from ..utils.logging import logger
 from ..utils.params import QType, UdaoParams
@@ -563,6 +566,58 @@ def add_dist_to_graphs(
     max_dist = max([v.edata["dist"].max().item() for v in new_g_dict.values()])
 
     return dgl_dict, max_dist
+
+
+def save_mlp_training_results(
+    trainer: Trainer,
+    module: UdaoModule,
+    split_iterators: Dict[DatasetType, BaseIterator],
+    params: Namespace,
+    ckp_learning_header: str,
+    test_results: Dict,
+) -> Dict[str, pd.DataFrame]:
+    obj_df_dict = {}
+    for split, iterator in split_iterators.items():
+        if split == "train":
+            # remove the random flipping postional encoding augmentation if any.
+            iterator.set_augmentations([])
+        iterator = cast(QueryPlanIterator, iterator)
+        test_file_name = (
+            f"obj_df_{split}_with_"
+            + "_".join([f"{k}={v:.3f}" for k, v in test_results.items()])
+            + ".pkl"
+        )
+        if os.path.exists(f"{ckp_learning_header}/{test_file_name}"):
+            try:
+                cache = PickleHandler.load(ckp_learning_header, test_file_name)
+            except Exception as e:
+                raise e
+            print("find cached results")
+            if not isinstance(cache, pd.DataFrame):
+                raise TypeError(f"obj_df is not a DataFrame, but a {type(cache)}")
+            obj_df: pd.DataFrame = cache
+        else:
+            print(f"not found for {split}")
+            preds = trainer.predict(
+                model=module,
+                dataloaders=iterator.get_dataloader(
+                    batch_size=params.batch_size,
+                    num_workers=0 if params.debug else params.num_workers,
+                    shuffle=False,
+                ),
+            )
+            if preds is None:
+                raise Exception("trainer.predict returns none values")
+
+            obj_df = iterator.objectives.data
+            obj_names = obj_df.columns.to_list()
+            obj_pred_names = [f"{n}_pred" for n in obj_names]
+            obj_df[obj_pred_names] = cast(th.Tensor, preds[0]).detach().cpu().numpy()
+            PickleHandler.save(
+                obj_df, ckp_learning_header, test_file_name, overwrite=False
+            )
+        obj_df_dict[split] = obj_df
+    return obj_df_dict
 
 
 LAT_MIN_MAP = {

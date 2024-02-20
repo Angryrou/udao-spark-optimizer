@@ -10,6 +10,7 @@ from udao_spark.model.utils import (
     MyLearningParams,
     get_graph_avg_mlp,
     get_tuned_trainer,
+    save_mlp_training_results,
 )
 from udao_spark.utils.collaborators import PathWatcher, TypeAdvisor
 from udao_spark.utils.params import ExtractParams, get_graph_avg_params
@@ -103,3 +104,11 @@ if __name__ == "__main__":
         indent=2,
     )
     print(test_results)
+    obj_df = save_mlp_training_results(
+        trainer=trainer,
+        module=module,
+        split_iterators=split_iterators,
+        params=params,
+        ckp_learning_header=ckp_learning_header,
+        test_results=test_results[0],
+    )
