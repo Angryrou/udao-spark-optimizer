@@ -1,6 +1,7 @@
 import glob
 import hashlib
 import os.path
+import time
 from argparse import Namespace
 from collections import defaultdict
 from dataclasses import dataclass
@@ -568,7 +569,7 @@ def add_dist_to_graphs(
     return dgl_dict, max_dist
 
 
-def save_mlp_training_results(
+def save_mlp_training_results_one_batch(
     trainer: Trainer,
     module: UdaoModule,
     split_iterators: Dict[DatasetType, BaseIterator],
@@ -615,6 +616,75 @@ def save_mlp_training_results(
             obj_df[obj_pred_names] = cast(th.Tensor, preds[0]).detach().cpu().numpy()
             PickleHandler.save(
                 obj_df, ckp_learning_header, test_file_name, overwrite=False
+            )
+        obj_df_dict[split] = obj_df
+    return obj_df_dict
+
+
+def save_mlp_training_results(
+    trainer: Trainer,
+    module: UdaoModule,
+    split_iterators: Dict[DatasetType, BaseIterator],
+    params: Namespace,
+    ckp_learning_header: str,
+    test_results: Dict,
+) -> Dict[str, pd.DataFrame]:
+    obj_df_dict = {}
+    for split, iterator in split_iterators.items():
+        if split == "train":
+            # remove the random flipping postional encoding augmentation if any.
+            iterator.set_augmentations([])
+        iterator = cast(QueryPlanIterator, iterator)
+        test_file_name = (
+            f"obj_df_{split}_with_"
+            + "_".join([f"{k}={v:.3f}" for k, v in test_results.items()])
+            + ".pkl"
+        )
+        if os.path.exists(f"{ckp_learning_header}/{test_file_name}"):
+            try:
+                cache = PickleHandler.load(ckp_learning_header, test_file_name)
+            except Exception as e:
+                raise e
+            print("find cached results")
+            if not isinstance(cache, Dict) or "obj_df" not in cache:
+                raise KeyError("obj_df not found in cache")
+            if not isinstance(cache["obj_df"], pd.DataFrame):
+                raise TypeError("obj_df is not a DataFrame")
+            obj_df: pd.DataFrame = cache["obj_df"]
+        else:
+            print(f"not found for {split}, start creating...")
+            t1 = time.perf_counter_ns()
+            dataloader = iterator.get_dataloader(
+                batch_size=params.batch_size,
+                num_workers=0 if params.debug else params.num_workers,
+                shuffle=False,
+            )
+            t2 = time.perf_counter_ns()
+            all_pred = []
+            for batch_id, (feature, y) in enumerate(dataloader):
+                with th.no_grad():
+                    y_hat = module.model(feature).detach().cpu()
+                all_pred.append(y_hat)
+                if (batch_id + 1) % 10 == 0:
+                    print(f"batch {batch_id + 1}/{len(dataloader)} done")
+            pred = th.cat(all_pred, dim=0).numpy()
+            t3 = time.perf_counter_ns()
+
+            obj_df = iterator.objectives.data
+            obj_names = obj_df.columns.to_list()
+            obj_pred_names = [f"{n}_pred" for n in obj_names]
+            obj_df[obj_pred_names] = pred
+            PickleHandler.save(
+                {
+                    "obj_df": obj_df,
+                    "time_eval": {
+                        "data_prepare_ms": (t2 - t1) / 1e6,
+                        "pred_ms": (t3 - t2) / 1e6,
+                    },
+                },
+                ckp_learning_header,
+                test_file_name,
+                overwrite=False,
             )
         obj_df_dict[split] = obj_df
     return obj_df_dict
