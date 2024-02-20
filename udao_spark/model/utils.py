@@ -643,6 +643,7 @@ def save_mlp_training_results(
         test_file_name = (
             f"obj_df_{split}_with_"
             + "_".join([f"{k}={v:.3f}" for k, v in test_results.items()])
+            + f"{module.device}"
             + ".pkl"
         )
         if os.path.exists(f"{ckp_learning_header}/{test_file_name}"):
