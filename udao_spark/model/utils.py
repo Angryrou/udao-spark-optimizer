@@ -745,6 +745,28 @@ LAT_MIN_MAP = {
             "io_mb": 3.4332275390625e-05,
         },
     },
+    "tpcds": {
+        "q_compile": {
+            "latency_s": 3.882,
+            "io_mb": 2.68405247,
+        },
+        "q_all": {
+            "latency_s": 0.08,
+            "io_mb": 1.90734863e-05,
+        },
+        "qs_lqp_compile": {
+            "ana_latency_s": 0.0002,
+            "io_mb": 1.90734863e-05,
+        },
+        "qs_lqp_runtime": {
+            "ana_latency_s": 0.0002,
+            "io_mb": 1.90734863e-05,
+        },
+        "qs_pqp_runtime": {
+            "ana_latency_s": 0.0002,
+            "io_mb": 1.90734863e-05,
+        },
+    },
 }
 
 
