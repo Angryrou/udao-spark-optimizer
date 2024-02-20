@@ -629,6 +629,7 @@ def save_mlp_training_results(
     params: Namespace,
     ckp_learning_header: str,
     test_results: Dict,
+    device: str,
 ) -> Dict[str, pd.DataFrame]:
     obj_df_dict = {}
     module.model.eval()
@@ -643,7 +644,7 @@ def save_mlp_training_results(
         test_file_name = (
             f"obj_df_{split}_with_"
             + "_".join([f"{k}={v:.3f}" for k, v in test_results.items()])
-            + f"_{module.device}"
+            + f"_{device}"
             + ".pkl"
         )
         if os.path.exists(f"{ckp_learning_header}/{test_file_name}"):
@@ -665,7 +666,7 @@ def save_mlp_training_results(
         print(f"not found for {split}, start creating...")
         t1 = time.perf_counter_ns()
         dataloader = iterator.get_dataloader(
-            batch_size=params.batch_size,
+            batch_size=5000,
             num_workers=0 if params.debug else params.num_workers,
             shuffle=False,
         )

@@ -118,4 +118,5 @@ if __name__ == "__main__":
         params=params,
         ckp_learning_header=ckp_learning_header,
         test_results=test_results[0],
+        device=device,
     )
