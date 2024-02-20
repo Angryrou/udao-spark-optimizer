@@ -579,6 +579,7 @@ def save_mlp_training_results_one_batch(
     params: Namespace,
     ckp_learning_header: str,
     test_results: Dict,
+    device: str,
 ) -> Dict[str, pd.DataFrame]:
     obj_df_dict = {}
     for split, iterator in split_iterators.items():
@@ -587,38 +588,77 @@ def save_mlp_training_results_one_batch(
             iterator.set_augmentations([])
         iterator = cast(QueryPlanIterator, iterator)
         test_file_name = (
-            f"obj_df_{split}_with_"
+            f"obj_df_{split}_with_pred_"
             + "_".join([f"{k}={v:.3f}" for k, v in test_results.items()])
+            + f"_{device}"
             + ".pkl"
         )
         if os.path.exists(f"{ckp_learning_header}/{test_file_name}"):
             try:
                 cache = PickleHandler.load(ckp_learning_header, test_file_name)
+                print("find cached results")
+                if not isinstance(cache, Dict) or "obj_df" not in cache:
+                    raise KeyError("obj_df not found in cache")
+                if not isinstance(cache["obj_df"], pd.DataFrame):
+                    raise TypeError("obj_df is not a DataFrame")
+                obj_df: pd.DataFrame = cache["obj_df"]
+                obj_df_dict[split] = obj_df
+                for obj in iterator.objectives.data.columns:
+                    print(f"metrics for {obj}: {cache['metrics'][obj]}")
+                print(f"time_eval: {cache['time_eval']}")
+                continue
             except Exception as e:
                 raise e
-            print("find cached results")
-            if not isinstance(cache, pd.DataFrame):
-                raise TypeError(f"obj_df is not a DataFrame, but a {type(cache)}")
-            obj_df: pd.DataFrame = cache
         else:
             print(f"not found for {split}")
-            preds = trainer.predict(
-                model=module,
-                dataloaders=iterator.get_dataloader(
-                    batch_size=len(iterator.objectives.data),
-                    num_workers=0 if params.debug else params.num_workers,
-                    shuffle=False,
-                ),
+            t1 = time.perf_counter_ns()
+            datalaoder = iterator.get_dataloader(
+                batch_size=5000,
+                num_workers=0 if params.debug else params.num_workers,
+                shuffle=False,
             )
-            if preds is None:
+            print(f"we have {len(datalaoder)} batches")
+            t2 = time.perf_counter_ns()
+            pred_list = trainer.predict(model=module, dataloaders=datalaoder)
+            if (
+                not isinstance(pred_list, list)
+                or len(pred_list) == 0
+                or not isinstance(pred_list[0], th.Tensor)
+            ):
                 raise Exception("trainer.predict returns none values")
+            pred = th.cat(pred_list).detach().cpu().numpy()  # type: ignore
+            t3 = time.perf_counter_ns()
 
             obj_df = iterator.objectives.data
             obj_names = obj_df.columns.to_list()
             obj_pred_names = [f"{n}_pred" for n in obj_names]
-            obj_df[obj_pred_names] = cast(th.Tensor, preds[0]).detach().cpu().numpy()
+            obj_df[obj_pred_names] = pred
+            metrics: Dict[str, Dict[str, float]] = {}
+            for obj_ind, obj in enumerate(obj_names):
+                metrics[obj] = {}
+                y = obj_df[obj].values
+                y_pred = pred[:, obj_ind]
+                metrics[obj]["wmape"] = local_wmape(y, y_pred)
+                metrics[obj]["p50_err"] = local_p50_err(y, y_pred)
+                metrics[obj]["p90_err"] = local_p90_err(y, y_pred)
+                metrics[obj]["p50_wape"] = local_p50_wape(y, y_pred)
+                metrics[obj]["p90_wape"] = local_p90_wape(y, y_pred)
+                metrics[obj]["corr"] = float(np.corrcoef(y, y_pred)[0, 1])
+            time_eval = {
+                "data_prepare_ms": (t2 - t1) / 1e6,
+                "pred_ms": (t3 - t2) / 1e6,
+            }
+            print("metrics: ", metrics)
+            print("time_eval: ", time_eval)
             PickleHandler.save(
-                obj_df, ckp_learning_header, test_file_name, overwrite=False
+                {
+                    "obj_df": obj_df,
+                    "time_eval": time_eval,
+                    "metrics": metrics,
+                },
+                ckp_learning_header,
+                test_file_name,
+                overwrite=True,
             )
         obj_df_dict[split] = obj_df
     return obj_df_dict
