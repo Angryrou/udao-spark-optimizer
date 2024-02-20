@@ -21,6 +21,7 @@ from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.loggers import TensorBoardLogger
 from torchmetrics import WeightedMeanAbsolutePercentageError
 from udao.data import BaseIterator, QueryPlanIterator
+from udao.data.iterators.query_plan_iterator import QueryPlanInput
 from udao.data.utils.query_plan import QueryPlanStructure
 from udao.data.utils.utils import DatasetType
 from udao.model import MLP, GraphAverager, GraphTransformer, UdaoModel, UdaoModule
@@ -632,6 +633,9 @@ def save_mlp_training_results(
     device: str,
 ) -> Dict[str, pd.DataFrame]:
     obj_df_dict = {}
+    local_device = get_default_device()
+    print(f"show the local device: {local_device}")
+    module.model.to(local_device)
     module.model.eval()
     for p in module.model.parameters():
         p.requires_grad = False
@@ -674,6 +678,7 @@ def save_mlp_training_results(
         all_pred = []
         for batch_id, (feature, y) in enumerate(dataloader):
             with th.no_grad():
+                feature = cast(QueryPlanInput, feature).to(local_device)
                 y_hat = module.model(feature).detach().cpu()
             all_pred.append(y_hat)
             if (batch_id + 1) % 10 == 0:
