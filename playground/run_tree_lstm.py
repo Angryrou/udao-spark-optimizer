@@ -112,7 +112,6 @@ if __name__ == "__main__":
     )
     print(test_results)
     obj_df = save_mlp_training_results(
-        trainer=trainer,
         module=module,
         split_iterators=split_iterators,
         params=params,
