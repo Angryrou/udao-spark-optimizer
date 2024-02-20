@@ -181,7 +181,7 @@ class BaseOptimizer(ABC):
         return embedding_input, tabular_input
 
     def extract_non_decision_embeddings_from_df(
-        self, df: pd.DataFrame
+        self, df: pd.DataFrame, ercilla: bool = True
     ) -> Tuple[th.Tensor, th.Tensor]:
         """
         compute the graph_embedding and
@@ -199,8 +199,11 @@ class BaseOptimizer(ABC):
         t2 = time.perf_counter_ns()
         if self.verbose:
             logger.info(f">>> preprocessed df in {(t2 - t1) / 1e6} ms")
-        # embedding_input, tabular_input = self.general_extraction(df)
-        embedding_input, tabular_input = self.fast_extraction(df)
+
+        if ercilla:
+            embedding_input, tabular_input = self.fast_extraction(df)
+        else:
+            embedding_input, tabular_input = self.general_extraction(df)
 
         t3 = time.perf_counter_ns()
         if self.verbose:
