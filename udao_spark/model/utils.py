@@ -28,6 +28,7 @@ from udao.model.embedders.layers.multi_head_attention import AttentionLayerName
 from udao.model.module import LearningParams
 from udao.model.utils.losses import WMAPELoss
 from udao.model.utils.schedulers import UdaoLRScheduler, setup_cosine_annealing_lr
+from udao.optimization.utils.moo_utils import get_default_device
 from udao.utils.interfaces import UdaoEmbedItemShape
 
 from udao_trace.utils import JsonHandler, PickleHandler
@@ -433,6 +434,7 @@ def get_tuned_trainer(
             objectives=objectives,
             loss=WMAPELoss(),
             metrics=[WeightedMeanAbsolutePercentageError],
+            map_location=get_default_device(),
         )
         trainer = pl.Trainer(accelerator=device, logger=tb_logger)
         return trainer, module, ckp_learning_header
@@ -630,6 +632,9 @@ def save_mlp_training_results(
 ) -> Dict[str, pd.DataFrame]:
     obj_df_dict = {}
     module.model.eval()
+    for p in module.model.parameters():
+        p.requires_grad = False
+
     for split, iterator in split_iterators.items():
         if split == "train":
             # remove the random flipping postional encoding augmentation if any.
