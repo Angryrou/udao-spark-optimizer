@@ -14,7 +14,7 @@ import random
 import signal
 from dataclasses import dataclass
 from types import FrameType
-from typing import Any, Callable, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -82,7 +82,7 @@ class EvoOptimizer:
         theta_ktype: dict,
         params: Params,
         use_ag: bool,
-        ag_model: str,
+        ag_model: Dict[str, str],
     ) -> None:
         self.query_id = query_id
         self.n_stages = n_stages
@@ -367,7 +367,7 @@ class EvoOptimizer:
 
         mesh_theta_c: Union[np.ndarray, th.Tensor]
         theta_p_s: Union[np.ndarray, th.Tensor]
-        if self.use_ag and isinstance(self.ag_model, str):
+        if self.use_ag:
             assert isinstance(self.non_decision_tabular_features, pd.DataFrame)
             mesh_theta_c = np.tile(
                 vars_decoded[:, : self.len_theta_c], (self.n_stages, 1)

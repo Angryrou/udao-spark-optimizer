@@ -146,17 +146,18 @@ def get_graph_gtn_params() -> ArgumentParser:
 def get_ag_parameters() -> ArgumentParser:
     parser = get_base_parser()
     # fmt: off
-    parser.add_argument("--hp_choice", type=str, default="default",
-                        choices=["default", "tuned-0202"])
+    parser.add_argument("--hp_choice", type=str, default="tuned-0215",
+                        choices=["tuned-0215"])
     parser.add_argument("--graph_choice", type=str, default="gtn",
                         choices=["avg", "gtn"])
-    parser.add_argument("--ag_sign", type=str, default="ag_default_hp",
-                        choices=["ag_default_hp"])
+    parser.add_argument("--ag_sign", type=str, default="medium_quality")
     parser.add_argument("--num_gpus", type=int, default=2,)
     parser.add_argument("--infer_limit", type=float, default=None,
                         help="Inference limit, e.g., 1e-5")
     parser.add_argument("--infer_limit_batch_size", type=int, default=None,
                         help="Inference limit batch size, e.g., 50000")
+    parser.add_argument("--ag_time_limit", type=int, default=None,
+                        help="Time limit in seconds for the AG")
     # fmt: on
 
     return parser
@@ -167,15 +168,24 @@ def get_compile_time_optimizer_parameters() -> ArgumentParser:
     # fmt: off
     parser.add_argument("--use_mlp", action="store_true",
                         help="Enable MLP only")
-    parser.add_argument("--ag_model", type=str, default=None,
-                        help="specific model name for AG")
+    parser.add_argument("--ag_model_qs_ana_latency", type=str, default=None,
+                        help="specific model name for AG for QS_R ana_latency")
+    parser.add_argument("--ag_model_qs_io", type=str, default=None,
+                        help="specific model name for AG for QS_R IO")
 
     parser.add_argument("--save_data", action="store_true",
                         help="Enable to save data")
+    parser.add_argument("--save_data_header", type=str, default="./output",
+                        help="the head of data save path")
     parser.add_argument("--moo_algo", type=str, default="div_and_conq_moo%B",
                         choices=["div_and_conq_moo%B", "div_and_conq_moo%GD",
                             "evo", "ws", "ppf"],
                         help="Algorithm for the compile-time optimization",)
+    parser.add_argument("--n_c_samples", type=int, default=100,
+                        help="the number of random samples of theta_c")
+    parser.add_argument("--n_p_samples", type=int, default=100,
+                        help="the number of random samples of theta_p")
+
     parser.add_argument("--sample_mode", type=str, default="grid",
                         choices=["grid", "random"],
                         help="Sample type for div_and_conq_moo")

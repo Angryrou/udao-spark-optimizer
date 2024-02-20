@@ -9,29 +9,26 @@
 # Description: TODO
 #
 # Created at 04/01/2024
-
 import platform
 import random
 import signal
 import time
 from dataclasses import dataclass
 from multiprocessing import Pool
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
-# from torch.multiprocessing import Pool
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
-
-# import numba as nb
 import numpy as np
 import pandas as pd
-import pygmo as pg  # type: ignore
 import torch as th
-
-# th.multiprocessing.set_sharing_strategy('file_system')
-# from numba.typed import List
 from sklearn.cluster import KMeans
 
 from udao_spark.optimizer.moo_algos.dag_opt import DAGOpt
+from udao_spark.optimizer.utils import is_pareto_efficient
 
+# from sklearnex import patch_sklearn  # type: ignore
+
+
+# patch_sklearn()
 # Detect the CPU architecture
 cpu_arch = platform.machine()
 
@@ -81,7 +78,8 @@ class DivAndConqMOO:
         obj_model: Callable[[Any, Any, Any, Any], Any],
         params: Params,
         use_ag: bool,
-        ag_model: Optional[str] = None,
+        sample_funcs: Callable[[Any, Any, Any, Any], Any],
+        ag_model: Dict[str, str],
         seed: Optional[int] = None,
     ) -> None:
         self.n_stages = n_stages
@@ -105,6 +103,7 @@ class DivAndConqMOO:
 
         self.ag_model = ag_model
         self.use_ag = use_ag
+        self.sample_funcs = sample_funcs
 
         self.len_theta_c = params.c_samples.shape[1]
         self.len_theta = (
@@ -114,7 +113,7 @@ class DivAndConqMOO:
         )
         self.n_objs = 2
 
-    def solve(self) -> Tuple[np.ndarray, np.ndarray]:
+    def solve(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         if self.time_limit > 0:
 
             def signal_handler(signum: Any, frame: Any) -> None:
@@ -124,7 +123,7 @@ class DivAndConqMOO:
             signal.alarm(self.time_limit)
 
             try:
-                F, Theta = self.div_moo_solve()
+                F, Theta, model_infer_info = self.div_moo_solve()
                 signal.alarm(
                     0
                 )  ##cancel the timer if the function returned before timeout
@@ -134,13 +133,13 @@ class DivAndConqMOO:
                 Theta = np.array([[-1], [-1]])
                 print("Timed out for query")
         else:
-            F, Theta = self.div_moo_solve()
+            F, Theta, model_infer_info = self.div_moo_solve()
 
-        return F, Theta
+        return F, Theta, model_infer_info
 
-    def div_moo_solve(self) -> Tuple[np.ndarray, np.ndarray]:
+    def div_moo_solve(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         start_qs_tuning = time.time()
-        f_th, conf_th, indices_arr = self.get_qs_set()
+        f_th, conf_th, indices_arr, model_infer_info = self.get_qs_set()
         if self.verbose:
             print(
                 f"time cost of getting effective set is {time.time() - start_qs_tuning}"
@@ -150,9 +149,11 @@ class DivAndConqMOO:
         F, Theta = self.dag_opt(f_th, conf_th, indices_arr)
         if self.verbose:
             print(f"time cost of dag optimization is {time.time() - start_dag_opt}")
-        return F, Theta
+        return F, Theta, model_infer_info
 
-    def get_qs_set(self) -> Tuple[th.Tensor, th.Tensor, np.ndarray]:
+    def get_qs_set(
+        self,
+    ) -> Tuple[np.ndarray, Union[th.Tensor, np.ndarray], np.ndarray, np.ndarray]:
         # 1. randomly sample each QS
         clustering_features = self.c_samples
         p_samples, s_samples = self.p_samples, self.s_samples
@@ -164,6 +165,7 @@ class DivAndConqMOO:
             indices_arr,
             cluster_model,
             label_rep_theta_c_mapping,
+            model_infer_info_tune_p_est_exist,
         ) = self._cluster_based_estimate_opt_theta_p_s(
             self.n_clusters,
             clustering_features,
@@ -204,7 +206,21 @@ class DivAndConqMOO:
         start_predict = time.time()
         # predict labels
         if len(new_theta_c_list) == 0:
-            new_theta_c_list = union_opt_theta_c_list
+            n_new_samples = np.unique(union_opt_theta_c_list, axis=0).shape[0]
+            if self.use_ag:
+                new_theta_c_list = self.sample_funcs(
+                    n_new_samples,
+                    "c",
+                    self.seed + n_new_samples if self.seed is not None else None,
+                    False,
+                ).tolist()
+            else:
+                new_theta_c_list = self.sample_funcs(
+                    n_new_samples,
+                    "c",
+                    self.seed + n_new_samples if self.seed is not None else None,
+                    True,
+                ).tolist()
 
         pred_cluster_label = cluster_model.predict(new_theta_c_list)  # type: ignore
         if self.verbose:
@@ -237,6 +253,7 @@ class DivAndConqMOO:
             new_tuned_f_th,
             new_tuned_conf_th,
             new_indices_arr,
+            model_infer_info_est_new,
         ) = self._estimate_opt_theta_p_s(
             th.Tensor(new_theta_c_list),
             new_cluster_members,
@@ -254,13 +271,15 @@ class DivAndConqMOO:
             print()
         # 6. union all solutions
         start_union_all = time.time()
+        all_conf_th: Union[th.Tensor, np.ndarray]
         if isinstance(tuned_f_th, np.ndarray):
-            all_f_th = np.concatenate([tuned_f_th, new_tuned_f_th])
+            # all_f_th = np.concatenate([tuned_f_th, new_tuned_f_th])
             all_conf_th = np.concatenate([tuned_conf_th, new_tuned_conf_th])
         else:
-            assert isinstance(tuned_f_th, th.Tensor)
-            all_f_th = th.concatenate([tuned_f_th, new_tuned_f_th])
+            assert isinstance(tuned_conf_th, th.Tensor)
+            # all_f_th = th.concatenate([tuned_f_th, new_tuned_f_th])
             all_conf_th = th.concatenate([tuned_conf_th, new_tuned_conf_th])
+        all_f_th = np.concatenate([tuned_f_th, new_tuned_f_th])
         all_indices_arr = np.concatenate([indices_arr, new_indices_arr])
 
         if self.verbose:
@@ -269,11 +288,16 @@ class DivAndConqMOO:
                 f"is {time.time() - start_union_all}"
             )
             print()
-
-        return all_f_th, all_conf_th, all_indices_arr
+        final_model_infer_info = np.vstack(
+            (model_infer_info_tune_p_est_exist, model_infer_info_est_new)
+        )
+        return all_f_th, all_conf_th, all_indices_arr, final_model_infer_info
 
     def dag_opt(
-        self, f_th: th.Tensor, conf_th: th.Tensor, indices_arr: np.ndarray
+        self,
+        f_th: np.ndarray,
+        conf_th: Union[th.Tensor, np.ndarray],
+        indices_arr: np.ndarray,
     ) -> Tuple[np.ndarray, np.ndarray]:
         dag_opt = DAGOpt(f_th, conf_th, indices_arr, self.dag_opt_algo, self.runmode)
 
@@ -288,7 +312,14 @@ class DivAndConqMOO:
         p_samples: Union[th.Tensor, np.ndarray],
         s_samples: Union[th.Tensor, np.ndarray],
         cluster_algo: str,
-    ) -> Tuple[th.Tensor, th.Tensor, np.ndarray, object, Dict[Any, Any]]:
+    ) -> Tuple[
+        np.ndarray,
+        Union[th.Tensor, np.ndarray],
+        np.ndarray,
+        object,
+        Dict[Any, Any],
+        np.ndarray,
+    ]:
         # clustering theta_c
         start_cluster = time.time()
         clusters_labels, cluster_model = self._clustering_method(
@@ -304,7 +335,7 @@ class DivAndConqMOO:
             print()
 
         start_tune_p = time.time()
-        f_th, conf_th, indices_arr = self._tune_p(
+        f_th, conf_th, indices_arr, model_infer_info_tupe_p = self._tune_p(
             represent_theta_c,
             label_rep_theta_c_mapping,
             clustering_features,
@@ -319,7 +350,12 @@ class DivAndConqMOO:
             print()
         # estimate optimal theta_p and theta_s
         start_est_opt_p = time.time()
-        tuned_f_th, tuned_conf_th, tuned_indices_arr = self._estimate_opt_theta_p_s(
+        (
+            tuned_f_th,
+            tuned_conf_th,
+            tuned_indices_arr,
+            model_infer_info_est_exist,
+        ) = self._estimate_opt_theta_p_s(
             clustering_features,
             cluster_members,
             label_rep_theta_c_mapping,
@@ -333,12 +369,16 @@ class DivAndConqMOO:
                 f"is {time.time() - start_est_opt_p}"
             )
             print()
+        current_model_infer_info = np.vstack(
+            (model_infer_info_tupe_p, model_infer_info_est_exist)
+        )
         return (
             tuned_f_th,
             tuned_conf_th,
             tuned_indices_arr,
             cluster_model,
             label_rep_theta_c_mapping,
+            current_model_infer_info,
         )
 
     def _clustering_method(
@@ -396,7 +436,7 @@ class DivAndConqMOO:
         conf_df: Union[th.Tensor, np.ndarray],
         qs_indices: np.ndarray,
         mode: str = "estimate_exist",
-    ) -> Tuple[th.Tensor, th.Tensor, np.ndarray]:
+    ) -> Tuple[np.ndarray, Union[th.Tensor, np.ndarray], np.ndarray, np.ndarray]:
         start_df_query = time.time()
         c_inds_list = list(label_rep_theta_c_mapping.values())
         # col0: qs_id, col1: c_id, col2: p_id
@@ -502,7 +542,7 @@ class DivAndConqMOO:
         )
         # non_decision_features = self.non_decision_tabular_features
         mesh_non_decision_tabular_features: Union[th.Tensor, pd.DataFrame]
-        if self.use_ag and isinstance(self.ag_model, str):
+        if self.use_ag:
             assert isinstance(self.non_decision_tabular_features, pd.DataFrame)
             mesh_theta = mesh_theta.numpy()
 
@@ -545,7 +585,8 @@ class DivAndConqMOO:
             mesh_non_decision_tabular_features,
             mesh_theta,
         )
-
+        n_eval = mesh_theta.shape[0]
+        time_cost_model_predict = time.time() - start_predict
         if self.verbose:
             print(f"time cost of predict in est_opt_p is {time.time() - start_predict}")
 
@@ -573,21 +614,23 @@ class DivAndConqMOO:
                 f"is {time.time() - start_predict}"
             )
             print()
-
-        return objs, mesh_theta, indices_arr
+        model_infer_arr = np.array([n_eval, time_cost_model_predict])
+        return objs, mesh_theta, indices_arr, model_infer_arr
 
     def _union_opt_theta_c(
         self,
-        tuned_f_th: th.Tensor,
-        tuned_conf_th: th.Tensor,
+        tuned_f_th: np.ndarray,
+        tuned_conf_th: Union[th.Tensor, np.ndarray],
         indices_arr: np.ndarray,
     ) -> List[List[Any]]:
         local_opt_theta_c_list = []
         for stage_id in range(self.n_stages):
             qs_values_inds = np.where(indices_arr[:, 0] == stage_id)[0].tolist()
             qs_values = tuned_f_th[qs_values_inds]
-            po_ind = pg.non_dominated_front_2d(qs_values).astype(int)
-            po_theta_c = tuned_conf_th[po_ind, : self.c_samples.shape[1]].tolist()
+            po_ind = is_pareto_efficient(qs_values)
+            po_theta_c = tuned_conf_th[qs_values_inds][
+                po_ind, : self.c_samples.shape[1]
+            ].tolist()
             local_opt_theta_c_list.append(po_theta_c)
 
         return sum(local_opt_theta_c_list, [])
@@ -599,7 +642,9 @@ class DivAndConqMOO:
     ) -> List[List[Any]]:
         # crossover to generate new \theta_c
         uniq_res_c = np.unique(np.array(opt_c_list)[:, :location], axis=0)
-        uniq_non_res_c = np.unique(np.array(opt_c_list)[:, location:8], axis=0)
+        uniq_non_res_c = np.unique(
+            np.array(opt_c_list)[:, location : self.len_theta_c], axis=0
+        )
 
         if uniq_res_c.shape[0] <= uniq_non_res_c.shape[0]:
             theta_res_mesh = np.repeat(uniq_res_c, uniq_non_res_c.shape[0], axis=0)
@@ -657,7 +702,7 @@ class DivAndConqMOO:
         s_samples: Union[th.Tensor, np.ndarray],
         n_stages: int,
         filter_mode: str = "naive",
-    ) -> Tuple[np.ndarray, Union[th.Tensor, np.ndarray], np.ndarray]:
+    ) -> Tuple[np.ndarray, Union[th.Tensor, np.ndarray], np.ndarray, np.ndarray]:
         rep_c_samples = clustering_features[represent_theta_c]
 
         start_mesh_theta = time.time()
@@ -702,7 +747,7 @@ class DivAndConqMOO:
         )
 
         mesh_non_decision_tabular_features: Union[th.Tensor, pd.DataFrame]
-        if self.use_ag and isinstance(self.ag_model, str):
+        if self.use_ag:
             assert isinstance(self.non_decision_tabular_features, pd.DataFrame)
 
             mesh_non_decision_tabular_features = self.non_decision_tabular_features.loc[
@@ -728,6 +773,7 @@ class DivAndConqMOO:
             mesh_non_decision_tabular_features,
             mesh_theta,
         )
+        time_cost_model_predict = time.time() - start_predict
         if self.verbose:
             print(
                 f"time cost of predict objective values of mesh theta "
@@ -735,15 +781,26 @@ class DivAndConqMOO:
             )
 
         start_filter = time.time()
-        if isinstance(y_hat, np.ndarray):
+        split_theta: Sequence[Union[np.ndarray, th.Tensor]]
+        split_y_hat: List[np.ndarray]
+        if isinstance(mesh_theta, np.ndarray):
             split_times = n_stages * rep_c_samples.shape[0]
             split_y_hat = np.split(y_hat, split_times)
             split_theta = np.split(mesh_theta, split_times)
         else:
-            assert isinstance(y_hat, th.Tensor)
-            split_y_hat = th.split(y_hat, p_samples.shape[0])
+            # case for MLP
+            assert isinstance(mesh_theta, th.Tensor)
+            split_y_hat = np.split(y_hat, n_stages * rep_c_samples.shape[0])
+            # split_y_hat = th.split(y_hat, p_samples.shape[0])
             split_theta = th.split(mesh_theta, p_samples.shape[0])
 
+        # to guarantee each split has the same theta_c and different theta_p
+        assert all(
+            [
+                np.unique(x[:, : self.len_theta_c], axis=0).shape[0] == 1
+                for x in split_theta
+            ]
+        )
         conf_list: List[Any] = []
 
         if filter_mode == "naive":
@@ -777,7 +834,7 @@ class DivAndConqMOO:
                 f"all theta_c is {time.time() - start_filter}"
             )
 
-        if self.use_ag and isinstance(self.ag_model, str):
+        if self.use_ag:
             assert isinstance(f_list[0], np.ndarray)
             assert isinstance(conf_list[0], np.ndarray)
             all_confs_th = np.concatenate(conf_list)
@@ -786,21 +843,22 @@ class DivAndConqMOO:
             all_confs_th = th.concatenate(conf_list)
         all_f_th = np.concatenate(f_list)
         all_indices_arr = np.concatenate(indices_list)
-        return all_f_th, all_confs_th, all_indices_arr
+        model_infer_arr = np.array([n_evals, time_cost_model_predict])
+        return all_f_th, all_confs_th, all_indices_arr, model_infer_arr
 
     def _keep_opt_p_per_c(
         self,
         i: int,
         rep_c_samples: Union[th.Tensor, np.ndarray],
         label_rep_theta_c_mapping: dict,
-        sub_f: Union[th.Tensor, np.ndarray],
+        sub_f: np.ndarray,
         sub_conf: Union[th.Tensor, np.ndarray],
-    ) -> Tuple[Union[th.Tensor, np.ndarray], Union[th.Tensor, np.ndarray], np.ndarray]:
+    ) -> Tuple[np.ndarray, Union[th.Tensor, np.ndarray], np.ndarray]:
         stage_id = int(i / rep_c_samples.shape[0])
         c_id = label_rep_theta_c_mapping[int(i % rep_c_samples.shape[0])]
-        po_ind = pg.non_dominated_front_2d(sub_f).tolist()
+        po_ind = is_pareto_efficient(sub_f)
         po_objs = sub_f[po_ind]
-        po_confs = sub_conf[po_ind]
+        po_confs = sub_conf[po_ind, :]
 
         time.time()
         qs_ids = (
@@ -829,9 +887,9 @@ class DivAndConqMOO:
         mesh_graph_embeddings: th.Tensor,
         mesh_non_decision_tabular_features: Union[th.Tensor, pd.DataFrame],
         mesh_theta: th.Tensor,
-    ) -> th.Tensor:
+    ) -> np.ndarray:
         print(f"n_evals is {n_evals}")
-        if self.use_ag and isinstance(self.ag_model, str):
+        if self.use_ag:
             y_hat = self.obj_model(
                 mesh_graph_embeddings.cpu().numpy(),
                 mesh_non_decision_tabular_features,

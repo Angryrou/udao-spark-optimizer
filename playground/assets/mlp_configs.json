@@ -31,6 +31,33 @@
         "qs_lqp_runtime": "cache_and_ckp/tpch_22x2273/qs_lqp_runtime/ea0378f56dcf/graph_gtn_07151d1a2f2b/learning_b125dbcf7f40/199-val_latency_s_WMAPE=0.159-val_io_mb_WMAPE=0.091-val_ana_latency_s_WMAPE=0.115.ckpt",
         "qs_pqp_runtime": "cache_and_ckp/tpch_22x2273/qs_pqp_runtime/ea0378f56dcf/graph_gtn_4cd154d0b9b1/learning_b125dbcf7f40/199-val_latency_s_WMAPE=0.244-val_io_mb_WMAPE=0.130-val_ana_latency_s_WMAPE=0.158.ckpt"
       }
+    },
+    "tuned-0215": {
+      "gtn": {
+        "q_compile": "cache_and_ckp/tpch_22x2273/q_compile/ea0378f56dcf/graph_gtn_fccc00d9f160/learning_49d80a1a5e09/99-val_latency_s_WMAPE=0.175-val_io_mb_WMAPE=0.229.ckpt",
+        "q_all": "cache_and_ckp/tpch_22x2273/q_all/ea0378f56dcf/graph_gtn_e6d1b3a655fb/learning_1d20f22457c5/49-val_latency_s_WMAPE=0.130-val_io_mb_WMAPE=0.132.ckpt",
+        "qs_lqp_compile": "cache_and_ckp/tpch_22x2273/qs_lqp_compile/ea0378f56dcf/graph_gtn_931827a1d64e/learning_49d80a1a5e09/99-val_latency_s_WMAPE=0.148-val_io_mb_WMAPE=0.090-val_ana_latency_s_WMAPE=0.112.ckpt",
+        "qs_lqp_runtime": "cache_and_ckp/tpch_22x2273/qs_lqp_runtime/ea0378f56dcf/graph_gtn_07151d1a2f2b/learning_49d80a1a5e09/99-val_latency_s_WMAPE=0.143-val_io_mb_WMAPE=0.082-val_ana_latency_s_WMAPE=0.107.ckpt",
+        "qs_pqp_runtime": "cache_and_ckp/tpch_22x2273/qs_pqp_runtime/ea0378f56dcf/graph_gtn_00056929be83/learning_49d80a1a5e09/99-val_latency_s_WMAPE=0.191-val_io_mb_WMAPE=0.086-val_ana_latency_s_WMAPE=0.132.ckpt"
+      },
+      "avg": {
+        "q_compile": "cache_and_ckp/tpch_22x2273/q_compile/ea0378f56dcf/graph_avg_ecfa2baa5a5e/learning_49d80a1a5e09/99-val_latency_s_WMAPE=0.252-val_io_mb_WMAPE=0.372.ckpt",
+        "qs_lqp_compile": "cache_and_ckp/tpch_22x2273/qs_lqp_compile/ea0378f56dcf/graph_avg_f6b27efc6e76/learning_49d80a1a5e09/99-val_latency_s_WMAPE=0.209-val_io_mb_WMAPE=0.147-val_ana_latency_s_WMAPE=0.150.ckpt"
+      }
+    }
+  },
+  "tpcds": {
+    "tuned-0215": {
+      "gtn": {
+        "q_compile": "cache_and_ckp/tpcds_102x490/q_compile/ea0378f56dcf/graph_gtn_f6f9fc8c4308/learning_49d80a1a5e09/99-val_latency_s_WMAPE=0.229-val_io_mb_WMAPE=0.373.ckpt",
+        "q_all": "cache_and_ckp/tpcds_102x490/q_all/ea0378f56dcf/graph_gtn_5ff208c91c6d/learning_cf653bc09d09/24-val_latency_s_WMAPE=0.230-val_io_mb_WMAPE=0.237-v1.ckpt",
+        "qs_lqp_compile": "cache_and_ckp/tpcds_102x490/qs_lqp_compile/ea0378f56dcf/graph_gtn_d89e18934fab/learning_49d80a1a5e09/99-val_latency_s_WMAPE=0.227-val_io_mb_WMAPE=0.138-val_ana_latency_s_WMAPE=0.188.ckpt",
+        "qs_lqp_runtime": "cache_and_ckp/tpcds_102x490/qs_lqp_runtime/ea0378f56dcf/graph_gtn_78d77b5975c5/learning_49d80a1a5e09/99-val_latency_s_WMAPE=0.210-val_io_mb_WMAPE=0.121-val_ana_latency_s_WMAPE=0.176.ckpt",
+        "qs_pqp_runtime": "cache_and_ckp/tpcds_102x490/qs_pqp_runtime/ea0378f56dcf/graph_gtn_45007f16bb5e/learning_49d80a1a5e09/99-val_latency_s_WMAPE=0.253-val_io_mb_WMAPE=0.121-val_ana_latency_s_WMAPE=0.216.ckpt"
+      },
+      "avg": {
+        "q_compile": "cache_and_ckp/tpcds_102x490/q_compile/ea0378f56dcf/graph_avg_0aa20ee85b5c/learning_49d80a1a5e09/99-val_latency_s_WMAPE=0.325-val_io_mb_WMAPE=0.593.ckpt"
+      }
     }
   }
 }

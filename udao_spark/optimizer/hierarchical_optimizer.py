@@ -58,7 +58,8 @@ class HierarchicalOptimizer(BaseOptimizer):
         graph_embeddings: np.ndarray,
         non_decision_df: pd.DataFrame,
         sampled_theta: np.ndarray,
-        model_name: str,
+        model_name: Dict[str, str],
+        cost_choice: str = "ana_cost_w_io",
     ) -> np.ndarray:
         start_time_ns = time.perf_counter_ns()
         objs = self.ag_ms.predict_with_ag(
@@ -83,7 +84,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         )
 
         ana_latency = objs["ana_latency_s"]
-        ana_cost_w_io = objs_dict["ana_cost_w_io"]
+        ana_cost_w_io = objs_dict[cost_choice]
 
         return np.vstack((ana_latency, ana_cost_w_io)).T
 
@@ -92,7 +93,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         non_decision_input: Dict[str, Any],
         seed: Optional[int] = None,
         use_ag: bool = True,
-        ag_model: str = "",
+        ag_model: Dict = dict(),
         algo: str = "naive_example",
         save_data: bool = False,
         query_id: Optional[str] = None,
@@ -100,6 +101,8 @@ class HierarchicalOptimizer(BaseOptimizer):
         param1: int = -1,
         param2: int = -1,
         time_limit: int = -1,
+        is_oracle: bool = False,
+        save_data_header: str = "./output",
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         non_decision_df = self.extract_non_decision_df(non_decision_input)
         (
@@ -141,6 +144,7 @@ class HierarchicalOptimizer(BaseOptimizer):
                 algo,
                 save_data,
                 query_id,
+                save_data_header=save_data_header,
             )
 
         elif algo == "analyze_model_accuracy":
@@ -158,9 +162,12 @@ class HierarchicalOptimizer(BaseOptimizer):
                 algo,
                 query_id,
                 save_data,
+                save_data_header=save_data_header,
             )
 
         elif "div_and_conq_moo" in algo:
+            # n_c_samples: param1
+            # n_p_samples: param2
             objs, conf = self._div_and_conq_moo(
                 len_theta_per_qs,
                 graph_embeddings,
@@ -174,6 +181,10 @@ class HierarchicalOptimizer(BaseOptimizer):
                 query_id,
                 save_data,
                 sample_mode,
+                param1,
+                param2,
+                is_oracle,
+                save_data_header,
             )
 
         elif algo == "evo":
@@ -194,6 +205,7 @@ class HierarchicalOptimizer(BaseOptimizer):
                 param1,
                 param2,
                 time_limit,
+                save_data_header,
             )
 
         elif algo == "ws":
@@ -214,6 +226,7 @@ class HierarchicalOptimizer(BaseOptimizer):
                 param1,
                 param2,
                 time_limit,
+                save_data_header,
             )
 
         else:
@@ -228,7 +241,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         use_ag: bool,
         graph_embeddings: th.Tensor,
         n_stages: int,
-        ag_model: str,
+        ag_model: Dict[str, str],
         non_decision_df: pd.DataFrame,
         non_decision_tabular_features: th.Tensor,
         seed: Optional[int],
@@ -241,11 +254,6 @@ class HierarchicalOptimizer(BaseOptimizer):
                     f"does not match n_stages {n_stages}"
                 )
             sampled_theta = self.foo_samples(n_stages, seed, normalize=False)
-            if ag_model is None:
-                logger.warning(
-                    "ag_model is not specified, choosing the ensembled model"
-                )
-                ag_model = "WeightedEnsemble_L2"
             objs_dict = self.get_objective_values_ag(
                 graph_embeddings.numpy(), non_decision_df, sampled_theta, ag_model
             )
@@ -285,13 +293,14 @@ class HierarchicalOptimizer(BaseOptimizer):
         use_ag: bool,
         graph_embeddings: th.Tensor,
         n_stages: int,
-        ag_model: str,
+        ag_model: Dict[str, str],
         non_decision_df: pd.DataFrame,
         non_decision_tabular_features: th.Tensor,
         seed: Optional[int],
         algo: str,
         save_data: bool = False,
         query_id: Optional[str] = None,
+        save_data_header: str = "./output",
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         fake_objs = np.array([-1])
         start_infer = time.time()
@@ -329,11 +338,6 @@ class HierarchicalOptimizer(BaseOptimizer):
                     normalize=normalize,
                 )
                 theta = np.concatenate([theta_c, theta_p, theta_s], axis=1)
-                if ag_model is None:
-                    logger.warning(
-                        "ag_model is not specified, choosing the ensembled model"
-                    )
-                    ag_model = "WeightedEnsemble_L2"
                 mesh_graph_embeddings = th.repeat_interleave(
                     graph_embeddings, n_repeat, dim=0
                 )
@@ -357,7 +361,7 @@ class HierarchicalOptimizer(BaseOptimizer):
 
                 if save_data:
                     data_path = (
-                        f"./output/test/latest_model_{self.device.type}/"
+                        f"{save_data_header}/latest_model_{self.device.type}/"
                         f"test/{algo}_update/time_-1/"
                         f"query_{query_id}_n_{n_stages}/"
                         f"n_rows_{n_repeat * n_stages}"
@@ -392,10 +396,11 @@ class HierarchicalOptimizer(BaseOptimizer):
         n_stages: int,
         seed: Optional[int],
         use_ag: bool,
-        ag_model: str,
+        ag_model: Dict[str, str],
         algo: str,
         query_id: Optional[str],
         save_data: bool,
+        save_data_header: str,
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         theta_s: Union[th.Tensor, np.ndarray]
         theta_s = self.sample_theta_x(
@@ -467,7 +472,7 @@ class HierarchicalOptimizer(BaseOptimizer):
                 conf_qs0.reshape(1, -1).astype(float)
             ).squeeze()
             data_path = (
-                f"./output/test/latest_model_{self.device.type}/{algo}/time_-1/"
+                f"{save_data_header}/latest_model_{self.device.type}/{algo}/time_-1/"
                 f"query_{query_id}_n_{n_stages}/c_{conf2[0]}_{conf2[1]}_{conf2[2]}/grid"
             )
             save_results(data_path, test_query_objs, mode="F")
@@ -484,11 +489,15 @@ class HierarchicalOptimizer(BaseOptimizer):
         n_stages: int,
         seed: Optional[int],
         use_ag: bool,
-        ag_model: str,
+        ag_model: Dict[str, str],
         algo: str,
         query_id: Optional[str],
         save_data: bool,
         sample_mode: Optional[str],
+        n_c_samples: int,
+        n_p_samples: int,
+        is_oracle: bool,
+        save_data_header: str,
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         start = time.time()
         theta_c: Union[th.Tensor, np.ndarray]
@@ -511,10 +520,16 @@ class HierarchicalOptimizer(BaseOptimizer):
 
         if sample_mode == "random":
             theta_c_samples = self.sample_theta_x(
-                10, "c", seed if seed is not None else None, normalize=normalize
+                n_c_samples,
+                "c",
+                seed if seed is not None else None,
+                normalize=normalize,
             )
             theta_p_samples = self.sample_theta_x(
-                10, "p", seed + 1 if seed is not None else None, normalize=normalize
+                n_p_samples,
+                "p",
+                seed + 1 if seed is not None else None,
+                normalize=normalize,
             )
             if use_ag:
                 theta_c = theta_c_samples
@@ -523,27 +538,139 @@ class HierarchicalOptimizer(BaseOptimizer):
                 theta_c = th.tensor(theta_c_samples, dtype=th.float32)
                 theta_p = th.tensor(theta_p_samples, dtype=th.float32)
         elif sample_mode == "grid":
-            c_grids = [
-                [1, 5],
-                [1, 4],
-                [4, 16],
-                [1, 4],
-                [0, 5],
-                [0, 1],
-                [0, 1],
-                [50, 75],
-            ]
-            p_grids = [
-                [0, 5],
-                [1, 6],
-                [0, 32],
-                [0, 32],
-                [2, 50],
-                [0, 4],
-                [20, 80],
-                [0, 4],
-                [0, 4],
-            ]
+            if n_c_samples == 256:
+                c_grids = [
+                    [1, 5],
+                    [1, 4],
+                    [4, 16],
+                    [1, 4],
+                    [0, 5],
+                    [0, 1],
+                    [0, 1],
+                    [50, 75],
+                ]
+            elif n_c_samples == 128:
+                c_grids = [
+                    [1, 5],
+                    [1, 4],
+                    [4, 16],
+                    [1, 4],
+                    [0, 5],
+                    [0, 1],
+                    [1],
+                    [50, 75],
+                ]
+
+            elif n_c_samples == 64:
+                c_grids = [
+                    [1, 5],
+                    [1, 4],
+                    [4, 16],
+                    [1, 4],
+                    [0, 5],
+                    [0],
+                    [1],
+                    [50, 75],
+                ]
+            elif n_c_samples == 32:
+                c_grids = [
+                    [1, 5],
+                    [1, 4],
+                    [4, 16],
+                    [1, 4],
+                    [5],
+                    [0],
+                    [1],
+                    [50, 75],
+                ]
+            elif n_c_samples == 16:
+                c_grids = [
+                    [1, 5],
+                    [1, 4],
+                    [4, 16],
+                    [1, 4],
+                    [5],
+                    [0],
+                    [1],
+                    [50],
+                ]
+            else:
+                raise Exception(f"n_c_samples {n_c_samples} is not supported!")
+
+            if n_p_samples == 512:
+                p_grids = [
+                    [0, 5],
+                    [1, 6],
+                    [0, 32],
+                    [0, 32],
+                    [2, 50],
+                    [0, 4],
+                    [20, 80],
+                    [0, 4],
+                    [0, 4],
+                ]
+            elif n_p_samples == 256:
+                p_grids = [
+                    [0],
+                    [1, 6],
+                    [0, 32],
+                    [0, 32],
+                    [2, 50],
+                    [0, 4],
+                    [20, 80],
+                    [0, 4],
+                    [0, 4],
+                ]
+            elif n_p_samples == 128:
+                p_grids = [
+                    [0],
+                    [1, 6],
+                    [0, 32],
+                    [0, 32],
+                    [2, 50],
+                    [0, 4],
+                    [20, 80],
+                    [0],
+                    [0, 4],
+                ]
+            elif n_p_samples == 64:
+                p_grids = [
+                    [0],
+                    [1],
+                    [0, 32],
+                    [0, 32],
+                    [2, 50],
+                    [0, 4],
+                    [20, 80],
+                    [0],
+                    [0, 4],
+                ]
+            elif n_p_samples == 32:
+                p_grids = [
+                    [0],
+                    [1],
+                    [0, 32],
+                    [0, 32],
+                    [2, 50],
+                    [0],
+                    [20, 80],
+                    [0],
+                    [0, 4],
+                ]
+            elif n_p_samples == 16:
+                p_grids = [
+                    [0],
+                    [1],
+                    [0, 32],
+                    [0, 32],
+                    [2, 50],
+                    [0],
+                    [20, 80],
+                    [0],
+                    [0],
+                ]
+            else:
+                raise Exception(f"n_p_samples {n_p_samples} is not supported!")
 
             if use_ag:
                 theta_c = np.array([list(i) for i in itertools.product(*c_grids)])
@@ -555,8 +682,6 @@ class HierarchicalOptimizer(BaseOptimizer):
                 theta_p_samples = np.array(
                     [list(i) for i in itertools.product(*p_grids)]
                 )
-                # s_samples = np.array([list(i)
-                # for i in itertools.product(*s_grids)])
                 c_samples_norm = (theta_c_samples - self.theta_minmax["c"][0]) / (
                     self.theta_minmax["c"][1] - self.theta_minmax["c"][0]
                 )
@@ -565,6 +690,9 @@ class HierarchicalOptimizer(BaseOptimizer):
                     self.theta_minmax["p"][1] - self.theta_minmax["p"][0]
                 )
                 theta_p = th.tensor(p_samples_norm, dtype=th.float32)
+
+            n_c_samples = theta_c.shape[0]
+            n_p_samples = theta_p.shape[0]
 
         else:
             raise Exception(
@@ -576,8 +704,10 @@ class HierarchicalOptimizer(BaseOptimizer):
 
         non_decision_features: Union[th.Tensor, pd.DataFrame]
         obj_model: Union[
+            Callable[
+                [np.ndarray, pd.DataFrame, np.ndarray, Dict[str, str]], np.ndarray
+            ],
             Callable[[th.Tensor, th.Tensor, th.Tensor, str], np.ndarray],
-            Callable[[np.ndarray, pd.DataFrame, np.ndarray, str], np.ndarray],
         ]
         if use_ag:
             obj_model = self.get_objective_values_ag_arr
@@ -603,8 +733,9 @@ class HierarchicalOptimizer(BaseOptimizer):
                 verbose=True,
             ),
             seed=0,
+            sample_funcs=self.sample_theta_x,
         )
-        po_objs, po_conf = div_moo.solve()
+        po_objs, po_conf, model_infer_info = div_moo.solve()
         time_cost = time.time() - start
         print(f"query id is {query_id}")
         print(f"FUNCTION: time cost of div_and_conq_moo is: {time_cost}")
@@ -620,22 +751,23 @@ class HierarchicalOptimizer(BaseOptimizer):
                 -1, len_theta_per_qs
             )
             data_path = (
-                f"./output/test/latest_model_{self.device.type}/ag/{algo}/time_-1/"
-                f"query_{query_id}_n_{n_stages}/{sample_mode}/use_ag_{use_ag}/{dag_opt_algo}"
+                f"{save_data_header}/latest_model_{self.device.type}/ag/oracle_{is_oracle}/{algo}/{n_c_samples}_{n_p_samples}/time_-1/"
+                f"query_{query_id}_n_{n_stages}/{sample_mode}/{dag_opt_algo}"
             )
         else:
             conf_raw = self.sc.construct_configuration_from_norm(conf_qs0).reshape(
                 -1, len_theta_per_qs
             )
             data_path = (
-                f"./output/test/latest_model_{self.device.type}/mlp/{algo}/time_-1/"
-                f"query_{query_id}_n_{n_stages}/{sample_mode}/use_ag_{use_ag}/{dag_opt_algo}"
+                f"{save_data_header}/latest_model_{self.device.type}/mlp/oracle_{is_oracle}/{algo}/{n_c_samples}_{n_p_samples}/time_-1/"
+                f"query_{query_id}_n_{n_stages}/{sample_mode}/{dag_opt_algo}"
             )
 
         if save_data:
             save_results(data_path, po_objs, mode="F")
             save_results(data_path, conf_raw, mode="Theta")
             save_results(data_path, np.array([time_cost]), mode="time")
+            save_results(data_path, model_infer_info, mode="model_infer_info")
 
         # add WUN
         objs, conf = weighted_utopia_nearest_impl(po_objs, conf_raw)
@@ -652,13 +784,14 @@ class HierarchicalOptimizer(BaseOptimizer):
         n_stages: int,
         seed: Optional[int],
         use_ag: bool,
-        ag_model: str,
+        ag_model: Dict[str, str],
         algo: str,
         query_id: Optional[str],
         save_data: bool,
         pop_size: int,
         nfe: int,
         time_limit: int,
+        save_data_header: str,
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         start = time.time()
         if use_ag:
@@ -692,8 +825,10 @@ class HierarchicalOptimizer(BaseOptimizer):
             }
         non_decision_features: Union[th.Tensor, pd.DataFrame]
         obj_model: Union[
+            Callable[
+                [np.ndarray, pd.DataFrame, np.ndarray, Dict[str, str]], np.ndarray
+            ],
             Callable[[th.Tensor, th.Tensor, th.Tensor, str], np.ndarray],
-            Callable[[np.ndarray, pd.DataFrame, np.ndarray, str], np.ndarray],
         ]
         if use_ag:
             obj_model = self.get_objective_values_ag_arr
@@ -746,12 +881,12 @@ class HierarchicalOptimizer(BaseOptimizer):
 
         if use_ag:
             data_path = (
-                f"./output/test/latest_model_{self.device.type}/ag/{algo}/{pop_size}_{nfe}/time_{time_limit}/"
+                f"{save_data_header}/latest_model_{self.device.type}/ag/{algo}/{pop_size}_{nfe}/time_{time_limit}/"
                 f"query_{query_id}_n_{n_stages}/"
             )
         else:
             data_path = (
-                f"./output/test/latest_model_{self.device.type}/mlp/{algo}/{pop_size}_{nfe}/time_{time_limit}/"
+                f"{save_data_header}/latest_model_{self.device.type}/mlp/{algo}/{pop_size}_{nfe}/time_{time_limit}/"
                 f"query_{query_id}_n_{n_stages}/"
             )
 
@@ -775,13 +910,14 @@ class HierarchicalOptimizer(BaseOptimizer):
         n_stages: int,
         seed: Optional[int],
         use_ag: bool,
-        ag_model: str,
+        ag_model: Dict[str, str],
         algo: str,
         query_id: Optional[str],
         save_data: bool,
         n_samples_per_param: int,
         n_ws: int,
         time_limit: int,
+        save_data_header: str,
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         start = time.time()
         if use_ag:
@@ -824,8 +960,10 @@ class HierarchicalOptimizer(BaseOptimizer):
 
         non_decision_features: Union[th.Tensor, pd.DataFrame]
         obj_model: Union[
+            Callable[
+                [np.ndarray, pd.DataFrame, np.ndarray, Dict[str, str]], np.ndarray
+            ],
             Callable[[th.Tensor, th.Tensor, th.Tensor, str], np.ndarray],
-            Callable[[np.ndarray, pd.DataFrame, np.ndarray, str], np.ndarray],
         ]
         if use_ag:
             obj_model = self.get_objective_values_ag_arr
@@ -882,12 +1020,12 @@ class HierarchicalOptimizer(BaseOptimizer):
 
         if use_ag:
             data_path = (
-                f"./output/test/latest_model_{self.device.type}/ag/{algo}/{n_samples_per_param}_{n_ws}/time_{time_limit}/"
+                f"{save_data_header}/latest_model_{self.device.type}/ag/{algo}/{n_samples_per_param}_{n_ws}/time_{time_limit}/"
                 f"query_{query_id}_n_{n_stages}/"
             )
         else:
             data_path = (
-                f"./output/test/latest_model_{self.device.type}/mlp/{algo}/{n_samples_per_param}_{n_ws}/time_{time_limit}/"
+                f"{save_data_header}/latest_model_{self.device.type}/mlp/{algo}/{n_samples_per_param}_{n_ws}/time_{time_limit}/"
                 f"query_{query_id}_n_{n_stages}/"
             )
 

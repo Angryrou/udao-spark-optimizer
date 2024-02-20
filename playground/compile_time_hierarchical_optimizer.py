@@ -38,6 +38,7 @@ if __name__ == "__main__":
         ag_sign,
         infer_limit,
         infer_limit_batch_size,
+        params.ag_time_limit,
     )
 
     # Initialize HierarchicalOptimizer and Model
@@ -93,15 +94,22 @@ if __name__ == "__main__":
             param1 = params.n_samples
             param2 = params.n_ws
         elif "div_and_conq_moo" in params.moo_algo:
-            param1, param2 = 0, 0
+            param1 = params.n_c_samples
+            param2 = params.n_p_samples
         else:
             raise Exception(f"algo {params.moo_algo} is not supported!")
+
+        ag_model = {
+            "ana_latency_s": params.ag_model_qs_ana_latency
+            or "WeightedEnsemble_L2_FULL",
+            "io_mb": params.ag_model_qs_io or "CatBoost",
+        }
 
         po_points = hier_optimizer.solve(
             non_decision_input,
             seed=params.seed,
             use_ag=use_ag,
-            ag_model=params.ag_model,
+            ag_model=ag_model,
             algo=params.moo_algo,
             save_data=params.save_data,
             query_id=query_id,
@@ -109,4 +117,6 @@ if __name__ == "__main__":
             param1=param1,
             param2=param2,
             time_limit=params.time_limit,
+            is_oracle=is_oracle,
+            save_data_header=params.save_data_header,
         )

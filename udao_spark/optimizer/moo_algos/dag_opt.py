@@ -12,19 +12,20 @@
 import itertools
 import time
 from multiprocessing import Pool
-from typing import Any, List, Tuple
+from typing import Any, List, Tuple, Union
 
 import numpy as np
-import pygmo as pg  # type: ignore
 import torch as th
 from tqdm import tqdm  # type: ignore
+
+from udao_spark.optimizer.utils import is_pareto_efficient
 
 
 class DAGOpt:
     def __init__(
         self,
-        f: th.Tensor,
-        conf: th.Tensor,
+        f: np.ndarray,
+        conf: Union[th.Tensor, np.ndarray],
         indices_arr: np.ndarray,
         algo: str,
         runmode: str,
@@ -62,7 +63,10 @@ class DAGOpt:
 
     # ------------Approximate solve------------------------------#
     def approx_solve(
-        self, f_th: th.Tensor, conf_th: th.Tensor, indices_arr: np.ndarray
+        self,
+        f_th: np.ndarray,
+        conf_th: Union[th.Tensor, np.ndarray],
+        indices_arr: np.ndarray,
     ) -> Tuple[np.ndarray, np.ndarray]:
         start = time.time()
         sorted_index = np.lexsort(
@@ -71,14 +75,14 @@ class DAGOpt:
         qs_indices = indices_arr[sorted_index]
         stages = np.unique(qs_indices[:, 0])
         np.unique(qs_indices[:, 1]).astype(int)
-        if isinstance(f_th, np.ndarray):
-            qs_f_all = f_th[sorted_index]
+        if isinstance(conf_th, np.ndarray):
+            # qs_f_all = f_th[sorted_index]
             qs_conf_all = conf_th[sorted_index]
         else:
-            assert isinstance(f_th, th.Tensor)
-            qs_f_all = f_th.numpy()[sorted_index]
+            assert isinstance(conf_th, th.Tensor)
+            # qs_f_all = f_th.numpy()[sorted_index]
             qs_conf_all = conf_th.numpy()[sorted_index]
-
+        qs_f_all = f_th[sorted_index]
         uniq_theta_c = np.unique(qs_conf_all[:, :8], axis=0)
         print(f"the number of theta_c is: {uniq_theta_c.shape[0]}")
         if self.verbose:
@@ -144,7 +148,7 @@ class DAGOpt:
             )
 
         start_filter_global = time.time()
-        po_query_ind = pg.non_dominated_front_2d(boundary_query_objs)
+        po_query_ind = is_pareto_efficient(boundary_query_objs)
         po_query_objs = boundary_query_objs[po_query_ind]
         po_query_confs = all_confs_qs[po_query_ind]
         uniq_po_query_objs, uniq_po_query_inds = np.unique(
@@ -164,8 +168,8 @@ class DAGOpt:
     # -------------General Hierarchical MOO-----------------------#
     def _hier_moo(
         self,
-        f_th: th.Tensor,
-        conf_th: th.Tensor,
+        f_th: np.ndarray,
+        conf_th: Union[th.Tensor, np.ndarray],
         ws_pairs: List[List[Any]],
         indices_arr: np.ndarray,
     ) -> Tuple[np.ndarray, np.ndarray]:
@@ -177,8 +181,16 @@ class DAGOpt:
         stages = np.unique(qs_indices[:, 0])
         c_ids = np.unique(qs_indices[:, 1]).astype(int)
         print(f"the number of theta_c is: {c_ids.shape[0]}")
-        qs_f_all = f_th.numpy()[sorted_index]
-        qs_conf_all = conf_th.numpy()[sorted_index]
+        # qs_f_all = f_th.numpy()[sorted_index]
+        # qs_conf_all = conf_th.numpy()[sorted_index]
+        if isinstance(conf_th, np.ndarray):
+            # qs_f_all = f_th[sorted_index]
+            qs_conf_all = conf_th[sorted_index]
+        else:
+            assert isinstance(conf_th, th.Tensor)
+            # qs_f_all = f_th.numpy()[sorted_index]
+            qs_conf_all = conf_th.numpy()[sorted_index]
+        qs_f_all = f_th[sorted_index]
         if self.verbose:
             print(
                 f"time cost of getting values and indices of f and conf "
@@ -237,7 +249,7 @@ class DAGOpt:
         start_filter_global = time.time()
         query_f_arr = np.concatenate(query_f_list)
         query_conf_arr = np.concatenate(query_conf_list)
-        po_query_ind = pg.non_dominated_front_2d(query_f_arr)
+        po_query_ind = is_pareto_efficient(query_f_arr)
         po_query_objs = query_f_arr[po_query_ind]
         po_query_confs = query_conf_arr[po_query_ind]
         if self.verbose:
@@ -294,8 +306,8 @@ class DAGOpt:
     # -------------Sequential Divide-and-Conquer-------------------#
     def _seq_div_and_conq(
         self,
-        f_th: th.Tensor,
-        conf_th: th.Tensor,
+        f_th: np.ndarray,
+        conf_th: Union[th.Tensor, np.ndarray],
         indices_arr: np.ndarray,
     ) -> Tuple[np.ndarray, np.ndarray]:
         if self.verbose:
@@ -309,13 +321,22 @@ class DAGOpt:
         stages = np.unique(qs_indices[:, 0])
         c_ids = np.unique(qs_indices[:, 1]).astype(int)
         # print(f"the number of theta_c is: {c_ids.shape[0]}")
-        if isinstance(f_th, np.ndarray):
-            qs_f_all = f_th[sorted_index]
+        # if isinstance(f_th, np.ndarray):
+        #     qs_f_all = f_th[sorted_index]
+        #     qs_conf_all = conf_th[sorted_index]
+        # else:
+        #     assert isinstance(f_th, th.Tensor)
+        #     qs_f_all = f_th.numpy()[sorted_index]
+        #     qs_conf_all = conf_th.numpy()[sorted_index]
+
+        if isinstance(conf_th, np.ndarray):
+            # qs_f_all = f_th[sorted_index]
             qs_conf_all = conf_th[sorted_index]
         else:
-            assert isinstance(f_th, th.Tensor)
-            qs_f_all = f_th.numpy()[sorted_index]
+            assert isinstance(conf_th, th.Tensor)
+            # qs_f_all = f_th.numpy()[sorted_index]
             qs_conf_all = conf_th.numpy()[sorted_index]
+        qs_f_all = f_th[sorted_index]
         uniq_theta_c = np.unique(qs_conf_all[:, :8], axis=0)
         print(f"the number of theta_c is: {uniq_theta_c.shape[0]}")
         if self.verbose:
@@ -373,7 +394,7 @@ class DAGOpt:
         start_filter_global = time.time()
         query_f_arr = np.concatenate(query_f_list)
         query_conf_arr = np.concatenate(query_conf_list)
-        po_query_ind = pg.non_dominated_front_2d(query_f_arr)
+        po_query_ind = is_pareto_efficient(query_f_arr)
         po_query_objs = query_f_arr[po_query_ind]
         po_query_confs = query_conf_arr[po_query_ind]
 
@@ -506,7 +527,7 @@ class DAGOpt:
         all_confs: List[Tuple[Any, ...]],
     ) -> Tuple[np.ndarray, np.ndarray]:
         arr_points = np.array(all_objs)
-        po_inds = pg.non_dominated_front_2d(arr_points).tolist()
+        po_inds = is_pareto_efficient(arr_points).tolist()
         po_objs = arr_points[po_inds]
 
         po_confs = np.array(all_confs)[po_inds]
