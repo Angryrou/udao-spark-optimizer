@@ -643,7 +643,7 @@ def save_mlp_training_results(
         test_file_name = (
             f"obj_df_{split}_with_"
             + "_".join([f"{k}={v:.3f}" for k, v in test_results.items()])
-            + f"{module.device}"
+            + f"_{module.device}"
             + ".pkl"
         )
         if os.path.exists(f"{ckp_learning_header}/{test_file_name}"):
@@ -656,7 +656,8 @@ def save_mlp_training_results(
                     raise TypeError("obj_df is not a DataFrame")
                 obj_df: pd.DataFrame = cache["obj_df"]
                 obj_df_dict[split] = obj_df
-                print(f"metrics: {cache['metrics']}")
+                for obj in iterator.objectives.data.columns:
+                    print(f"metrics for {obj}: {cache['metrics'][obj]}")
                 print(f"time_eval: {cache['time_eval']}")
                 continue
             except Exception as e:
@@ -683,16 +684,17 @@ def save_mlp_training_results(
         obj_names = obj_df.columns.to_list()
         obj_pred_names = [f"{n}_pred" for n in obj_names]
         obj_df[obj_pred_names] = pred
-        metrics = {}
+        metrics: Dict[str, Dict[str, float]] = {}
         for obj_ind, obj in enumerate(obj_names):
+            metrics[obj] = {}
             y = obj_df[obj].values
             y_pred = pred[:, obj_ind]
-            metrics["wmape"] = local_wmape(y, y_pred)
-            metrics["p50_err"] = local_p50_err(y, y_pred)
-            metrics["p90_err"] = local_p90_err(y, y_pred)
-            metrics["p50_wape"] = local_p50_wape(y, y_pred)
-            metrics["p90_wape"] = local_p90_wape(y, y_pred)
-            metrics["corr"] = np.corrcoef(y, y_pred)[0, 1]
+            metrics[obj]["wmape"] = local_wmape(y, y_pred)
+            metrics[obj]["p50_err"] = local_p50_err(y, y_pred)
+            metrics[obj]["p90_err"] = local_p90_err(y, y_pred)
+            metrics[obj]["p50_wape"] = local_p50_wape(y, y_pred)
+            metrics[obj]["p90_wape"] = local_p90_wape(y, y_pred)
+            metrics[obj]["corr"] = float(np.corrcoef(y, y_pred)[0, 1])
         time_eval = {
             "data_prepare_ms": (t2 - t1) / 1e6,
             "pred_ms": (t3 - t2) / 1e6,
