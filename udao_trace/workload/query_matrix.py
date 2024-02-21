@@ -16,7 +16,6 @@ class QueryMatrix(object):
 
     def get_query_as_template_variant(self, i: int) -> Tuple[str, int]:
         template = self.queries[i]
-        variant = (
-            i // self.n_templates
-        ) + 1  # variant indexed from 1, such q1-1, q1-2, q1-3, ...
+        variant = (i // self.n_templates) + 1
+        # variant indexed from 1, such 1-1, 1-2, 1-3, ...
         return template, variant

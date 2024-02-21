@@ -4,7 +4,7 @@ import subprocess
 import sys
 import time
 from multiprocessing import Manager, Pool
-from typing import Callable, Dict, Tuple
+from typing import Callable, Dict, List, Tuple
 
 import pandas as pd
 
@@ -232,6 +232,32 @@ class SparkCollector:
             total=total,
             header=lhs_header,
             get_next=prepare_lhs_i,
+            cluster_cores=cluster_cores,
+            n_processes=n_processes,
+        )
+
+    def start_eval(
+        self,
+        eval_header: str,
+        configurations: List[Dict],
+        cluster_cores: int = 120,
+        n_processes: int = 6,
+    ) -> None:
+        def prepare_eval_i(index: int) -> Tuple[str, int, str, int]:
+            conf = configurations[index]
+            (template, qid), configuration = list(conf.items())[0]
+            knob_sign = self.spark_conf.conf2sign(
+                configuration[knob_name] for knob_name in self.spark_conf.knob_names
+            )
+            cores = int(configuration["spark.executor.cores"]) * (
+                int(configuration["spark.executor.instances"]) + 1
+            )
+            return template, qid, knob_sign, cores
+
+        self._start(
+            total=len(configurations),
+            header=eval_header,
+            get_next=prepare_eval_i,
             cluster_cores=cluster_cores,
             n_processes=n_processes,
         )

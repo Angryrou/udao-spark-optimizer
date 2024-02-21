@@ -168,3 +168,5 @@ playground/assets/optimizer_preparation
 
 output/
 AutogluonModels/
+
+evaluations/
