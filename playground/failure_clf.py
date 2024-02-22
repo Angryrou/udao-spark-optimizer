@@ -88,7 +88,7 @@ for i, df_q_all in all_confs.items():
         infer_limit_batch_size=10000,
         included_model_types=["XGB", "CAT"],
         hyperparameters="toy",
-        presets=["good_quality", "optimize_for_deployment"],
+        presets=["medium_quality", "optimize_for_deployment"],
         verbosity=1,
     )
     eval_stats = predictor.evaluate(test_data)
