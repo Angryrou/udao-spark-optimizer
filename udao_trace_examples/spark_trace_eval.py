@@ -99,7 +99,7 @@ if __name__ == "__main__":
     )
 
     if args.default:
-        header = f"{spark_collector.header}/default"
+        header = f"{spark_collector.header}/default_conf"
         configuration = {
             k.name: k.default for k in spark_collector.spark_conf.knob_list
         }
