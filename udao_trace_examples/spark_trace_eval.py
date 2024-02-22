@@ -165,8 +165,8 @@ if __name__ == "__main__":
         }
     JsonHandler.dump_to_file(
         {
-            "stats": stats_dict,
-            "agg_stats": agg_stats_dict,
+            "stats": {f"{k[0]}-{k[1]}": v for k, v in stats_dict.items()},
+            "agg_stats": {f"{k[0]}-{k[1]}": v for k, v in agg_stats_dict.items()},
         },
         file_name,
         indent=2,
