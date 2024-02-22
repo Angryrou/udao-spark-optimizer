@@ -123,7 +123,8 @@ if __name__ == "__main__":
     try:
         j = JsonHandler.load_json(file_name)
     except Exception as e:
-        raise e
+        print(e)
+        print("------ Load failed, trying to parse configurations")
 
     stats_dict = {}
     agg_stats_dict = {}
