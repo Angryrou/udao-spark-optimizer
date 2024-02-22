@@ -88,9 +88,8 @@ for i, df_q_all in all_confs.items():
         infer_limit_batch_size=10000,
         included_model_types=["XGB"],
         hyperparameters="toy",
-        presets=["medium_quality", "optimize_for_deployment"],
+        presets=["good_quality", "optimize_for_deployment"],
         verbosity=1,
-        num_cpus=4,
     )
     eval_stats = predictor.evaluate(test_data)
     if eval_stats["f1"] == 0:
