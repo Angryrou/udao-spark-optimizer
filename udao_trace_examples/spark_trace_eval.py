@@ -1,5 +1,4 @@
 import glob
-import os.path
 from argparse import ArgumentParser
 from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple
@@ -118,61 +117,63 @@ if __name__ == "__main__":
     print("------ Start parsing")
 
     file_name = f"{header}/evaluations.json"
-    if os.path.exists(file_name):
-        raise FileExistsError(file_name)
     try:
         j = JsonHandler.load_json(file_name)
+        print("------ Load successful")
+        print(JsonHandler.dump_to_string(j["agg_stats"], indent=2))
     except Exception as e:
         print(e)
         print("------ Load failed, trying to parse configurations")
 
-    stats_dict = {}
-    agg_stats_dict = {}
-    for conf in configurations:
-        (template, qid), configuration = list(conf.items())[0]
-        json_files = glob.glob(f"{header}/traces/{template}-{qid}-*.json")
-        print(f"------ Parsing {template}-{qid}")
-        stats: Dict[str, List[Any]] = defaultdict(list)
-        for json_file in json_files:
-            try:
-                d = JsonHandler.load_json(json_file)
-            except Exception as e:
-                raise Exception(f"Failed to load {json_file} with error: {e}")
-            obj_dict = parse_lqp_objectives(d["Objectives"])
-            lat_s = obj_dict["latency_s"]
-            io_mb = obj_dict["io_mb"]
-            cores = configuration["spark.executor.cores"] * (
-                configuration["spark.executor.instances"] + 1
-            )
-            cost_wo_io = get_cloud_cost_wo_io(
-                lat=lat_s,
-                cores=int(configuration["spark.executor.cores"]),
-                mem=int(configuration["spark.executor.memory"].replace("g", "")),
-                nexec=int(configuration["spark.executor.instances"]),
-            )
-            cost_w_io = get_cloud_cost_add_io(
-                cost_wo_io=cost_wo_io,
-                io_mb=io_mb,
-            )
-            stats["json_trace"].append(json_file)
-            stats["latency_s"].append(lat_s)
-            stats["io_mb"].append(io_mb)
-            stats["cores"].append(cores)
-            stats["cost_wo_io"].append(cost_wo_io)
-            stats["cost_w_io"].append(cost_w_io)
-        stats_dict[(template, qid)] = stats
-        agg_stats_dict[(template, qid)] = {
-            "latency_s": get_mean_std_without_none(stats["latency_s"]),
-            "io_mb": get_mean_std_without_none(stats["io_mb"]),
-            "cores": get_mean_std_without_none(stats["cores"]),
-            "cost_wo_io": get_mean_std_without_none(stats["cost_wo_io"]),
-            "cost_w_io": get_mean_std_without_none(stats["cost_w_io"]),
-        }
-    JsonHandler.dump_to_file(
-        {
-            "stats": {f"{k[0]}-{k[1]}": v for k, v in stats_dict.items()},
-            "agg_stats": {f"{k[0]}-{k[1]}": v for k, v in agg_stats_dict.items()},
-        },
-        file_name,
-        indent=2,
-    )
+        stats_dict = {}
+        agg_stats_dict = {}
+        for conf in configurations:
+            (template, qid), configuration = list(conf.items())[0]
+            json_files = glob.glob(f"{header}/traces/{template}-{qid}-*.json")
+            print(f"------ Parsing {template}-{qid}")
+            stats: Dict[str, List[Any]] = defaultdict(list)
+            for json_file in json_files:
+                try:
+                    d = JsonHandler.load_json(json_file)
+                except Exception as e:
+                    raise Exception(f"Failed to load {json_file} with error: {e}")
+                obj_dict = parse_lqp_objectives(d["Objectives"])
+                lat_s = obj_dict["latency_s"]
+                io_mb = obj_dict["io_mb"]
+                cores = configuration["spark.executor.cores"] * (
+                    configuration["spark.executor.instances"] + 1
+                )
+                cost_wo_io = get_cloud_cost_wo_io(
+                    lat=lat_s,
+                    cores=int(configuration["spark.executor.cores"]),
+                    mem=int(configuration["spark.executor.memory"].replace("g", "")),
+                    nexec=int(configuration["spark.executor.instances"]),
+                )
+                cost_w_io = get_cloud_cost_add_io(
+                    cost_wo_io=cost_wo_io,
+                    io_mb=io_mb,
+                )
+                stats["json_trace"].append(json_file)
+                stats["latency_s"].append(lat_s)
+                stats["io_mb"].append(io_mb)
+                stats["cores"].append(cores)
+                stats["cost_wo_io"].append(cost_wo_io)
+                stats["cost_w_io"].append(cost_w_io)
+            stats_dict[(template, qid)] = stats
+            agg_stats_dict[(template, qid)] = {
+                "latency_s": get_mean_std_without_none(stats["latency_s"]),
+                "io_mb": get_mean_std_without_none(stats["io_mb"]),
+                "cores": get_mean_std_without_none(stats["cores"]),
+                "cost_wo_io": get_mean_std_without_none(stats["cost_wo_io"]),
+                "cost_w_io": get_mean_std_without_none(stats["cost_w_io"]),
+            }
+        JsonHandler.dump_to_file(
+            {
+                "stats": {f"{k[0]}-{k[1]}": v for k, v in stats_dict.items()},
+                "agg_stats": {f"{k[0]}-{k[1]}": v for k, v in agg_stats_dict.items()},
+            },
+            file_name,
+            indent=2,
+        )
+        j = JsonHandler.load_json(file_name)
+        print(JsonHandler.dump_to_string(j["agg_stats"], indent=2))
