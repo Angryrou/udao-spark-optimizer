@@ -78,6 +78,8 @@ def get_eval_parser() -> ArgumentParser:
                         help="Only parse configurations, do not start evaluations")
     parser.add_argument("--force", action="store_true",
                         help="Force parsing even if the file already exists")
+    parser.add_argument("--default", action="store_true",
+                        help="Use default configurations")
     # fmt: on
 
     return parser
