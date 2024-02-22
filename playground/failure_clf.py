@@ -79,7 +79,7 @@ for i, df_q_all in all_confs.items():
     label = "failure"
     predictor = TabularPredictor(
         label=label,
-        path=f"AutogluonModels/{bm}/template_{i}",
+        path=f"AutogluonModels/{bm}_fail_clf/template_{i}",
         problem_type="binary",
         learner_kwargs={"label_count_threshold": 10},
     ).fit(
