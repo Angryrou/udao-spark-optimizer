@@ -7,7 +7,9 @@ from udao_spark.optimizer.hierarchical_optimizer import HierarchicalOptimizer
 from udao_spark.optimizer.utils import get_ag_meta
 from udao_spark.utils.params import QType, get_compile_time_optimizer_parameters
 from udao_trace.configuration import SparkConf
+from udao_trace.utils import BenchmarkType
 from udao_trace.utils.logging import logger
+from udao_trace.workload import Benchmark
 
 logger.setLevel("INFO")
 
@@ -63,13 +65,25 @@ if __name__ == "__main__":
     )
 
     # Prepare traces
-    sample_header = str(base_dir / "assets/samples")
-    raw_traces = [
-        f"{sample_header}/tpch100_{q}-1_1,1g,16,16,48m,200,true,0.6,"
-        f"64MB,0.2,0MB,10MB,200,256MB,5,128MB,4MB,0.2,1024KB"
-        f"_application_1701736595646_{2556 + q}.json"
-        for q in range(1, 23)
-    ]
+    sample_header = str(base_dir / "assets/query_plan_samples")
+    if bm == "tpch":
+        benchmark = Benchmark(BenchmarkType.TPCH, params.scale_factor)
+        raw_traces = [
+            f"{sample_header}/{bm}/{bm}100_{q}-1_1,1g,16,16,48m,200,true,0.6,"
+            f"64MB,0.2,0MB,10MB,200,256MB,5,128MB,4MB,0.2,1024KB"
+            f"_application_1701736595646_{2557 + i}.json"
+            for i, q in enumerate(benchmark.templates)
+        ]
+    elif bm == "tpcds":
+        benchmark = Benchmark(BenchmarkType.TPCDS, params.scale_factor)
+        raw_traces = [
+            f"{sample_header}/{bm}/{bm}100_{q}-1_1,1g,16,16,48m,200,true,0.6,"
+            f"64MB,0.2,0MB,10MB,200,256MB,5,128MB,4MB,0.2,1024KB"
+            f"_application_1701737506122_{3283 + i}.json"
+            for i, q in enumerate(benchmark.templates)
+        ]
+    else:
+        raise ValueError(f"benchmark {bm} is not supported")
     for trace in raw_traces:
         print(trace)
         if not Path(trace).exists():
@@ -84,7 +98,7 @@ if __name__ == "__main__":
         non_decision_input = get_non_decision_inputs_for_qs_compile_dict(
             trace, is_oracle=is_oracle
         )
-        query_id = trace.split("tpch100_")[1].split("_")[0]  # e.g. 2-1
+        query_id = trace.split(f"{bm}100_")[1].split("_")[0]  # e.g. 2-1
         print(f"query_id is {query_id}")
 
         if params.moo_algo == "evo":
