@@ -120,6 +120,10 @@ if __name__ == "__main__":
     file_name = f"{header}/evaluations.json"
     if os.path.exists(file_name):
         raise FileExistsError(file_name)
+    try:
+        j = JsonHandler.load_json(file_name)
+    except Exception as e:
+        raise e
 
     stats_dict = {}
     agg_stats_dict = {}
