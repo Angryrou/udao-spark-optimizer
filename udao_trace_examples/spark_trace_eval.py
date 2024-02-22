@@ -125,17 +125,13 @@ if __name__ == "__main__":
     agg_stats_dict = {}
     for (template, qid), configuration in configurations:
         json_files = glob.glob(f"{header}/traces/{template}-{qid}-*.json")
-
+        print(f"------ Parsing {template}-{qid}")
         stats: Dict[str, List[Any]] = defaultdict(list)
         for json_file in json_files:
-            if not os.path.exists(json_file):
-                stats["json_trace"].append(None)
-                stats["latency_s"].append(None)
-                stats["io_mb"].append(None)
-                stats["cores"].append(None)
-                stats["cost_wo_io"].append(None)
-                stats["cost_w_io"].append(None)
-            d = JsonHandler.load_json(json_file)
+            try:
+                d = JsonHandler.load_json(json_file)
+            except Exception as e:
+                raise Exception(f"Failed to load {json_file} with error: {e}")
             obj_dict = parse_lqp_objectives(d["Objectives"])
             lat_s = obj_dict["latency_s"]
             io_mb = obj_dict["io_mb"]
@@ -158,7 +154,6 @@ if __name__ == "__main__":
             stats["cores"].append(cores)
             stats["cost_wo_io"].append(cost_wo_io)
             stats["cost_w_io"].append(cost_w_io)
-
         stats_dict[(template, qid)] = stats
         agg_stats_dict[(template, qid)] = {
             "latency_s": get_mean_std_without_none(stats["latency_s"]),
@@ -167,11 +162,11 @@ if __name__ == "__main__":
             "cost_wo_io": get_mean_std_without_none(stats["cost_wo_io"]),
             "cost_w_io": get_mean_std_without_none(stats["cost_w_io"]),
         }
-        JsonHandler.dump_to_file(
-            {
-                "stats": stats_dict,
-                "agg_stats": agg_stats_dict,
-            },
-            file_name,
-            indent=2,
-        )
+    JsonHandler.dump_to_file(
+        {
+            "stats": stats_dict,
+            "agg_stats": agg_stats_dict,
+        },
+        file_name,
+        indent=2,
+    )
