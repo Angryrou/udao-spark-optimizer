@@ -86,7 +86,6 @@ for i, df_q_all in all_confs.items():
         train_data,
         infer_limit=1e-5,
         infer_limit_batch_size=10000,
-        time_limit=30,
         included_model_types=["XGB"],
         hyperparameters="toy",
         presets=["medium_quality", "optimize_for_deployment"],
@@ -96,7 +95,12 @@ for i, df_q_all in all_confs.items():
     if eval_stats["f1"] == 0:
         print("f1 score is 0, skip")
         continue
-    valid_clf[i] = {"path": predictor.path, "eval_stats": eval_stats}
+    valid_clf[i] = {
+        "path": predictor.path,
+        "eval_stats": eval_stats,
+        "n_all": n_all,
+        "n_succ": n_succ,
+    }
     print(eval_stats)
 
 JsonHandler.dump_to_file(valid_clf, f"assets/{bm}_valid_clf_meta.json", indent=2)
