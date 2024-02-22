@@ -98,12 +98,22 @@ if __name__ == "__main__":
         debug=args.debug,
     )
 
-    header, configurations = validate_and_parse_configurations(
-        spark_collector=spark_collector,
-        config_header=args.configuration_header,
-        n_data_per_template=args.n_data_per_template,
-        fine_grained=args.fine_grained,
-    )
+    if args.default:
+        header = f"{spark_collector.header}/default"
+        configuration = {
+            k.name: k.default for k in spark_collector.spark_conf.knob_list
+        }
+        configurations = []
+        for template in spark_collector.benchmark.templates:
+            for qid in range(1, args.n_data_per_template + 1):
+                configurations.append({(template, qid): configuration})
+    else:
+        header, configurations = validate_and_parse_configurations(
+            spark_collector=spark_collector,
+            config_header=args.configuration_header,
+            n_data_per_template=args.n_data_per_template,
+            fine_grained=args.fine_grained,
+        )
 
     if not args.parse_only:
         print("------ Starting evaluations")
