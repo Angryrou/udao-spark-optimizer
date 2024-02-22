@@ -129,7 +129,7 @@ if __name__ == "__main__":
         agg_stats_dict = {}
         for conf in configurations:
             (template, qid), configuration = list(conf.items())[0]
-            json_files = glob.glob(f"{header}/traces/{template}-{qid}-*.json")
+            json_files = glob.glob(f"{header}/trace/{template}-{qid}-*.json")
             print(f"------ Parsing {template}-{qid}")
             stats: Dict[str, List[Any]] = defaultdict(list)
             for json_file in json_files:
