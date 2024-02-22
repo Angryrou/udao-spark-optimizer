@@ -13,7 +13,8 @@ from udao_spark.optimizer.atomic_optimizer import AtomicOptimizer
 from udao_spark.optimizer.utils import get_ag_meta
 from udao_spark.utils.collaborators import TypeAdvisor
 from udao_trace.configuration import SparkConf
-from udao_trace.utils import ParquetHandler
+from udao_trace.utils import BenchmarkType, ParquetHandler
+from udao_trace.workload import Benchmark
 
 
 def extract_non_decision_df(non_decision_input_dict: Dict) -> pd.DataFrame:
@@ -62,13 +63,30 @@ def get_non_decision_inputs(
 
     # prepare the traces
     spark_conf = SparkConf(str(base_dir / "assets/spark_configuration_aqe_on.json"))
-    sample_header = str(base_dir / "assets/samples")
-    raw_traces = [
-        f"{sample_header}/tpch100_{q}-1_1,1g,16,16,48m,200,true,0.6,"
-        f"64MB,0.2,0MB,10MB,200,256MB,5,128MB,4MB,0.2,1024KB"
-        f"_application_1701736595646_{2556 + q}.json"
-        for q in range(1, 23)
-    ]
+    sample_header = str(base_dir / "assets/query_plan_samples")
+    if bm == "tpch":
+        benchmark = Benchmark(BenchmarkType.TPCH, params.scale_factor)
+        raw_traces = [
+            f"{sample_header}/{bm}/{bm}100_{q}-1_1,1g,16,16,48m,200,true,0.6,"
+            f"64MB,0.2,0MB,10MB,200,256MB,5,128MB,4MB,0.2,1024KB"
+            f"_application_1701736595646_{2557 + i}.json"
+            for i, q in enumerate(benchmark.templates)
+        ]
+    elif bm == "tpcds":
+        benchmark = Benchmark(BenchmarkType.TPCDS, params.scale_factor)
+        raw_traces = [
+            f"{sample_header}/{bm}/{bm}100_{q}-1_1,1g,16,16,48m,200,true,0.6,"
+            f"64MB,0.2,0MB,10MB,200,256MB,5,128MB,4MB,0.2,1024KB"
+            f"_application_1701737506122_{3283 + i}.json"
+            for i, q in enumerate(benchmark.templates)
+        ]
+    else:
+        raise ValueError(f"benchmark {bm} is not supported")
+    for trace in raw_traces:
+        print(trace)
+        if not Path(trace).exists():
+            print(f"{trace} does not exist")
+            raise FileNotFoundError(f"{trace} does not exist")
 
     # use functions in HierarchicalOptimizer to extract the non-decision inputs
     atomic_optimizer = AtomicOptimizer(
