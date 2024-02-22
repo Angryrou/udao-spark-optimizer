@@ -128,7 +128,7 @@ if __name__ == "__main__":
             print("------ File already exists")
             try:
                 j = JsonHandler.load_json(file_name)
-                print(JsonHandler.dump_to_string(j["agg_stats"], indent=2))
+                print(j["agg_stats"])
                 exit(0)
             except Exception as e:
                 print(f"------ File is corrupted {e}, force parsing")
@@ -148,8 +148,8 @@ if __name__ == "__main__":
             obj_dict = parse_lqp_objectives(d["Objectives"])
             lat_s = obj_dict["latency_s"]
             io_mb = obj_dict["io_mb"]
-            cores = configuration["spark.executor.cores"] * (
-                configuration["spark.executor.instances"] + 1
+            total_cores = int(configuration["spark.executor.cores"]) * (
+                int(configuration["spark.executor.instances"]) + 1
             )
             cost_wo_io = get_cloud_cost_wo_io(
                 lat=lat_s,
@@ -164,7 +164,7 @@ if __name__ == "__main__":
             stats["json_trace"].append(json_file)
             stats["latency_s"].append(lat_s)
             stats["io_mb"].append(io_mb)
-            stats["cores"].append(cores)
+            stats["cores"].append(total_cores)
             stats["cost_wo_io"].append(cost_wo_io)
             stats["cost_w_io"].append(cost_w_io)
         stats_dict[(template, qid)] = stats
@@ -184,4 +184,4 @@ if __name__ == "__main__":
         indent=2,
     )
     j = JsonHandler.load_json(file_name)
-    print(JsonHandler.dump_to_string(j["agg_stats"], indent=2))
+    print(j["agg_stats"])
