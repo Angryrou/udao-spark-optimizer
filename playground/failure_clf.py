@@ -86,15 +86,12 @@ for i, df_q_all in all_confs.items():
         train_data,
         infer_limit=1e-5,
         infer_limit_batch_size=10000,
-        included_model_types=["XGB"],
+        included_model_types=["XGB", "CAT"],
         hyperparameters="toy",
         presets=["good_quality", "optimize_for_deployment"],
         verbosity=1,
     )
     eval_stats = predictor.evaluate(test_data)
-    if eval_stats["f1"] == 0:
-        print("f1 score is 0, skip")
-        continue
     valid_clf[i] = {
         "path": predictor.path,
         "eval_stats": eval_stats,
