@@ -1,7 +1,14 @@
+import glob
+import os.path
 from argparse import ArgumentParser
-from typing import Dict, List, Tuple
+from collections import defaultdict
+from typing import Any, Dict, List, Optional, Tuple
 
+import numpy as np
+
+from udao_spark.optimizer.utils import get_cloud_cost_add_io, get_cloud_cost_wo_io
 from udao_trace.collector.SparkCollector import SparkCollector
+from udao_trace.parser.spark_parser import parse_lqp_objectives
 from udao_trace.utils import BenchmarkType, ClusterName, JsonHandler
 from udao_trace_examples.params import get_collector_parser
 
@@ -49,6 +56,15 @@ def validate_and_parse_configurations(
     return header, configurations
 
 
+def get_mean_std_without_none(
+    raw_numbers: List[Optional[float]],
+) -> Tuple[float, float]:
+    ll = [x for x in raw_numbers if x is not None]
+    if len(ll) == 0:
+        return 0, 0
+    return np.mean(ll).astype(float), np.std(ll).astype(float)
+
+
 def get_eval_parser() -> ArgumentParser:
     parser = get_collector_parser()
     # fmt: off
@@ -58,6 +74,8 @@ def get_eval_parser() -> ArgumentParser:
                         help="Use fine-grained configurations")
     parser.add_argument("--n_reps", type=int, default=3,
                         help="Number of repetitions for each configuration")
+    parser.add_argument("--parse_only", action="store_true",
+                        help="Only parse configurations, do not start evaluations")
     # fmt: on
 
     return parser
@@ -85,11 +103,75 @@ if __name__ == "__main__":
         fine_grained=args.fine_grained,
     )
 
-    for i in range(args.n_reps):
-        print("------ Starting evaluation", i + 1)
-        spark_collector.start_eval(
-            eval_header=header,
-            configurations=configurations,
-            n_processes=args.n_processes,
-            cluster_cores=args.cluster_cores,
+    if not args.parse_only:
+        print("------ Starting evaluations")
+        for i in range(args.n_reps):
+            print("------ Starting evaluation", i + 1)
+            spark_collector.start_eval(
+                eval_header=header,
+                configurations=configurations,
+                n_processes=args.n_processes,
+                cluster_cores=args.cluster_cores,
+            )
+        print("------ Finished all evaluations")
+
+    print("------ Start parsing")
+
+    file_name = f"{header}/evaluations.json"
+    if os.path.exists(file_name):
+        raise FileExistsError(file_name)
+
+    stats_dict = {}
+    agg_stats_dict = {}
+    for (template, qid), configuration in configurations:
+        json_files = glob.glob(f"{header}/traces/{template}-{qid}-*.json")
+
+        stats: Dict[str, List[Any]] = defaultdict(list)
+        for json_file in json_files:
+            if not os.path.exists(json_file):
+                stats["json_trace"].append(None)
+                stats["latency_s"].append(None)
+                stats["io_mb"].append(None)
+                stats["cores"].append(None)
+                stats["cost_wo_io"].append(None)
+                stats["cost_w_io"].append(None)
+            d = JsonHandler.load_json(json_file)
+            obj_dict = parse_lqp_objectives(d["Objectives"])
+            lat_s = obj_dict["latency_s"]
+            io_mb = obj_dict["io_mb"]
+            cores = configuration["spark.executor.cores"] * (
+                configuration["spark.executor.instances"] + 1
+            )
+            cost_wo_io = get_cloud_cost_wo_io(
+                lat=lat_s,
+                cores=int(configuration["spark.executor.cores"]),
+                mem=int(configuration["spark.executor.memory"].replace("g", "")),
+                nexec=int(configuration["spark.executor.instances"]),
+            )
+            cost_w_io = get_cloud_cost_add_io(
+                cost_wo_io=cost_wo_io,
+                io_mb=io_mb,
+            )
+            stats["json_trace"].append(json_file)
+            stats["latency_s"].append(lat_s)
+            stats["io_mb"].append(io_mb)
+            stats["cores"].append(cores)
+            stats["cost_wo_io"].append(cost_wo_io)
+            stats["cost_w_io"].append(cost_w_io)
+
+        stats_dict[(template, qid)] = stats
+        agg_stats_dict[(template, qid)] = {
+            "latency_s": get_mean_std_without_none(stats["latency_s"]),
+            "io_mb": get_mean_std_without_none(stats["io_mb"]),
+            "cores": get_mean_std_without_none(stats["cores"]),
+            "cost_wo_io": get_mean_std_without_none(stats["cost_wo_io"]),
+            "cost_w_io": get_mean_std_without_none(stats["cost_w_io"]),
+        }
+        JsonHandler.dump_to_file(
+            {
+                "stats": stats_dict,
+                "agg_stats": agg_stats_dict,
+            },
+            file_name,
+            indent=2,
         )
