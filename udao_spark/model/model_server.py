@@ -102,7 +102,7 @@ class AGServer:
         picked_path_dict = {}
         for template, info in clf_meta.items():
             if (
-                info["n_succ"] / info["n_all"] > 0.6
+                info["n_succ"] / info["n_all"] < 0.7
                 or info["eval_stats"]["recall"] > clf_recall_xhold
             ):
                 logger.info(f"Loading predictor for {template}")
@@ -163,7 +163,8 @@ class AGServer:
         if template in self.failure_clfs:
             clf = self.failure_clfs[template]
             fmask = clf.predict(df[THETA_COMPILE], as_pandas=False)
-            if sum(fmask) == len(df):
+            n_fails, n_all = sum(fmask), len(df)
+            if n_fails == n_all:
                 logger.warning(
                     f"Template {template} has no successful configurations, "
                 )
@@ -171,6 +172,7 @@ class AGServer:
                     obj: np.ones(len(df)) * np.inf
                     for obj in self.ta.get_ag_objectives()
                 }
+            logger.info(f"{n_fails}/{n_all} confs are predicted to fail, set as inf")
         else:
             fmask = np.zeros(len(df), dtype=bool)  # failure mask
 

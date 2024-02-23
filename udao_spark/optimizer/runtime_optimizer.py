@@ -243,7 +243,8 @@ class RuntimeOptimizer:
 
                 while True:
                     msg = recv_msg(conn)
-                    logger.debug(f"Received message: {msg}")
+                    if self.verbose:
+                        logger.info(f"Received message: {msg}")
                     if not msg:
                         logger.warning(f"No message received, disconnecting {addr}")
                         break
