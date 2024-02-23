@@ -100,6 +100,7 @@ class AGServer:
 
         if clf_json_path is None:
             failure_clfs = {}
+            logger.warning("The failure clf is disabled, not recommended!")
         else:
             clf_meta = JsonHandler.load_json(clf_json_path)
             picked_path_dict = {}
