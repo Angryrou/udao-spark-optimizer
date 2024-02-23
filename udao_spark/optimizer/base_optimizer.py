@@ -41,7 +41,7 @@ class BaseOptimizer(ABC):
         spark_conf: SparkConf,
         decision_variables: List[str],
         ag_path: str,
-        clf_json_path: str,
+        clf_json_path: Optional[str],
         clf_recall_xhold: float,
         verbose: bool = False,
     ) -> None:

@@ -51,7 +51,6 @@ if __name__ == "__main__":
         + ["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9"]
         + ["s10", "s11"]
     )
-    clf_json_path = str(base_dir / f"assets/{bm}_valid_clf_meta.json")
 
     hier_optimizer = HierarchicalOptimizer(
         bm=bm,
@@ -63,7 +62,9 @@ if __name__ == "__main__":
         spark_conf=spark_conf,
         decision_variables=decision_variables,
         ag_path=ag_meta["ag_path"],
-        clf_json_path=clf_json_path,
+        clf_json_path=None
+        if params.disable_failure_clf
+        else str(base_dir / f"assets/{bm}_valid_clf_meta.json"),
         clf_recall_xhold=params.clf_recall_xhold,
     )
 

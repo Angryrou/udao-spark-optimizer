@@ -101,7 +101,9 @@ def get_non_decision_inputs(
         spark_conf=spark_conf,
         decision_variables=decision_vars,
         ag_path=ag_meta["ag_path"],
-        clf_json_path=str(base_dir / f"assets/{bm}_valid_clf_meta.json"),
+        clf_json_path=None
+        if params.disable_failure_clf
+        else str(base_dir / f"assets/{bm}_valid_clf_meta.json"),
         clf_recall_xhold=params.clf_recall_xhold,
         verbose=False,
     )

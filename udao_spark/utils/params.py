@@ -209,6 +209,8 @@ def get_ag_parameters() -> ArgumentParser:
                              "Our clf gives Positive signal for failure cases. When it"
                              " gives Negative, we want to reduce a False Negative (FN) "
                              "Therefore, we pick recall=TP/(TP+FN) as the metric. ")
+    parser.add_argument("--disable_failure_clf", action="store_true",
+                        help="Disable failure classifiers")
     # fmt: on
 
     return parser

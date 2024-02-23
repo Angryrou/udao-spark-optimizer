@@ -1,5 +1,5 @@
 import time
-from typing import Dict, List, Union
+from typing import Dict, List, Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -86,7 +86,7 @@ class AGServer:
         graph_weights_path: str,
         q_type: QType,
         ag_path: str,
-        clf_json_path: str,
+        clf_json_path: Optional[str],
         clf_recall_xhold: float,
     ) -> "AGServer":
         ms = ModelServer.from_ckp_path(
@@ -98,19 +98,22 @@ class AGServer:
             for obj in ta.get_ag_objectives()
         }
 
-        clf_meta = JsonHandler.load_json(clf_json_path)
-        picked_path_dict = {}
-        for template, info in clf_meta.items():
-            if (
-                info["n_succ"] / info["n_all"] < 0.7
-                or info["eval_stats"]["recall"] > clf_recall_xhold
-            ):
-                logger.info(f"Loading predictor for {template}")
-                picked_path_dict[template] = info["path"]
-        failure_clfs = {
-            template: TabularPredictor.load(path)
-            for template, path in picked_path_dict.items()
-        }
+        if clf_json_path is None:
+            failure_clfs = {}
+        else:
+            clf_meta = JsonHandler.load_json(clf_json_path)
+            picked_path_dict = {}
+            for template, info in clf_meta.items():
+                if (
+                    info["n_succ"] / info["n_all"] < 0.7
+                    or info["eval_stats"]["recall"] > clf_recall_xhold
+                ):
+                    logger.info(f"Loading predictor for {template}")
+                    picked_path_dict[template] = info["path"]
+            failure_clfs = {
+                template: TabularPredictor.load(path)
+                for template, path in picked_path_dict.items()
+            }
         return cls(ta, ms, predictors, failure_clfs)
 
     def __init__(

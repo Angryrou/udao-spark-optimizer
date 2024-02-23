@@ -68,7 +68,7 @@ class RuntimeOptimizer:
         ag_meta_dict: Dict,
         spark_conf: SparkConf,
         decision_variables_dict: Dict,
-        clf_json_path: str,
+        clf_json_path: Optional[str],
         clf_recall_xhold: float,
         seed: Optional[int] = 42,
         verbose: bool = False,

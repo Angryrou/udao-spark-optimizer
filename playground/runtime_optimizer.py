@@ -42,14 +42,15 @@ if __name__ == "__main__":
 
     base_dir = Path(__file__).parent
     spark_conf = SparkConf(str(base_dir / "assets/spark_configuration_aqe_on.json"))
-    clf_json_path = str(base_dir / f"assets/{bm}_valid_clf_meta.json")
 
     ro = RuntimeOptimizer.from_params(
         bm,
         ag_meta_dict,
         spark_conf,
         decision_variables_dict,
-        clf_json_path=clf_json_path,
+        clf_json_path=None
+        if params.disable_failure_clf
+        else str(base_dir / f"assets/{bm}_valid_clf_meta.json"),
         clf_recall_xhold=params.clf_recall_xhold,
         seed=seed,
         verbose=params.verbose,
