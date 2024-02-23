@@ -101,7 +101,10 @@ class AGServer:
         clf_meta = JsonHandler.load_json(clf_json_path)
         picked_path_dict = {}
         for template, info in clf_meta.items():
-            if info["eval_stats"]["recall"] > clf_recall_xhold:
+            if (
+                info["n_succ"] / info["n_all"] > 0.6
+                or info["eval_stats"]["recall"] > clf_recall_xhold
+            ):
                 logger.info(f"Loading predictor for {template}")
                 picked_path_dict[template] = info["path"]
         failure_clfs = {

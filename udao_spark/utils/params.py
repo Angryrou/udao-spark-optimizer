@@ -279,19 +279,19 @@ def get_runtime_optimizer_parameters() -> ArgumentParser:
                         help="specific model name for AG for QS_R ana_latency")
     parser.add_argument("--ag_model_qs_io", type=str, default=None,
                         help="specific model name for AG for QS_R IO")
-    parser.add_argument("--q_ag_sign", type=str, default="medium_quality")
-    parser.add_argument("--q_infer_limit", type=float, default=None,
+    parser.add_argument("--ag_sign_q", type=str, default="medium_quality")
+    parser.add_argument("--infer_limit_q", type=float, default=None,
                         help="Inference limit, e.g., 1e-5 (Q)")
-    parser.add_argument("--q_infer_limit_batch_size", type=int, default=None,
+    parser.add_argument("--infer_limit_batch_size_q", type=int, default=None,
                         help="Inference limit batch size, e.g., 50000 (Q)")
-    parser.add_argument("--q_ag_time_limit", type=int, default=None,
+    parser.add_argument("--ag_time_limit_q", type=int, default=None,
                         help="Time limit in seconds for the AG (Q)")
-    parser.add_argument("--qs_ag_sign", type=str, default="medium_quality")
-    parser.add_argument("--qs_infer_limit", type=float, default=None,
+    parser.add_argument("--ag_sign_qs", type=str, default="medium_quality")
+    parser.add_argument("--infer_limit_qs", type=float, default=None,
                         help="Inference limit, e.g., 1e-5 (QS)")
-    parser.add_argument("--qs_infer_limit_batch_size", type=int, default=None,
+    parser.add_argument("--infer_limit_batch_size_qs", type=int, default=None,
                         help="Inference limit batch size, e.g., 50000 (QS)")
-    parser.add_argument("--qs_ag_time_limit", type=int, default=None,
+    parser.add_argument("--ag_time_limit_qs", type=int, default=None,
                         help="Time limit in seconds for the AG (QS)")
     parser.add_argument("--sanity_check", action="store_true",
                         help="Enable sanity check")
