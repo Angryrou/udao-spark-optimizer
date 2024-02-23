@@ -23,6 +23,7 @@ class AtomicOptimizer(BaseOptimizer):
 
     def solve(
         self,
+        template: str,
         non_decision_input: Dict[str, Any],
         seed: Optional[int] = None,
         use_ag: bool = True,
@@ -70,6 +71,7 @@ class AtomicOptimizer(BaseOptimizer):
         if use_ag:
             graph_embeddings = graph_embeddings.detach().cpu()
             objs_dict = self.get_objective_values_ag(
+                template,
                 graph_embeddings.tile(n_samples, 1).numpy(),
                 pd.DataFrame(
                     np.tile(non_decision_df.values, (n_samples, 1)),

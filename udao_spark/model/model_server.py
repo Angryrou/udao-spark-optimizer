@@ -1,5 +1,5 @@
 import time
-from typing import Dict, List, Union
+from typing import Dict, List, Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -14,6 +14,7 @@ from udao.optimization.utils.moo_utils import get_default_device
 from udao_trace.utils import JsonHandler
 
 from ..utils.collaborators import TypeAdvisor
+from ..utils.constants import THETA_COMPILE
 from ..utils.logging import logger
 from ..utils.params import QType
 from .utils import (
@@ -85,6 +86,8 @@ class AGServer:
         graph_weights_path: str,
         q_type: QType,
         ag_path: str,
+        clf_json_path: Optional[str],
+        clf_recall_xhold: float,
     ) -> "AGServer":
         ms = ModelServer.from_ckp_path(
             model_sign, graph_model_params_path, graph_weights_path
@@ -94,14 +97,38 @@ class AGServer:
             obj: TabularPredictor.load(f"{ag_path}/Predictor_{obj}")
             for obj in ta.get_ag_objectives()
         }
-        return cls(ta, ms, predictors)
+
+        if clf_json_path is None:
+            failure_clfs = {}
+            logger.warning("The failure clf is disabled, not recommended!")
+        else:
+            clf_meta = JsonHandler.load_json(clf_json_path)
+            picked_path_dict = {}
+            for template, info in clf_meta.items():
+                if (
+                    info["n_succ"] / info["n_all"] < 0.7
+                    or info["eval_stats"]["recall"] > clf_recall_xhold
+                ):
+                    logger.info(f"Loading predictor for {template}")
+                    picked_path_dict[template] = info["path"]
+            failure_clfs = {
+                template: TabularPredictor.load(path)
+                for template, path in picked_path_dict.items()
+            }
+        return cls(ta, ms, predictors, failure_clfs)
 
     def __init__(
-        self, ta: TypeAdvisor, ms: ModelServer, predictors: Dict[str, TabularPredictor]
+        self,
+        ta: TypeAdvisor,
+        ms: ModelServer,
+        predictors: Dict[str, TabularPredictor],
+        failure_clfs: Dict[str, TabularPredictor],
     ):
         self.ta = ta
         self.ms = ms
         self.predictors = predictors
+        self.failure_clfs = failure_clfs
+
         self.objectives = self.ta.get_ag_objectives()
         for obj in predictors:
             self.predictors[obj].persist()  # persist the predictor in memory
@@ -123,6 +150,7 @@ class AGServer:
     def predict_with_ag(
         self,
         bm: str,
+        template: str,
         graph_embeddings: np.ndarray,
         non_decision_df: pd.DataFrame,
         decision_variables: List[str],
@@ -134,15 +162,35 @@ class AGServer:
         ge_cols = [f"ge_{i}" for i in range(ge_dim)]
         df[ge_cols] = graph_embeddings
         df[decision_variables] = sampled_theta
-        dataset = TabularDataset(df[ge_cols + self.ta.get_tabular_columns()])
+
+        # filter with clf
+        if template in self.failure_clfs:
+            clf = self.failure_clfs[template]
+            fmask = clf.predict(df[THETA_COMPILE], as_pandas=False)
+            n_fails, n_all = sum(fmask), len(df)
+            if n_fails == n_all:
+                logger.warning(
+                    f"Template {template} has no successful configurations, "
+                )
+                return {
+                    obj: np.ones(len(df)) * np.inf
+                    for obj in self.ta.get_ag_objectives()
+                }
+            logger.info(f"{n_fails}/{n_all} confs are predicted to fail, set as inf")
+        else:
+            fmask = np.zeros(len(df), dtype=bool)  # failure mask
+
+        dataset = TabularDataset(df[ge_cols + self.ta.get_tabular_columns()][~fmask])
         start = time.perf_counter_ns()
         transformed_data = self.predictors[self.objectives[0]].transform_features(
             dataset
         )
         dt = time.perf_counter_ns() - start
         logger.debug(f"Transformed data for AG prediction in {dt / 1e6} ms")
-        return {
-            obj: calibrate_negative_predictions(
+        obj_dict = {}
+        for obj in self.ta.get_ag_objectives():
+            obj_values = np.ones(len(df)) * np.inf
+            obj_values[~fmask] = calibrate_negative_predictions(
                 np.array(
                     self.predictors[obj].predict(
                         transformed_data,
@@ -158,5 +206,5 @@ class AGServer:
                 obj=obj,
                 q_type=self.ta.q_type,
             )
-            for obj in self.ta.get_ag_objectives()
-        }
+            obj_dict[obj] = obj_values
+        return obj_dict

@@ -7,7 +7,7 @@ from udao_trace.configuration import SparkConf
 from udao_trace.parser.spark_parser import drop_raw_plan, parse_conf
 from udao_trace.utils import JsonHandler
 
-from ...utils.constants import BETA, EPS, THETA_C
+from ...utils.constants import BETA, EPS, THETA_C, THETA_P
 from ..utils import extract_compile_time_im
 
 
@@ -132,7 +132,11 @@ def get_non_decision_inputs_for_qs_runtime(
         }
         conf = parse_conf(qs["Configuration"])
         theta_np = sc.deconstruct_configuration(np.array([list(conf.values())]))
-        theta = {k: v for k, v in zip(THETA_C, theta_np[0][: len(THETA_C)])}
+        theta = {
+            k: v
+            for k, v in zip(THETA_C + THETA_P, theta_np[0][: len(THETA_C + THETA_P)])
+        }
+        # include THETA_P to help detect failure.
 
     alpha = extract_alpha(
         size_in_mb=qs["IM"]["inputSizeInBytes"] / 1024 / 1024,

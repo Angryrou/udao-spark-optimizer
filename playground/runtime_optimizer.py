@@ -12,10 +12,14 @@ if __name__ == "__main__":
     logger.info(f"get parameters: {params}")
     bm, seed = params.benchmark, params.seed
     hp_choice, graph_choice = params.hp_choice, params.graph_choice
-    ag_sign = params.ag_sign
-    infer_limit = params.infer_limit
-    infer_limit_batch_size = params.infer_limit_batch_size
-    time_limit = params.ag_time_limit
+
+    ag_sign_dict = {R_Q: params.ag_sign_q, R_QS: params.ag_sign_qs}
+    infer_limit_dict = {R_Q: params.infer_limit_q, R_QS: params.infer_limit_qs}
+    infer_limit_batch_size_dict = {
+        R_Q: params.infer_limit_batch_size_q,
+        R_QS: params.infer_limit_batch_size_qs,
+    }
+    time_limit_dict = {R_Q: params.ag_time_limit_q, R_QS: params.ag_time_limit_qs}
 
     ag_meta_dict = {
         q_type: get_ag_meta(
@@ -23,10 +27,10 @@ if __name__ == "__main__":
             hp_choice,
             graph_choice,
             q_type,
-            ag_sign,
-            infer_limit,
-            infer_limit_batch_size,
-            time_limit,
+            ag_sign_dict[q_type],
+            infer_limit_dict[q_type],
+            infer_limit_batch_size_dict[q_type],
+            time_limit_dict[q_type],
         )
         for q_type in [R_Q, R_QS]
     }
@@ -40,7 +44,16 @@ if __name__ == "__main__":
     spark_conf = SparkConf(str(base_dir / "assets/spark_configuration_aqe_on.json"))
 
     ro = RuntimeOptimizer.from_params(
-        bm, ag_meta_dict, spark_conf, decision_variables_dict, seed, params.verbose
+        bm,
+        ag_meta_dict,
+        spark_conf,
+        decision_variables_dict,
+        clf_json_path=None
+        if params.disable_failure_clf
+        else str(base_dir / f"assets/{bm}_valid_clf_meta.json"),
+        clf_recall_xhold=params.clf_recall_xhold,
+        seed=seed,
+        verbose=params.verbose,
     )
     use_ag = not params.use_mlp
     if use_ag:
@@ -62,6 +75,7 @@ if __name__ == "__main__":
     if params.sanity_check:
         for file_path in [
             "assets/runtime_samples/sample_runtime_lqp.txt",
+            "assets/runtime_samples/sample_runtime_lqp2.txt",
             "assets/runtime_samples/sample_runtime_qs.txt",
             "assets/runtime_samples/sample_runtime_qs2.txt",
         ]:

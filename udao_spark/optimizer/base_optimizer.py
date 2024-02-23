@@ -41,11 +41,19 @@ class BaseOptimizer(ABC):
         spark_conf: SparkConf,
         decision_variables: List[str],
         ag_path: str,
+        clf_json_path: Optional[str],
+        clf_recall_xhold: float,
         verbose: bool = False,
     ) -> None:
         self.bm = bm
         self.ag_ms = AGServer.from_ckp_path(
-            model_sign, graph_model_params_path, graph_weights_path, q_type, ag_path
+            model_sign,
+            graph_model_params_path,
+            graph_weights_path,
+            q_type,
+            ag_path,
+            clf_json_path,
+            clf_recall_xhold,
         )
         self.ta = self.ag_ms.ta
         data_processor = PickleHandler.load(
@@ -308,6 +316,7 @@ class BaseOptimizer(ABC):
 
     def get_objective_values_ag(
         self,
+        template: str,
         graph_embeddings: np.ndarray,
         non_decision_df: pd.DataFrame,
         sampled_theta: np.ndarray,
@@ -316,6 +325,7 @@ class BaseOptimizer(ABC):
         start_time_ns = time.perf_counter_ns()
         objs = self.ag_ms.predict_with_ag(
             self.bm,
+            template,
             graph_embeddings,
             non_decision_df,
             self.decision_variables,
@@ -413,6 +423,7 @@ class BaseOptimizer(ABC):
     @abstractmethod
     def solve(
         self,
+        template: str,
         non_decision_input: Dict[str, Any],
         seed: Optional[int] = None,
         use_ag: bool = True,

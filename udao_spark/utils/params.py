@@ -204,6 +204,13 @@ def get_ag_parameters() -> ArgumentParser:
                         help="Inference limit batch size, e.g., 50000")
     parser.add_argument("--ag_time_limit", type=int, default=None,
                         help="Time limit in seconds for the AG")
+    parser.add_argument("--clf_recall_xhold", type=float, default=0.6,
+                        help="The threshold of recall used in the failure classifier. "
+                             "Our clf gives Positive signal for failure cases. When it"
+                             " gives Negative, we want to reduce a False Negative (FN) "
+                             "Therefore, we pick recall=TP/(TP+FN) as the metric. ")
+    parser.add_argument("--disable_failure_clf", action="store_true",
+                        help="Disable failure classifiers")
     # fmt: on
 
     return parser
@@ -274,6 +281,20 @@ def get_runtime_optimizer_parameters() -> ArgumentParser:
                         help="specific model name for AG for QS_R ana_latency")
     parser.add_argument("--ag_model_qs_io", type=str, default=None,
                         help="specific model name for AG for QS_R IO")
+    parser.add_argument("--ag_sign_q", type=str, default="medium_quality")
+    parser.add_argument("--infer_limit_q", type=float, default=None,
+                        help="Inference limit, e.g., 1e-5 (Q)")
+    parser.add_argument("--infer_limit_batch_size_q", type=int, default=None,
+                        help="Inference limit batch size, e.g., 50000 (Q)")
+    parser.add_argument("--ag_time_limit_q", type=int, default=None,
+                        help="Time limit in seconds for the AG (Q)")
+    parser.add_argument("--ag_sign_qs", type=str, default="medium_quality")
+    parser.add_argument("--infer_limit_qs", type=float, default=None,
+                        help="Inference limit, e.g., 1e-5 (QS)")
+    parser.add_argument("--infer_limit_batch_size_qs", type=int, default=None,
+                        help="Inference limit batch size, e.g., 50000 (QS)")
+    parser.add_argument("--ag_time_limit_qs", type=int, default=None,
+                        help="Time limit in seconds for the AG (QS)")
     parser.add_argument("--sanity_check", action="store_true",
                         help="Enable sanity check")
     parser.add_argument("--sample_mode", type=str, default="random",

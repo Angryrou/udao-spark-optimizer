@@ -1,0 +1,65 @@
+{
+  "theta_c": {
+    "spark.executor.cores": "1",
+    "spark.executor.memory": "1g",
+    "spark.executor.instances": "16",
+    "spark.default.parallelism": "16",
+    "spark.reducer.maxSizeInFlight": "48m",
+    "spark.shuffle.sort.bypassMergeThreshold": "200",
+    "spark.shuffle.compress": "true",
+    "spark.memory.fraction": "0.6"
+  },
+  "runtime_theta": {
+    "qs0": {
+      "theta_p": {
+        "spark.sql.adaptive.advisoryPartitionSizeInBytes": "64MB",
+        "spark.sql.adaptive.nonEmptyPartitionRatioForBroadcastJoin": "0.2",
+        "spark.sql.adaptive.maxShuffledHashJoinLocalMapThreshold": "0MB",
+        "spark.sql.adaptive.autoBroadcastJoinThreshold": "10MB",
+        "spark.sql.shuffle.partitions": "200",
+        "spark.sql.adaptive.skewJoin.skewedPartitionThresholdInBytes": "256MB",
+        "spark.sql.adaptive.skewJoin.skewedPartitionFactor": "5",
+        "spark.sql.files.maxPartitionBytes": "128MB",
+        "spark.sql.files.openCostInBytes": "4MB"
+      },
+      "theta_s": {
+        "spark.sql.adaptive.rebalancePartitionsSmallPartitionFactor": "0.2",
+        "spark.sql.adaptive.coalescePartitions.minPartitionSize": "1024KB"
+      }
+    },
+    "qs1": {
+      "theta_p": {
+        "spark.sql.adaptive.advisoryPartitionSizeInBytes": "64MB",
+        "spark.sql.adaptive.nonEmptyPartitionRatioForBroadcastJoin": "0.2",
+        "spark.sql.adaptive.maxShuffledHashJoinLocalMapThreshold": "0MB",
+        "spark.sql.adaptive.autoBroadcastJoinThreshold": "10MB",
+        "spark.sql.shuffle.partitions": "200",
+        "spark.sql.adaptive.skewJoin.skewedPartitionThresholdInBytes": "256MB",
+        "spark.sql.adaptive.skewJoin.skewedPartitionFactor": "5",
+        "spark.sql.files.maxPartitionBytes": "128MB",
+        "spark.sql.files.openCostInBytes": "4MB"
+      },
+      "theta_s": {
+        "spark.sql.adaptive.rebalancePartitionsSmallPartitionFactor": "0.2",
+        "spark.sql.adaptive.coalescePartitions.minPartitionSize": "1024KB"
+      }
+    },
+    "qs2": {
+      "theta_p": {
+        "spark.sql.adaptive.advisoryPartitionSizeInBytes": "64MB",
+        "spark.sql.adaptive.nonEmptyPartitionRatioForBroadcastJoin": "0.2",
+        "spark.sql.adaptive.maxShuffledHashJoinLocalMapThreshold": "0MB",
+        "spark.sql.adaptive.autoBroadcastJoinThreshold": "10MB",
+        "spark.sql.shuffle.partitions": "200",
+        "spark.sql.adaptive.skewJoin.skewedPartitionThresholdInBytes": "256MB",
+        "spark.sql.adaptive.skewJoin.skewedPartitionFactor": "5",
+        "spark.sql.files.maxPartitionBytes": "128MB",
+        "spark.sql.files.openCostInBytes": "4MB"
+      },
+      "theta_s": {
+        "spark.sql.adaptive.rebalancePartitionsSmallPartitionFactor": "0.2",
+        "spark.sql.adaptive.coalescePartitions.minPartitionSize": "1024KB"
+      }
+    }
+  }
+}
