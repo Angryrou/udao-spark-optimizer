@@ -51,6 +51,7 @@ if __name__ == "__main__":
         + ["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9"]
         + ["s10", "s11"]
     )
+    clf_json_path = str(base_dir / f"assets/{bm}_valid_clf_meta.json")
 
     hier_optimizer = HierarchicalOptimizer(
         bm=bm,
@@ -62,6 +63,8 @@ if __name__ == "__main__":
         spark_conf=spark_conf,
         decision_variables=decision_variables,
         ag_path=ag_meta["ag_path"],
+        clf_json_path=clf_json_path,
+        clf_recall_xhold=params.clf_recall_xhold,
     )
 
     # Prepare traces
@@ -93,7 +96,7 @@ if __name__ == "__main__":
     # Compile time QS logical plans from CBO estimation (a list of LQP-sub)
     is_oracle = q_type == "qs_lqp_runtime"
     use_ag = not params.use_mlp
-    for trace in raw_traces:
+    for template, trace in zip(benchmark.templates, raw_traces):
         logger.info(f"Processing {trace}")
         non_decision_input = get_non_decision_inputs_for_qs_compile_dict(
             trace, is_oracle=is_oracle
@@ -120,7 +123,8 @@ if __name__ == "__main__":
         }
 
         po_points = hier_optimizer.solve(
-            non_decision_input,
+            template=template,
+            non_decision_input=non_decision_input,
             seed=params.seed,
             use_ag=use_ag,
             ag_model=ag_model,

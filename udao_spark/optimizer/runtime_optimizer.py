@@ -68,6 +68,8 @@ class RuntimeOptimizer:
         ag_meta_dict: Dict,
         spark_conf: SparkConf,
         decision_variables_dict: Dict,
+        clf_json_path: str,
+        clf_recall_xhold: float,
         seed: Optional[int] = 42,
         verbose: bool = False,
     ) -> "RuntimeOptimizer":
@@ -82,6 +84,8 @@ class RuntimeOptimizer:
                 spark_conf=spark_conf,
                 decision_variables=decision_variables_dict[q_type],
                 ag_path=ag_meta_dict[q_type]["ag_path"],
+                clf_json_path=clf_json_path,
+                clf_recall_xhold=clf_recall_xhold,
                 verbose=verbose,
             )
             for q_type in [R_Q, R_QS]
@@ -172,7 +176,8 @@ class RuntimeOptimizer:
             logger.info(f"> got non_decision_input and ro in {(t3 - t2) // 1e6} ms")
 
         po_objs, po_confs = ro.solve(
-            non_decision_input,
+            template=parsed_dict["TemplateId"],
+            non_decision_input=non_decision_input,
             seed=self.seed,
             use_ag=use_ag,
             ag_model=ag_model_dict[ro.ta.q_type],

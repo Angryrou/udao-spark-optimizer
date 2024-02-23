@@ -64,6 +64,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         start_time_ns = time.perf_counter_ns()
         objs = self.ag_ms.predict_with_ag(
             self.bm,
+            self.current_target_template,
             graph_embeddings,
             non_decision_df,
             self.decision_variables,
@@ -90,6 +91,7 @@ class HierarchicalOptimizer(BaseOptimizer):
 
     def solve(
         self,
+        template: str,
         non_decision_input: Dict[str, Any],
         seed: Optional[int] = None,
         use_ag: bool = True,
@@ -104,6 +106,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         is_oracle: bool = False,
         save_data_header: str = "./output",
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+        self.current_target_template = template
         non_decision_df = self.extract_non_decision_df(non_decision_input)
         (
             graph_embeddings,
@@ -255,7 +258,11 @@ class HierarchicalOptimizer(BaseOptimizer):
                 )
             sampled_theta = self.foo_samples(n_stages, seed, normalize=False)
             objs_dict = self.get_objective_values_ag(
-                graph_embeddings.numpy(), non_decision_df, sampled_theta, ag_model
+                self.current_target_template,
+                graph_embeddings.numpy(),
+                non_decision_df,
+                sampled_theta,
+                ag_model,
             )
         else:
             # use MLP for inference.
@@ -459,7 +466,10 @@ class HierarchicalOptimizer(BaseOptimizer):
 
         if use_ag:
             test_objs = self.get_objective_values_ag_arr(
-                graph_embeddings.numpy(), non_decision_df, test_theta, ag_model
+                graph_embeddings.numpy(),
+                non_decision_df,
+                test_theta,
+                ag_model,
             )
         else:
             test_objs = self.get_objective_values_mlp_arr(

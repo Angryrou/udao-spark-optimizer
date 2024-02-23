@@ -52,6 +52,8 @@ def get_non_decision_inputs(
             graph_weights_path=ag_meta["graph_weights_path"],
             q_type=q_type,
             ag_path=ag_meta["ag_path"],
+            clf_json_path=str(base_dir / f"assets/{bm}_valid_clf_meta.json"),
+            clf_recall_xhold=params.clf_recall_xhold,
         )
         print("found cached non_decision_df...")
         return df, ag_ms
@@ -99,6 +101,8 @@ def get_non_decision_inputs(
         spark_conf=spark_conf,
         decision_variables=decision_vars,
         ag_path=ag_meta["ag_path"],
+        clf_json_path=str(base_dir / f"assets/{bm}_valid_clf_meta.json"),
+        clf_recall_xhold=params.clf_recall_xhold,
         verbose=False,
     )
 
