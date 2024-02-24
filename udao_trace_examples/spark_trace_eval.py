@@ -78,6 +78,12 @@ def get_eval_parser() -> ArgumentParser:
                         help="Only parse configurations, do not start evaluations")
     parser.add_argument("--force", action="store_true",
                         help="Force parsing even if the file already exists")
+    parser.add_argument("--enable_runtime_optimizer", action="store_true",
+                        help="Enable runtime optimizer")
+    parser.add_argument("--runtime_optimizer_host", type=str, default="localhost",
+                        help="Host for runtime optimizer")
+    parser.add_argument("--runtime_optimizer_port", type=int, default=12345,
+                        help="Port for runtime optimizer")
     # fmt: on
 
     return parser
@@ -96,6 +102,9 @@ if __name__ == "__main__":
         parametric_bash_file=args.parametric_bash_file,
         header=args.trace_header,
         debug=args.debug,
+        enable_runtime_optimizer=args.enable_runtime_optimizer,
+        runtime_optimizer_host=args.runtime_optimizer_host,
+        runtime_optimizer_port=args.runtime_optimizer_port,
     )
 
     if args.default:
