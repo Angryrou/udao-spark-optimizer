@@ -28,7 +28,7 @@ while getopts "q:c:b:n:r:x:v" opt; do
     c) conf="$OPTARG";;
     b) benchmark="$OPTARG";;
     n) name="$OPTARG";;
-    r) name="$OPTARG";;
+    r) runtime="$OPTARG";;
     x) xpath="$OPTARG";;
     v) verbose_mode=true;;
     \?) usage;;
