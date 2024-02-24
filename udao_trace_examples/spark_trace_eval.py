@@ -138,7 +138,7 @@ if __name__ == "__main__":
 
     print("------ Start parsing")
     if args.enable_runtime_optimizer:
-        file_name = f"{header}/evalutions_with_runtime_optimizer.json"
+        file_name = f"{header}/evaluations_with_runtime_optimizer.json"
     else:
         file_name = f"{header}/evaluations.json"
 
@@ -158,7 +158,12 @@ if __name__ == "__main__":
     agg_stats_dict = {}
     for conf in configurations:
         (template, qid), configuration = list(conf.items())[0]
-        json_files = glob.glob(f"{header}/trace/*_{template}-{qid}_*.json")
+        if args.enable_runtime_optimizer:
+            json_files = glob.glob(
+                f"{header}/trace_rt_enabled/*_{template}-{qid}_*.json"
+            )
+        else:
+            json_files = glob.glob(f"{header}/trace/*_{template}-{qid}_*.json")
         print(f"------ Parsing {template}-{qid}, found {len(json_files)} files")
         stats: Dict[str, List[Any]] = defaultdict(list)
         for json_file in json_files:
