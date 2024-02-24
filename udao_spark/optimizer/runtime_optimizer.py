@@ -4,6 +4,8 @@ import time
 from socket import AF_INET, SOCK_STREAM, socket
 from typing import Dict, Optional, Tuple
 
+import numpy as np
+
 from udao_trace.configuration import SparkConf
 from udao_trace.parser.spark_parser import THETA_P, THETA_S
 
@@ -16,7 +18,6 @@ from ..utils.logging import logger
 from ..utils.monitor import UdaoMonitor
 from ..utils.params import QType
 from .atomic_optimizer import AtomicOptimizer
-from .utils import utopia_nearest
 
 
 def recv_msg(sock: socket) -> Optional[str]:
@@ -206,7 +207,10 @@ class RuntimeOptimizer:
         if len(po_objs) == 1:
             ret_obj, ret_conf = po_objs[0], po_confs[0]
         else:
-            ret_obj, ret_conf = utopia_nearest(po_objs, po_confs)
+            # ret_obj, ret_conf = utopia_nearest(po_objs, po_confs)
+            # quick hack
+            ind = np.argmin(po_objs[:, 0])
+            ret_obj, ret_conf = po_objs[ind], po_confs[ind]
 
         t5 = time.perf_counter_ns()
         monitor.utopia_nearest_selection_ms = (t5 - t4) / 1e6  # monitoring
@@ -222,6 +226,7 @@ class RuntimeOptimizer:
 
         if self.verbose:
             logger.info(f"> dumped return message in {(t6 - t5) // 1e6} ms")
+            logger.info(f"Ideal Obj: {ret_obj}")
             logger.info(f"Monitor: {monitor.to_dict()}")
 
         ret_msg = json.dumps(
