@@ -85,20 +85,27 @@ class SparkCollector:
     def _submit(
         self, template: str, qid: int, knob_sign: str, cores: int, header: str
     ) -> None:
-        trace_header = f"{header}/trace"
-        log_header = f"{header}/log"
-        os.makedirs(trace_header, exist_ok=True)
-        os.makedirs(log_header, exist_ok=True)
-
-        app_name = self.benchmark.get_prefix() + f"_{template}-{qid}_{knob_sign}"
-        logger.info(f"-[{template}-{qid}]: start running")
-        start = time.time()
-        conf_str = knob_sign.replace(",", " ")
         rt_enable, rt_host, rt_port = (
             self.enable_runtime_optimizer,
             self.runtime_optimizer_host,
             self.runtime_optimizer_port,
         )
+
+        trace_header = f"{header}/trace"
+        log_header = f"{header}/log"
+        app_name = self.benchmark.get_prefix() + f"_{template}-{qid}_{knob_sign}"
+
+        if rt_enable == "true":
+            trace_header += "_rt_enabled"
+            log_header += "_rt_enabled"
+            app_name += "_rt_enabled"
+        os.makedirs(trace_header, exist_ok=True)
+        os.makedirs(log_header, exist_ok=True)
+
+        logger.info(f"-[{template}-{qid}]: start running {app_name}")
+        start = time.time()
+        conf_str = knob_sign.replace(",", " ")
+
         exec_str = (
             f'bash {self.parametric_bash_file} -q "{template} {qid}" -c "{conf_str}" '
             f"-b {self.benchmark.get_name()} -n {app_name} "
