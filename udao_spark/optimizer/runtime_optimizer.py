@@ -174,7 +174,7 @@ class RuntimeOptimizer:
             return json.dumps(
                 {
                     "Configuration": {},
-                    "Measure": monitor.to_dict(),
+                    "Measure": monitor.to_server(),
                 }
             )
 
@@ -227,7 +227,7 @@ class RuntimeOptimizer:
         ret_msg = json.dumps(
             {
                 "Configuration": ret_dict,
-                "Measure": monitor.to_dict(),
+                "Measure": monitor.to_server(),
             }
         )
 
