@@ -23,6 +23,7 @@ from ..data.extractors.query_structure_extractor import (
 from ..model.model_server import AGServer
 from ..utils.constants import THETA_C, THETA_COMPILE, THETA_P, THETA_S
 from ..utils.logging import logger
+from ..utils.monitor import UdaoMonitor
 from ..utils.params import QType
 from .utils import get_cloud_cost_add_io, get_cloud_cost_wo_io
 
@@ -78,6 +79,15 @@ class BaseOptimizer(ABC):
 
         self.tabular_columns = feature_extractors["tabular_features"].columns
         self.tabular_normalizer = feature_processors["tabular_features"][0].normalizer
+        self.tabular_normalizer_meta = {
+            "theta_cols": self.tabular_normalizer.theta_cols,
+            "theta_min": self.tabular_normalizer.theta_scaler.data_min_,
+            "theta_max": self.tabular_normalizer.theta_scaler.data_max_,
+            "non_theta_cols": self.tabular_normalizer.non_theta_cols,
+            "non_theta_min": self.tabular_normalizer.non_theta_scaler.data_min_,
+            "non_theta_max": self.tabular_normalizer.non_theta_scaler.data_max_,
+        }
+
         self.model_objective_columns = feature_extractors["objectives"].columns
         self.sc = spark_conf
         if decision_variables != self.tabular_columns[-len(decision_variables) :]:
@@ -127,14 +137,23 @@ class BaseOptimizer(ABC):
         }
         self.verbose = verbose
 
-    def fast_extraction(self, df: pd.DataFrame) -> Tuple[dgl.DGLGraph, th.Tensor]:
+    def fast_extraction(
+        self, df: pd.DataFrame, use_ag: bool
+    ) -> Tuple[dgl.DGLGraph, Optional[th.Tensor]]:
         """not general but fast for our case"""
         bg = []
         for j in df[self.ta.get_graph_column()].values:
             d = json.loads(j)
+            dt1 = time.perf_counter_ns()
             structure, op_features = extract_query_plan_features_from_serialized_json(
                 self.ta, j
             )
+            dt2 = time.perf_counter_ns()
+            if self.verbose:
+                logger.info(
+                    f"~~~~ extract_query_plan_features_from_serialized_json "
+                    f"in {(dt2 - dt1) / 1e6} ms"
+                )
             op_gid = [
                 self.query_structure.operation_types.get(n.split()[0])
                 for n in structure.node_id2name.values()
@@ -154,21 +173,48 @@ class BaseOptimizer(ABC):
                 ),
                 dtype=self.dtype,
             )
+            dt3 = time.perf_counter_ns()
+            if self.verbose:
+                logger.info(f"~~~~ prepare_operation in {(dt3 - dt2) / 1e6} ms")
             # if self.ag_ms.ms.model_sign == "graph_gtn":
             g = add_positional_encoding(
                 g, self.query_structure.positional_encoding_size
             )
+            dt4 = time.perf_counter_ns()
+            if self.verbose:
+                logger.info(f"~~~~ add_positional_encoding in {(dt4 - dt3) / 1e6} ms")
             bg.append(g)
 
+        dt5 = time.perf_counter_ns()
         embedding_input = dgl.batch(bg)
-        tabular_input_df = self.tabular_normalizer.transform(
-            df[self.tabular_columns].copy()
-        )
-        tabular_input = th.tensor(tabular_input_df.values, dtype=self.dtype)
+        dt6 = time.perf_counter_ns()
+        if self.verbose:
+            logger.info(f"~~~~ dgl.batch in {(dt6 - dt5) / 1e6} ms")
 
-        return embedding_input, tabular_input
+        if not use_ag:
+            norm_non_theta = (
+                df[self.tabular_normalizer_meta["non_theta_cols"]].values
+                - self.tabular_normalizer_meta["non_theta_min"]
+            ) / (
+                self.tabular_normalizer_meta["non_theta_max"]
+                - self.tabular_normalizer_meta["non_theta_min"]
+            )
+            norm_theta = (
+                df[self.tabular_normalizer_meta["theta_cols"]].values
+                - self.tabular_normalizer_meta["theta_min"]
+            ) / (
+                self.tabular_normalizer["theta_max"]
+                - self.tabular_normalizer_meta["theta_min"]
+            )
+            tabular_input = np.concatenate([norm_non_theta, norm_theta], axis=1)
+            tabular_input = th.tensor(tabular_input, dtype=self.dtype)
+            return embedding_input, tabular_input
+        else:
+            return embedding_input, None
 
-    def general_extraction(self, df: pd.DataFrame) -> Tuple[dgl.DGLGraph, th.Tensor]:
+    def general_extraction(
+        self, df: pd.DataFrame
+    ) -> Tuple[dgl.DGLGraph, Optional[th.Tensor]]:
         t1 = time.perf_counter_ns()
         with th.no_grad():
             iterator = self.data_processor.make_iterator(df, df.index, split="test")
@@ -191,8 +237,8 @@ class BaseOptimizer(ABC):
         return embedding_input, tabular_input
 
     def extract_non_decision_embeddings_from_df(
-        self, df: pd.DataFrame, ercilla: bool = True
-    ) -> Tuple[th.Tensor, th.Tensor]:
+        self, df: pd.DataFrame, use_ag: bool = True, ercilla: bool = True
+    ) -> Tuple[th.Tensor, th.Tensor, Dict[str, float]]:
         """
         compute the graph_embedding and
         the normalized values of the non-decision variables
@@ -211,24 +257,76 @@ class BaseOptimizer(ABC):
             logger.info(f">>> preprocessed df in {(t2 - t1) / 1e6} ms")
 
         if ercilla:
-            embedding_input, tabular_input = self.fast_extraction(df)
+            embedding_input, tabular_input = self.fast_extraction(df, use_ag)
         else:
             embedding_input, tabular_input = self.general_extraction(df)
-
         t3 = time.perf_counter_ns()
         if self.verbose:
             logger.info(f">>> fast_extraction in {(t3 - t2) / 1e6} ms")
 
         graph_embedding = self.ag_ms.ms.model.embedder(embedding_input.to(self.device))
-        non_decision_tabular_features = tabular_input[
-            :, : -len(self.decision_variables)
-        ]
+
+        if not use_ag:
+            if tabular_input is None:
+                raise ValueError("tabular_input must not be None")
+            non_decision_tabular_features = tabular_input[
+                :, : -len(self.decision_variables)
+            ]
+        else:
+            non_decision_tabular_features = th.zeros(1, 1, dtype=self.dtype)
 
         t4 = time.perf_counter_ns()
         if self.verbose:
             logger.info(f">>> computed graph_embedding in {(t4 - t3) / 1e6} ms")
 
-        return graph_embedding, non_decision_tabular_features
+        return (
+            graph_embedding,
+            non_decision_tabular_features,
+            {
+                "input_extraction_ms": (t3 - t1) / 1e6,
+                "graph_embedding_ms": (t4 - t3) / 1e6,
+            },
+        )
+
+    @abstractmethod
+    def extract_non_decision_df(self, non_decision_input: Dict) -> pd.DataFrame:
+        ...
+
+    def extract_data_and_compute_non_decision_features(
+        self, monitor: UdaoMonitor, non_decision_input: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        t1 = time.perf_counter_ns()
+        non_decision_df = self.extract_non_decision_df(non_decision_input)
+        t2 = time.perf_counter_ns()
+        if self.verbose:
+            logger.info(f">> extracted non_decision_df in {(t2 - t1) / 1e6} ms")
+        (
+            graph_embeddings,
+            non_decision_tabular_features,
+            time_dict,
+        ) = self.extract_non_decision_embeddings_from_df(non_decision_df)
+        t3 = time.perf_counter_ns()
+        # add time measurements to
+        monitor.input_extraction_ms += (t2 - t1) / 1e6  # monitoring
+        monitor.input_extraction_ms += time_dict["input_extraction_ms"]  # monitoring
+        monitor.graph_embedding_computation_ms = time_dict[
+            "graph_embedding_ms"
+        ]  # monitoring
+
+        if self.verbose:
+            logger.info(f">> extracted non_decision_embeddings in {(t3 - t2) / 1e6} ms")
+            logger.debug("graph_embeddings shape: %s", graph_embeddings.shape)
+            logger.warning(
+                "non_decision_tabular_features is only used for "
+                "MLP inference, shape: %s",
+                non_decision_tabular_features.shape,
+            )
+
+        return {
+            "non_decision_df": non_decision_df,
+            "graph_embeddings": graph_embeddings,
+            "non_decision_tabular_features": non_decision_tabular_features,
+        }
 
     def summarize_obj(
         self,
@@ -436,4 +534,4 @@ class BaseOptimizer(ABC):
         in a weighted distance function
         """
         # todo
-        pass
+        raise NotImplementedError

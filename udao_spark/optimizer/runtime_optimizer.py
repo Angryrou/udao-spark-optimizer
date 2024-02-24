@@ -13,6 +13,7 @@ from ..data.extractors.injection_extractor import (
 )
 from ..utils.exceptions import SolutionNotFoundError
 from ..utils.logging import logger
+from ..utils.monitor import UdaoMonitor
 from ..utils.params import QType
 from .atomic_optimizer import AtomicOptimizer
 from .utils import utopia_nearest
@@ -160,20 +161,28 @@ class RuntimeOptimizer:
         n_samples: int,
         moo_mode: str,
     ) -> str:
+        monitor = UdaoMonitor()
         t1 = time.perf_counter_ns()
-        if self.filter_msg(parsed_dict):
-            logger.info("No need to solve, boost!!!")
-            return "{}"
-
+        is_filter = self.filter_msg(parsed_dict)
         t2 = time.perf_counter_ns()
         if self.verbose:
             logger.info(f"> filtered in {(t2 - t1) // 1e6} ms")
 
-        non_decision_input, ro = self.get_non_decision_input_and_ro(parsed_dict)
+        monitor.input_extraction_ms = (t2 - t1) / 1e6  # monitoring
+        if is_filter:
+            logger.info("No need to solve, boost!!!")
+            return json.dumps(
+                {
+                    "Configuration": {},
+                    "Measure": monitor.to_dict(),
+                }
+            )
 
+        non_decision_input, ro = self.get_non_decision_input_and_ro(parsed_dict)
         t3 = time.perf_counter_ns()
         if self.verbose:
             logger.info(f"> got non_decision_input and ro in {(t3 - t2) // 1e6} ms")
+        monitor.input_extraction_ms = (t3 - t2) / 1e6  # monitoring
 
         po_objs, po_confs = ro.solve(
             template=parsed_dict["TemplateId"],
@@ -184,6 +193,7 @@ class RuntimeOptimizer:
             sample_mode=sample_mode,
             n_samples=n_samples,
             moo_mode=moo_mode,
+            monitor=monitor,
         )
 
         t4 = time.perf_counter_ns()
@@ -197,23 +207,29 @@ class RuntimeOptimizer:
             ret_obj, ret_conf = po_objs[0], po_confs[0]
         else:
             ret_obj, ret_conf = utopia_nearest(po_objs, po_confs)
+
+        t5 = time.perf_counter_ns()
+        monitor.utopia_nearest_selection_ms = (t5 - t4) / 1e6  # monitoring
+
         if ro.ta.q_type == R_Q:
             ret_dict = {k: v for k, v in zip(THETA_P + THETA_S, ret_conf)}
         elif ro.ta.q_type == R_QS:
             ret_dict = {k: v for k, v in zip(THETA_S, ret_conf)}
         else:
             raise ValueError(f"QType {ro.ta.q_type} is not supported")
-
-        t5 = time.perf_counter_ns()
-        if self.verbose:
-            logger.info(f"> prepared return message in {(t5 - t4) // 1e6} ms")
-
-        ret_msg = json.dumps(ret_dict)
-        logger.debug(f"Return {ret_msg}")
-
         t6 = time.perf_counter_ns()
+        monitor.output_preparation_ms += (t6 - t5) / 1e6  # monitoring
+
         if self.verbose:
             logger.info(f"> dumped return message in {(t6 - t5) // 1e6} ms")
+            logger.info(f"Monitor: {monitor.to_dict()}")
+
+        ret_msg = json.dumps(
+            {
+                "Configuration": ret_dict,
+                "Measure": monitor.to_dict(),
+            }
+        )
 
         return ret_msg
 
@@ -249,8 +265,18 @@ class RuntimeOptimizer:
                         logger.warning(f"No message received, disconnecting {addr}")
                         break
                     if debug:
+                        local_monitor = UdaoMonitor()
                         response = (
-                            json.dumps({THETA_S[0]: "0.34", THETA_S[1]: "512KB"}) + "\n"
+                            json.dumps(
+                                {
+                                    "Configuration": {
+                                        THETA_S[0]: "0.34",
+                                        THETA_S[1]: "512KB",
+                                    },
+                                    "Measure": local_monitor.to_server(),
+                                }
+                            )
+                            + "\n"
                         )
                     else:
                         t1 = time.perf_counter_ns()

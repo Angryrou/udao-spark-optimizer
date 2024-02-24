@@ -8,6 +8,7 @@ from udao.optimization.utils.moo_utils import is_pareto_efficient
 
 from ..utils.constants import THETA_COMPILE
 from ..utils.logging import logger
+from ..utils.monitor import UdaoMonitor
 from .base_optimizer import BaseOptimizer
 
 
@@ -31,30 +32,18 @@ class AtomicOptimizer(BaseOptimizer):
         sample_mode: str = "random",
         n_samples: int = 1,
         moo_mode: str = "BF",
+        monitor: UdaoMonitor = UdaoMonitor(),
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
-        t1 = time.perf_counter_ns()
-
-        non_decision_df = self.extract_non_decision_df(non_decision_input)
-
-        t2 = time.perf_counter_ns()
-        if self.verbose:
-            logger.info(f">> extracted non_decision_df in {(t2 - t1) / 1e6} ms")
-
-        (
-            graph_embeddings,
-            non_decision_tabular_features,
-        ) = self.extract_non_decision_embeddings_from_df(non_decision_df)
+        non_decision_dict = self.extract_data_and_compute_non_decision_features(
+            monitor, non_decision_input
+        )
+        non_decision_df = non_decision_dict["non_decision_df"]
+        graph_embeddings = non_decision_dict["graph_embeddings"]
+        non_decision_tabular_features = non_decision_dict[
+            "non_decision_tabular_features"
+        ]
 
         t3 = time.perf_counter_ns()
-        if self.verbose:
-            logger.info(f">> extracted non_decision_embeddings in {(t3 - t2) / 1e6} ms")
-            logger.debug("graph_embeddings shape: %s", graph_embeddings.shape)
-            logger.warning(
-                "non_decision_tabular_features is only used for "
-                "MLP inference, shape: %s",
-                non_decision_tabular_features.shape,
-            )
-
         if sample_mode == "random":
             sampled_theta = self.sample_theta_all(
                 n_samples=n_samples, seed=seed, normalize=not use_ag
@@ -63,10 +52,11 @@ class AtomicOptimizer(BaseOptimizer):
             raise NotImplementedError
         else:
             raise ValueError(f"sample_mode {sample_mode} is not supported")
-
         t4 = time.perf_counter_ns()
+        monitor.theta_sampling_ms = (t4 - t3) / 1e6  # monitoring
+        monitor.theta_numbers = n_samples  # monitoring
         if self.verbose:
-            logger.info(f">> sampled theta in {(t4 - t3) / 1e6} ms")
+            logger.info(f">> sampled {n_samples} theta in {(t4 - t3) / 1e6} ms")
 
         if use_ag:
             graph_embeddings = graph_embeddings.detach().cpu()
@@ -81,6 +71,10 @@ class AtomicOptimizer(BaseOptimizer):
                 ag_model,
             )
         else:
+            if non_decision_tabular_features is None:
+                raise ValueError(
+                    "non_decision_tabular_features is required for MLP inference"
+                )
             objs_dict = self.get_objective_values_mlp(
                 graph_embeddings.tile(n_samples, 1),
                 non_decision_tabular_features.tile(n_samples, 1),
@@ -88,8 +82,8 @@ class AtomicOptimizer(BaseOptimizer):
             )
         lat, cost = self.get_latencies_and_objectives(objs_dict)
         objs = np.vstack([lat, cost]).T.astype(np.float32)
-
         t5 = time.perf_counter_ns()
+        monitor.model_inference_ms = (t5 - t4) / 1e6  # monitoring
         if self.verbose:
             logger.info(f">> computed objective values in {(t5 - t4) / 1e6} ms")
 
@@ -101,6 +95,7 @@ class AtomicOptimizer(BaseOptimizer):
         po_theta = sampled_theta[po_mask]
 
         t6 = time.perf_counter_ns()
+        monitor.pareto_filtering_ms = (t6 - t5) / 1e6  # monitoring
         if self.verbose:
             logger.info(f">> filtered pareto optimal points in {(t6 - t5) / 1e6} ms")
 
@@ -124,6 +119,7 @@ class AtomicOptimizer(BaseOptimizer):
         logger.debug(f"found {len(po_objs)} po points, po_confs: {po_confs}")
 
         t7 = time.perf_counter_ns()
+        monitor.output_preparation_ms += (t7 - t6) / 1e6  # monitoring
         if self.verbose:
             logger.info(f">> constructed configurations in {(t7 - t6) / 1e6} ms")
 
