@@ -137,8 +137,10 @@ if __name__ == "__main__":
         print("------ Finished all evaluations")
 
     print("------ Start parsing")
-
-    file_name = f"{header}/evaluations.json"
+    if args.enable_runtime_optimizer:
+        file_name = f"{header}/evalutions_with_runtime_optimizer.json"
+    else:
+        file_name = f"{header}/evaluations.json"
 
     if args.force:
         print("------ Force parsing")
