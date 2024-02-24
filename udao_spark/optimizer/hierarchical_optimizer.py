@@ -11,6 +11,7 @@ from udao.optimization.concepts import BoolVariable, FloatVariable, IntegerVaria
 from udao_trace.utils.interface import VarTypes
 
 from ..utils.logging import logger
+from ..utils.monitor import DivAndConqMonitor, UdaoMonitor
 from .base_optimizer import BaseOptimizer
 from .moo_algos.div_and_conq_moo import DivAndConqMOO
 from .moo_algos.evo_optimizer import EvoOptimizer
@@ -107,15 +108,27 @@ class HierarchicalOptimizer(BaseOptimizer):
         save_data_header: str = "./output",
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         self.current_target_template = template
-        non_decision_df = self.extract_non_decision_df(non_decision_input)
-        (
-            graph_embeddings,
-            non_decision_tabular_features,
-        ) = self.extract_non_decision_embeddings_from_df(non_decision_df)
-        logger.info("graph_embeddings shape: %s", graph_embeddings.shape)
-        logger.warning(
-            "non_decision_tabular_features is only used for MLP inferencing, shape: %s",
-            non_decision_tabular_features.shape,
+
+        # initial a monitor
+        monitor = DivAndConqMonitor() if "div_and_conq" in algo else UdaoMonitor()
+        non_decision_dict = self.extract_data_and_compute_non_decision_features(
+            monitor, non_decision_input
+        )
+        non_decision_df = non_decision_dict["non_decision_df"]
+        graph_embeddings = non_decision_dict["graph_embeddings"]
+        non_decision_tabular_features = non_decision_dict[
+            "non_decision_tabular_features"
+        ]
+        # checking the monitor is working:
+        if (
+            monitor.input_extraction_ms <= 0
+            or monitor.graph_embedding_computation_ms <= 0
+        ):
+            raise Exception("Monitor is not working properly!")
+        logger.info(
+            "input_extraction: {}ms, graph_embedding_computation: {}ms".format(
+                monitor.input_extraction_ms, monitor.graph_embedding_computation_ms
+            )
         )
 
         n_stages = len(non_decision_input)
@@ -234,6 +247,11 @@ class HierarchicalOptimizer(BaseOptimizer):
 
         else:
             raise Exception(f"Algorithm {algo} is not supported!")
+
+        # to save monitor:
+        monitor.save_to_file(
+            file_path=f"{save_data_header}/monitor/{self.bm}_{query_id}_{algo}_add_customized_params.json"
+        )
 
         logger.info(f"conf: {conf}")
         logger.info(f"objs: {objs}")

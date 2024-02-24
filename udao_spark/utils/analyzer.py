@@ -116,6 +116,7 @@ def get_non_decision_inputs(
     (
         graph_embeddings,
         non_decision_tabular_features,
+        dt,
     ) = atomic_optimizer.extract_non_decision_embeddings_from_df(
         non_decision_df, ercilla=False
     )
