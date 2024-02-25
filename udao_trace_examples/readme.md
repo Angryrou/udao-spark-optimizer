@@ -57,4 +57,8 @@ Most parameters have a default value according to Spark. For the resource parame
    # run compile-time query-level control (Qi's recommendation)
 
 
+  # -------  tpcds -------
+  # default rerun
+
+
    ```

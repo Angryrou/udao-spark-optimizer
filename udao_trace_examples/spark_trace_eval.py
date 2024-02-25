@@ -131,7 +131,7 @@ if __name__ == "__main__":
             spark_collector.start_eval(
                 eval_header=header,
                 configurations=configurations,
-                n_processes=args.n_processes,
+                n_processes=1 if args.enable_runtime_optimizer else args.n_processes,
                 cluster_cores=args.cluster_cores,
             )
         print("------ Finished all evaluations")
