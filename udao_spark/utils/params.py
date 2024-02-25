@@ -232,7 +232,8 @@ def get_compile_time_optimizer_parameters() -> ArgumentParser:
                         help="the head of data save path")
     parser.add_argument("--moo_algo", type=str, default="div_and_conq_moo%B",
                         choices=["div_and_conq_moo%B", "div_and_conq_moo%GD",
-                            "evo", "ws", "ppf"],
+                                 "div_and_conq_moo%WS&11",
+                            "evo", "ws", "ppf", "analyze_model_accuracy", "test"],
                         help="Algorithm for the compile-time optimization",)
     parser.add_argument("--n_c_samples", type=int, default=100,
                         help="the number of random samples of theta_c")
@@ -263,6 +264,10 @@ def get_compile_time_optimizer_parameters() -> ArgumentParser:
                              "used in PF-AP")
     parser.add_argument("--n_max_iters", type=int, default=1,
                         help="The number of maximum iterations used in PF-AP")
+
+    parser.add_argument("--set_query_control", action="store_true",
+                        help="Enable query-level control, "
+                             "which is fine-grained control by default")
 
     # fmt: on
     return parser

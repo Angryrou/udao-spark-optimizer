@@ -131,6 +131,7 @@ class Conf(ABC):
             raise Exception(
                 f"conf_norm should be within [0, 1], got {conf_norm} instead"
             )
+        eps = 1e-6
         conf_norm = np.clip(conf_norm, 0.0, 1.0 - eps)
         knob_list, knob_min, knob_max = (
             self.knob_list,

@@ -222,6 +222,8 @@ class DivAndConqMOO:
                     True,
                 ).tolist()
 
+            # new_theta_c_list = union_opt_theta_c_list
+
         pred_cluster_label = cluster_model.predict(new_theta_c_list)  # type: ignore
         if self.verbose:
             print(f"time cost of predicting labels is: {time.time() - start_predict}")

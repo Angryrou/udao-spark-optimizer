@@ -42,9 +42,9 @@ class DAGOpt:
         self.n_objs = f.shape[1]
 
     def solve(self) -> Tuple[np.ndarray, np.ndarray]:
-        if "hier_moo" in self.algo:
+        if "WS" in self.algo:
             # weights
-            n_ws = int(self.algo.split("%")[1])
+            n_ws = int(self.algo.split("&")[1])
             ws_steps = 1 / (int(n_ws) - 1)
             ws_pairs = self.even_weights(ws_steps, self.n_objs)
             F, Theta = self._hier_moo(self.f, self.conf, ws_pairs, self.indices_arr)
@@ -285,8 +285,10 @@ class DAGOpt:
             objs = qs_f_cid_list[c_id].reshape(-1, self.n_objs)
             confs = qs_conf_cid_list[c_id].reshape(-1, self.len_theta)
             objs_min, objs_max = objs.min(0), objs.max(0)
+            objs_norm = (objs - objs_min) / (objs_max - objs_min)
             if all((objs_min - objs_max) <= 0):
-                obj = np.sum(objs * ws, axis=1)
+                obj = np.sum(objs_norm * ws, axis=1)
+                # obj = np.sum(objs * ws, axis=1)
                 po_ind = int(np.argmin(obj))
                 sum_objs += objs[po_ind]
 

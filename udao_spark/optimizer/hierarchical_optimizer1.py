@@ -4,24 +4,19 @@ import time
 from typing import Any, Callable, Dict, Optional, Tuple, Union
 from types import FrameType
 
-import os
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import signal
 import torch as th
 
-from udao.optimization.concepts import BoolVariable, FloatVariable, IntegerVariable
-
 from udao_trace.utils.interface import VarTypes
 
 from ..utils.logging import logger
-from ..utils.monitor import DivAndConqMonitor, UdaoMonitor
 from .base_optimizer import BaseOptimizer
 from .moo_algos.div_and_conq_moo import DivAndConqMOO
 from .moo_algos.evo_optimizer import EvoOptimizer
 from .moo_algos.ws_optimizer import WSOptimizer
-from .utils import even_weights, save_json, save_results, weighted_utopia_nearest_impl, Model, is_pareto_efficient
+from .utils import even_weights, save_json, save_results, weighted_utopia_nearest_impl, Model
 
 from udao.optimization.concepts import BoolVariable, FloatVariable, IntegerVariable, Objective, Variable
 from udao.optimization.concepts.problem import MOProblem
@@ -31,7 +26,7 @@ from udao.optimization.soo.mogd import MOGD
 from udao.optimization.soo.random_sampler_solver import RandomSamplerSolver
 from udao.optimization.soo.grid_search_solver import GridSearchSolver
 
-class HierarchicalOptimizer(BaseOptimizer):
+class HierarchicalOptimizer1(BaseOptimizer):
     def extract_non_decision_df(self, non_decision_input: Dict) -> pd.DataFrame:
         """
         extract the non_decision dict to a DataFrame
@@ -77,7 +72,6 @@ class HierarchicalOptimizer(BaseOptimizer):
         start_time_ns = time.perf_counter_ns()
         objs = self.ag_ms.predict_with_ag(
             self.bm,
-            self.current_target_template,
             graph_embeddings,
             non_decision_df,
             self.decision_variables,
@@ -104,7 +98,6 @@ class HierarchicalOptimizer(BaseOptimizer):
 
     def solve(
         self,
-        template: str,
         non_decision_input: Dict[str, Any],
         seed: Optional[int] = None,
         use_ag: bool = True,
@@ -121,37 +114,12 @@ class HierarchicalOptimizer(BaseOptimizer):
         save_data_header: str = "./output",
         is_query_control: bool = False,
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
-        self.current_target_template = template
-
-        # initial a monitor
         start_compute_non_decision = time.time()
-        monitor = DivAndConqMonitor() if "div_and_conq" in algo else UdaoMonitor()
-        non_decision_dict = self.extract_data_and_compute_non_decision_features(
-            monitor, non_decision_input
-        )
-        non_decision_df = non_decision_dict["non_decision_df"]
-        graph_embeddings = non_decision_dict["graph_embeddings"]
-        non_decision_tabular_features = non_decision_dict[
-            "non_decision_tabular_features"
-        ]
-        # checking the monitor is working:
-        if (
-                monitor.input_extraction_ms <= 0
-                or monitor.graph_embedding_computation_ms <= 0
-        ):
-            raise Exception("Monitor is not working properly!")
-        logger.info(
-            "input_extraction: {}ms, graph_embedding_computation: {}ms".format(
-                monitor.input_extraction_ms, monitor.graph_embedding_computation_ms
-            )
-        )
-
-
-        # non_decision_df = self.extract_non_decision_df(non_decision_input)
-        # (
-        #     graph_embeddings,
-        #     non_decision_tabular_features,
-        # ) = self.extract_non_decision_embeddings_from_df(non_decision_df)
+        non_decision_df = self.extract_non_decision_df(non_decision_input)
+        (
+            graph_embeddings,
+            non_decision_tabular_features,
+        ) = self.extract_non_decision_embeddings_from_df(non_decision_df)
         tc_compute_non_decision = time.time() - start_compute_non_decision
         logger.info("graph_embeddings shape: %s", graph_embeddings.shape)
         logger.warning(
@@ -209,16 +177,6 @@ class HierarchicalOptimizer(BaseOptimizer):
                 save_data,
                 save_data_header=save_data_header,
             )
-
-        elif algo == "test":
-            self._random_sample_query(use_ag,
-                graph_embeddings,
-                n_stages,
-                ag_model,
-                non_decision_df,
-                non_decision_tabular_features,
-                seed,
-                )
 
         elif "div_and_conq_moo" in algo:
             # n_c_samples: param1
@@ -326,27 +284,19 @@ class HierarchicalOptimizer(BaseOptimizer):
         else:
             algo_setting = f"{param1}_{param2}"
 
-        if use_ag:
-            model_name = "ag"
-        else:
-            model_name = "mlp"
         if "div_and_conq_moo" in algo:
             # algo = div_and_conq_moo%GD
             dag_opt_algo = algo.split("%")[1]
             data_path = (
-                f"{save_data_header}/query_control_{is_query_control}/latest_model_{self.device.type}/{model_name}/oracle_{is_oracle}/{algo}/{algo_setting}/time_{time_limit}/"
+                f"{save_data_header}/query_control_{is_query_control}/latest_model_{self.device.type}/ag/oracle_{is_oracle}/{algo}/{algo_setting}/time_{time_limit}/"
                 f"query_{query_id}_n_{n_stages}/{sample_mode}/{dag_opt_algo}"
             )
         else:
             data_path = (
-                f"{save_data_header}/query_control_{is_query_control}/latest_model_{self.device.type}/{model_name}/oracle_{is_oracle}/{algo}/{algo_setting}/time_{time_limit}/"
+                f"{save_data_header}/query_control_{is_query_control}/latest_model_{self.device.type}/ag/oracle_{is_oracle}/{algo}/{algo_setting}/time_{time_limit}/"
                 f"query_{query_id}_n_{n_stages}"
             )
         save_json(data_path, time_cost_dict, mode="end_to_end")
-
-        monitor.save_to_file(
-            file_path=f"{save_data_header}/monitor/{self.bm}_{query_id}_{algo}_add_customized_params.json"
-        )
 
         logger.info(f"conf: {conf}")
         logger.info(f"objs: {objs}")
@@ -372,11 +322,7 @@ class HierarchicalOptimizer(BaseOptimizer):
             sampled_theta = self.foo_samples(n_stages, seed, normalize=False)
 
             objs_dict = self.get_objective_values_ag(
-                self.current_target_template,
-                graph_embeddings.numpy(),
-                non_decision_df,
-                sampled_theta,
-                ag_model,
+                graph_embeddings.numpy(), non_decision_df, sampled_theta, ag_model
             )
         else:
             # use MLP for inference.
@@ -581,10 +527,7 @@ class HierarchicalOptimizer(BaseOptimizer):
 
         if use_ag:
             test_objs = self.get_objective_values_ag_arr(
-                graph_embeddings.numpy(),
-                non_decision_df,
-                test_theta,
-                ag_model,
+                graph_embeddings.numpy(), non_decision_df, test_theta, ag_model
             )
         else:
             test_objs = self.get_objective_values_mlp_arr(
@@ -687,55 +630,17 @@ class HierarchicalOptimizer(BaseOptimizer):
                 ]
 
             elif n_c_samples == 64:
-                if "test_end" in save_data_header:
-                    # to test for end-to-end
-                    c_grids = [
-                        [2, 3, 4, 5],
-                        [1, 2, 3, 4],
-                        [4, 8, 12, 16],
-                        [1, 4],
-                        [0, 5],
-                        [0],
-                        [1],
-                        [50, 75],
-                    ]
-                else:
-                    c_grids = [
-                        [1, 5],
-                        [1, 4],
-                        [4, 16],
-                        [1, 4],
-                        [0, 5],
-                        [0],
-                        [1],
-                        [50, 75],
-                    ]
+                c_grids = [
+                    [1, 5],
+                    [1, 4],
+                    [4, 16],
+                    [1, 4],
+                    [0, 5],
+                    [0],
+                    [1],
+                    [50, 75],
+                ]
             elif n_c_samples == 32:
-                if "test_end" in save_data_header:
-                    # to test for end-to-end
-                    c_grids = [
-                        [2, 3, 4, 5],
-                        [1, 2, 3, 4],
-                        [4, 8, 12, 16],
-                        [1, 4],
-                        [5],
-                        [0],
-                        [1],
-                        [50, 75],
-                    ]
-                else:
-                    c_grids = [
-                        [1, 5],
-                        [1, 4],
-                        [4, 16],
-                        [1, 4],
-                        [5],
-                        [0],
-                        [1],
-                        [50, 75],
-                    ]
-
-            elif n_c_samples == 16:
                 c_grids = [
                     [1, 5],
                     [1, 4],
@@ -744,14 +649,14 @@ class HierarchicalOptimizer(BaseOptimizer):
                     [5],
                     [0],
                     [1],
-                    [50],
+                    [50, 75],
                 ]
-            elif n_c_samples == 1:
+            elif n_c_samples == 16:
                 c_grids = [
-                    [5], #r1: 1, r2: 3, r3: 5
-                    [4], #r1: 1, r2: 1, r3: 4
-                    [16],#r1: 4, r2: 16, r3: 16
-                    [1],
+                    [1, 5],
+                    [1, 4],
+                    [4, 16],
+                    [1, 4],
                     [5],
                     [0],
                     [1],
@@ -918,16 +823,10 @@ class HierarchicalOptimizer(BaseOptimizer):
             conf_raw_all = self.sc.construct_configuration(conf_all_qs).reshape(
                 -1, len_theta_per_qs
             )
-            if n_c_samples == 1:
-                data_path = (
-                    f"{save_data_header}/query_control_False/latest_model_{self.device.type}/ag/oracle_{is_oracle}/{algo}/{n_c_samples}_{n_p_samples}/time_-1/"
-                    f"query_{query_id}_n_{n_stages}/{sample_mode}/{dag_opt_algo}/c_{conf_raw_all[0, 0]}_{conf_raw_all[0, 1]}_{conf_raw_all[0, 2]}"
-                )
-            else:
-                data_path = (
-                    f"{save_data_header}/query_control_False/latest_model_{self.device.type}/ag/oracle_{is_oracle}/{algo}/{n_c_samples}_{n_p_samples}/time_-1/"
-                    f"query_{query_id}_n_{n_stages}/{sample_mode}/{dag_opt_algo}"
-                )
+            data_path = (
+                f"{save_data_header}/query_control_False/latest_model_{self.device.type}/ag/oracle_{is_oracle}/{algo}/{n_c_samples}_{n_p_samples}/time_-1/"
+                f"query_{query_id}_n_{n_stages}/{sample_mode}/{dag_opt_algo}"
+            )
         else:
             conf_raw = self.sc.construct_configuration_from_norm(conf_qs0).reshape(
                 -1, len_theta_per_qs
@@ -935,16 +834,10 @@ class HierarchicalOptimizer(BaseOptimizer):
             conf_raw_all = self.sc.construct_configuration_from_norm(conf_all_qs).reshape(
                 -1, len_theta_per_qs
             )
-            if n_c_samples == 1:
-                data_path = (
-                    f"{save_data_header}/query_control_False/latest_model_{self.device.type}/mlp/oracle_{is_oracle}/{algo}/{n_c_samples}_{n_p_samples}/time_-1/"
-                    f"query_{query_id}_n_{n_stages}/{sample_mode}/{dag_opt_algo}/c_{conf_raw_all[0, 0]}_{conf_raw_all[0, 1]}_{conf_raw_all[0, 2]}"
-                )
-            else:
-                data_path = (
-                    f"{save_data_header}/query_control_False/latest_model_{self.device.type}/mlp/oracle_{is_oracle}/{algo}/{n_c_samples}_{n_p_samples}/time_-1/"
-                    f"query_{query_id}_n_{n_stages}/{sample_mode}/{dag_opt_algo}"
-                )
+            data_path = (
+                f"{save_data_header}/query_control_False/latest_model_{self.device.type}/mlp/oracle_{is_oracle}/{algo}/{n_c_samples}_{n_p_samples}/time_-1/"
+                f"query_{query_id}_n_{n_stages}/{sample_mode}/{dag_opt_algo}"
+            )
 
         # add WUN
         objs, conf = weighted_utopia_nearest_impl(po_objs, conf_raw)
@@ -965,138 +858,6 @@ class HierarchicalOptimizer(BaseOptimizer):
             save_json(data_path, time_cost_dict, mode="time_cost_json")
 
         return conf, objs
-
-
-    def _random_sample_query(
-            self,
-            use_ag: bool,
-            graph_embeddings: th.Tensor,
-            n_stages: int,
-            ag_model: Dict[str, str],
-            non_decision_df: pd.DataFrame,
-            non_decision_tabular_features: th.Tensor,
-            seed: Optional[int],
-    ) -> None:
-        # n_samples = 100
-        if use_ag:
-            # graph_embeddings = graph_embeddings.detach().cpu()
-            if graph_embeddings.shape[0] != n_stages:
-                raise ValueError(
-                    f"graph_embeddings shape {graph_embeddings.shape} "
-                    f"does not match n_stages {n_stages}"
-                )
-            # n_samples=100
-            # theta_c_samples = self.sample_theta_x(
-            #     n_samples * n_stages,
-            #     "c",
-            #     seed if seed is not None else None,
-            #     normalize=False,
-            # )
-            # theta_p_samples = self.sample_theta_x(
-            #     n_samples * n_stages,
-            #     "p",
-            #     seed + 1 if seed is not None else None,
-            #     normalize=False,
-            # )
-            # if use_ag:
-            #     mesh_theta_c = theta_c_samples
-            #     mesh_theta_p = theta_p_samples
-            # else:
-            #     theta_c = th.tensor(theta_c_samples, dtype=th.float32)
-            #     theta_p = th.tensor(theta_p_samples, dtype=th.float32)
-
-            c_grids = [
-                [1, 5],
-                [1, 4],
-                [4, 16],
-                [1, 4],
-                [0, 5],
-                [0, 1],
-                [0, 1],
-                [50, 75],
-            ]
-            p_grids = [
-                [0],
-                [1, 6],
-                [0, 32],
-                [0, 32],
-                [2, 50],
-                [0, 4],
-                [20, 80],
-                [0, 4],
-                [0, 4],
-            ]
-            theta_c_samples = np.array([list(i) for i in itertools.product(*c_grids)])
-            theta_p_samples = np.array([list(i) for i in itertools.product(*p_grids)])
-            n_samples = theta_c_samples.shape[0]
-            theta_s_samples = self.sample_theta_x(
-                n_samples * n_stages, "s", seed + 2 if seed is not None else None, normalize=False
-            )
-            mesh_theta_c = np.tile(theta_c_samples, (n_stages, 1))
-            mesh_theta_p = np.tile(theta_p_samples, (n_stages, 1))
-            theta_all = np.concatenate([mesh_theta_c, mesh_theta_p, theta_s_samples], axis=1)
-
-            mesh_graph_embeddings = graph_embeddings.repeat_interleave(
-                n_samples, dim=0
-            )
-            mesh_tabular_features = non_decision_df.loc[
-                np.repeat(non_decision_df.index, n_samples)
-            ].reset_index(drop=True)
-
-            objs = self.get_objective_values_ag_arr(
-                mesh_graph_embeddings.cpu().numpy(),
-                mesh_tabular_features,
-                theta_all,
-                ag_model,
-            )
-        else:
-            # use MLP for inference.
-            sampled_theta = self.foo_samples(n_stages, seed, normalize=True)
-            # an example to get objective values given theta
-            objs_dict = self.get_objective_values_mlp(
-                graph_embeddings,
-                non_decision_tabular_features,
-                th.tensor(sampled_theta, dtype=self.dtype),
-            )
-            logger.info(objs_dict)
-
-        # shape (n_samples, n_stages)
-        latency = np.vstack(np.split(objs[:, 0], n_stages)).T
-        cost = np.vstack(np.split(objs[:, 1], n_stages)).T
-
-        query_latency = np.sum(latency, axis=1)
-        query_cost = np.sum(cost, axis=1)
-        query_objs = np.vstack((query_latency, query_cost)).T
-        utopia_lat = min(query_latency)
-        utopia_cost = min(query_cost)
-        fig, ax = plt.subplots()
-        ax.set_xlim([0.7, 1.05])
-        ax.set_ylim([15, 100])
-        ax.scatter(query_cost, query_latency, marker=".", color="blue", edgecolors="blue", alpha=0.3, label="Dominated")
-
-        q_pareto_flag = is_pareto_efficient(query_objs)
-        q_pareto = query_objs[q_pareto_flag]
-        lat_q_pareto, cost_q_pareto = q_pareto[:, 0], q_pareto[:, 1]
-        ax.scatter(cost_q_pareto, lat_q_pareto, marker=".", color="red", edgecolors="red", alpha=0.6, label="Pareto")
-
-        ax.scatter([utopia_cost], [utopia_lat], color="orange", edgecolors="orange", alpha=0.6, label="Utopia")
-        ax.set_ylabel('Query Latency', fontdict={"size": 20})
-        ax.set_xlabel('Query Cost', fontdict={"size": 20})
-
-        weights = np.array([0.7, 0.3])
-        rec_f, _ = self.temp_weighted_utopia_nearest(q_pareto, q_pareto, weights=weights)
-        ax.scatter(rec_f[1], rec_f[0], marker="*", color="red", label=f"Recommendation[{weights[0]},{weights[1]}]", s=80)
-
-        plt.xticks(fontsize=20)
-        plt.yticks(fontsize=20)
-        ax.legend(fontsize=15)
-        plt.tight_layout()
-        # plt.show()
-        plot_path = f"./output/0218test/plots/example_tpch_query"
-        if not os.path.exists(plot_path):
-            os.makedirs(plot_path, exist_ok=True)
-        plt.savefig(f"{plot_path}/query_5-1_n_{n_stages}.pdf")
-
 
     def _evo(
         self,
@@ -1282,25 +1043,25 @@ class HierarchicalOptimizer(BaseOptimizer):
         if use_ag:
             theta_s = theta_s_samples
             c_vars = [
-                IntegerVariable(1, 5),
-                IntegerVariable(1, 4),
-                IntegerVariable(4, 16),
-                IntegerVariable(1, 4),
-                IntegerVariable(0, 5),
+                IntegerVariable(1, 2),
+                IntegerVariable(1, 2),
+                IntegerVariable(4, 5),
+                IntegerVariable(1, 2),
+                IntegerVariable(0, 1),
                 BoolVariable(),
                 BoolVariable(),
-                IntegerVariable(50, 75),
+                IntegerVariable(50, 51),
             ]
             p_vars = [
-                IntegerVariable(0, 5),
-                IntegerVariable(1, 6),
-                IntegerVariable(0, 32),
-                IntegerVariable(0, 32),
-                IntegerVariable(2, 50),
-                IntegerVariable(0, 4),
-                IntegerVariable(20, 80),
-                IntegerVariable(0, 4),
-                IntegerVariable(0, 4),
+                IntegerVariable(0, 1),
+                IntegerVariable(1, 2),
+                IntegerVariable(0, 1),
+                IntegerVariable(0, 1),
+                IntegerVariable(2, 3),
+                IntegerVariable(0, 1),
+                IntegerVariable(20, 21),
+                IntegerVariable(0, 1),
+                IntegerVariable(0, 1),
             ]
             s_vars = [IntegerVariable(x, x) for x in theta_s[0].tolist()]
         else:
@@ -1414,35 +1175,6 @@ class HierarchicalOptimizer(BaseOptimizer):
             save_json(data_path, time_cost_dict, mode="time_cost_json")
 
         return objs, conf
-
-    def temp_weighted_utopia_nearest(self,
-            pareto_objs: np.ndarray, pareto_confs: np.ndarray, weights: np.ndarray,
-    ) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        return the Pareto point that is closest to the utopia point
-        in a weighted distance function
-        """
-        n_pareto = pareto_objs.shape[0]
-        assert n_pareto > 0
-        if n_pareto == 1:
-            # (2,), (n, 2)
-            return pareto_objs[0], pareto_confs[0]
-
-        utopia = np.zeros_like(pareto_objs[0])
-        min_objs, max_objs = pareto_objs.min(0), pareto_objs.max(0)
-        pareto_norm = (pareto_objs - min_objs) / (max_objs - min_objs)
-        # fixme: internal weights
-        # weights = np.array([1, 1])
-        # weights = np.array([0.7, 0.3])
-        pareto_weighted_norm = pareto_norm * weights
-        # check the speed comparison: https://stackoverflow.com/a/37795190/5338690
-        dists = np.sum((pareto_weighted_norm - utopia) ** 2, axis=1)
-        wun_id = np.argmin(dists)
-
-        picked_pareto = pareto_objs[wun_id]
-        picked_confs = pareto_confs[wun_id]
-
-        return picked_pareto, picked_confs
 
     def _ppf(self,
              len_theta_per_qs: int,
