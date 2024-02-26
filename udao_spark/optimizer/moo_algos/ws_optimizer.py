@@ -97,6 +97,7 @@ class WSOptimizer:
             except Exception:
                 F, Theta = np.array([-1]), np.array([-1])
                 print(f"Timed out for query {self.query_id}")
+                model_infer_info = [-1]
         else:
             F, Theta, model_infer_info = self.ws_solve()
 
@@ -190,18 +191,22 @@ class WSOptimizer:
         # normalization
         objs_min, objs_max = query_objs.min(0), query_objs.max(0)
 
+        weights_map = {}
         if all((objs_min - objs_max) <= 0):
             objs_norm = (query_objs - objs_min) / (objs_max - objs_min)
             for ws in self.ws_pairs:
+                # [0.1, 0.9], [0.3, 0.7], [0.5, 0.5], [0.7, 0.3], [0.9, 0.1]
                 # po_ind = self.get_soo_index(objs_norm, ws)
                 obj = np.sum(objs_norm * ws, axis=1)
                 po_ind = np.argmin(obj)
                 po_obj_list.append(query_objs[po_ind])
                 po_var_list.append(theta[po_ind])
+                weights_map[int(round(ws[0] * 10))] = theta[po_ind].tolist()
 
             # only keep non-dominated solutions
             po, confs = ut.keep_non_dominated(po_obj_list, po_var_list)
 
+            model_infer_info_list.append(weights_map)
             return po, confs, model_infer_info_list
             # return moo_ut._summarize_ret(po_obj_list, po_var_list)
         else:

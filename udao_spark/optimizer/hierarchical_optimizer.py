@@ -1410,7 +1410,8 @@ class HierarchicalOptimizer(BaseOptimizer):
             save_results(data_path, conf2, mode="Theta")
             save_results(data_path, conf_raw_all, mode="Theta_all")
             # save_results(data_path, np.array([time_cost]), mode="time")
-            save_results(data_path, model_infer_info, mode="model_infer_info")
+            save_json(data_path, model_infer_info[-1], mode="weight2theta")
+            save_results(data_path, model_infer_info[:-1], mode="model_infer_info")
             save_json(data_path, time_cost_dict, mode="time_cost_json")
 
         return objs, conf
