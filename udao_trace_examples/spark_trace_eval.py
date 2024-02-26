@@ -170,7 +170,9 @@ if __name__ == "__main__":
             try:
                 d = JsonHandler.load_json(json_file)
             except Exception as e:
-                raise Exception(f"Failed to load {json_file} with error: {e}")
+                print(f"Skip due to - failed to load {json_file} with error: {e}")
+                continue
+                # raise Exception(f"Failed to load {json_file} with error: {e}")
             obj_dict = parse_lqp_objectives(d["Objectives"])
             lat_s = obj_dict["latency_s"]
             io_mb = obj_dict["io_mb"]
