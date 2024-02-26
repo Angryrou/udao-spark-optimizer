@@ -4,7 +4,6 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 
 from udao_trace.collector.SparkCollector import SparkCollector
-from udao_trace.parser.spark_parser import THETA_C, THETA_P, THETA_S
 from udao_trace.utils import BenchmarkType, ClusterName, JsonHandler
 from udao_trace_examples.params import get_collector_parser
 
@@ -113,7 +112,8 @@ if __name__ == "__main__":
         template, qid = query_id.split("-")
         for conf in conf_list:
             conf_dict = {
-                k: v for k, v in zip(THETA_C + THETA_P + THETA_S, conf.split(","))
+                k: v
+                for k, v in zip(spark_collector.spark_conf.knob_names, conf.split(","))
             }
             configurations.append({(template, qid): conf_dict})
 
