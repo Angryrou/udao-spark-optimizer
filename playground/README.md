@@ -30,8 +30,13 @@ method = "div_and_conq_moo%B"
 dag_opt_algo = "B"
 # query_id: the id of query, e.g. 2-1
 # n_s: the number of subQs
+# for F, Theta_all, time_cost of the algorithm and the model inference time
 data_path = f"{save_data_header}/query_control_False/latest_model_{cpu_mode}/{model_name}/oracle_False/{method}/" \
                         f"{div_moo_setting}/time_-1/query_{query_id}_n_{n_s}/{sample_mode}/{dag_opt_algo}"
+# for end-to-end comparison (the solve function in hierarchical_optimizer.py)
+div_moo_setting_end_to_end_time = "32_256"
+data_path_end_to_end = f"{save_data_header}/query_control_False/latest_model_{cpu_mode}/{model_name}/oracle_False/{method}/" \
+                        f"{div_moo_setting_end_to_end_time}/time_-1/query_{query_id}_n_{n_s}/{sample_mode}/{dag_opt_algo}"
 ```
 
 - DivB (Oracle-setting-with-failure-classifier)
@@ -122,6 +127,10 @@ dag_opt_algo = "B"
 # n_s: the number of subQs
 data_path = f"{save_data_header}/query_control_False/latest_model_{cpu_mode}/{model_name}/oracle_False/{method}/" \
                         f"{div_moo_setting}/time_-1/query_{query_id}_n_{n_s}/{sample_mode}/{dag_opt_algo}"
+# for end-to-end comparison (the solve function in hierarchical_optimizer.py)
+div_moo_setting_end_to_end_time = "64_32"
+data_path_end_to_end = f"{save_data_header}/query_control_False/latest_model_{cpu_mode}/{model_name}/oracle_False/{method}/" \
+                        f"{div_moo_setting_end_to_end_time}/time_-1/query_{query_id}_n_{n_s}/{sample_mode}/{dag_opt_algo}"
 ```
 
 - DivB (Oracle-setting-with-failure-classifier)
