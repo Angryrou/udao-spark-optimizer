@@ -12,6 +12,10 @@ from udao_trace.parser.spark_parser import parse_lqp_objectives
 from udao_trace.utils import BenchmarkType, ClusterName, JsonHandler
 from udao_trace_examples.params import get_collector_parser
 
+s3 = "spark.sql.adaptive.maxShuffledHashJoinLocalMapThreshold"
+s4 = "spark.sql.autoBroadcastJoinThreshold"
+s5 = "spark.sql.shuffle.partitions"
+
 
 def parse_configuration(j: Dict, fine_grained: bool) -> Dict:
     if "submit_theta" not in j:
@@ -93,6 +97,11 @@ if __name__ == "__main__":
     args = get_eval_parser().parse_args()
     if args.trace_header != "evaluations":
         raise ValueError("trace_header must be 'evaluations'")
+
+    if args.fine_grained:
+        raise NotImplementedError(
+            "theta_p should be extracted based on QS with join operators"
+        )
 
     spark_collector = SparkCollector(
         knob_meta_file=args.knob_meta_file,
