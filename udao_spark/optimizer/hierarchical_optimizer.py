@@ -685,7 +685,28 @@ class HierarchicalOptimizer(BaseOptimizer):
                     [1],
                     [50, 75],
                 ]
-
+            elif n_c_samples == 160: # 4 * 2 * 5 * 1 * 2 * 2 = 160
+                c_grids = [
+                    [1, 2, 3, 5], # 4
+                    [1, 2], # 2
+                    [8, 10, 12, 14, 16], # 5
+                    [2],
+                    [2],
+                    [0, 1], # 2
+                    [1],
+                    [50, 75], # 2
+                ]
+            elif n_c_samples == 36: # 3 * 2 * 3 * 2 (<= 64)
+                c_grids = [
+                    [1, 3, 5], # 3
+                    [1, 2], # 2
+                    [8, 12, 16], # 3
+                    [2],
+                    [2],
+                    [0, 1], # 2
+                    [1],
+                    [60], # 1
+                ]
             elif n_c_samples == 64:
                 if "test_end" in save_data_header:
                     # to test for end-to-end
@@ -772,7 +793,34 @@ class HierarchicalOptimizer(BaseOptimizer):
                     [0, 4],
                     [0, 4],
                 ]
+
+            elif n_p_samples == 162: # 3 * 3 * 3 * 3 * 2 = 162 (<= 256)
+                p_grids = [
+                    [2], # default
+                    [2], # default
+                    [0, 14, 28], # 0MB/140MB/280MB maxShuffledHashJoinLocalMapThreshold
+                    [0, 14, 28], # 0MB/140MB/280MB autoBroadcastJoinThreshold
+                    [10, 20, 40], # 80/160/320 sql.shuffle.partitions
+                    [2],
+                    [50], # default
+                    [1, 2, 3],
+                    [1, 2]
+                ]
+            elif n_p_samples == 24: #  2 * 2 * 2 * 3 (<= 32)
+                p_grids = [
+                    [2], # default
+                    [2], # default
+                    [0, 14], # 0MB/140MB maxShuffledHashJoinLocalMapThreshold
+                    [0, 14], # 0MB/140MB autoBroadcastJoinThreshold
+                    [10, 20], # 80/160 sql.shuffle.partitions
+                    [2],
+                    [50], # default
+                    [1, 2, 3],
+                    [2] # default
+                ]
             elif n_p_samples == 256:
+                if "new_grid" in save_data_header:
+                    ...
                 p_grids = [
                     [0],
                     [1, 6],
@@ -808,7 +856,9 @@ class HierarchicalOptimizer(BaseOptimizer):
                     [0],
                     [0, 4],
                 ]
-            elif n_p_samples == 32:
+            elif n_p_samples == 32: # for tpcds
+                if "chenghao_new_grid" in save_data_header:
+                    ...
                 p_grids = [
                     [0],
                     [1],
