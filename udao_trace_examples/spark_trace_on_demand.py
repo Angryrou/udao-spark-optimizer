@@ -1,3 +1,4 @@
+import glob
 from argparse import ArgumentParser
 from typing import Dict, List, Optional, Tuple
 
@@ -115,7 +116,11 @@ if __name__ == "__main__":
                 k: v
                 for k, v in zip(spark_collector.spark_conf.knob_names, conf.split(","))
             }
-            configurations.append({(template, qid): conf_dict})
+            pattern = f"{header}/*{query_id}_{conf}*"
+            files = glob.glob(pattern)
+            n_exits = len(files)
+            for i in range(n_exits, args.n_reps):
+                configurations.append({(template, qid): conf_dict})
 
     print("------ Starting evaluations")
     for i in range(args.n_reps):
