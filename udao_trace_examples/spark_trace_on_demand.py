@@ -116,7 +116,11 @@ if __name__ == "__main__":
                 k: v
                 for k, v in zip(spark_collector.spark_conf.knob_names, conf.split(","))
             }
-            pattern = f"{header}/*{query_id}_{conf}*"
+            pattern = (
+                f"{header}/trace_rt_enabled/*{query_id}_{conf}*"
+                if args.enable_runtime_optimizer
+                else f"{header}/trace/*{query_id}_{conf}*"
+            )
             files = glob.glob(pattern)
             n_exits = len(files)
             for i in range(n_exits, args.n_reps):
