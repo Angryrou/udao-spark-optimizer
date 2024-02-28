@@ -126,13 +126,11 @@ if __name__ == "__main__":
             for i in range(n_exits, args.n_reps):
                 configurations.append({(template, qid): conf_dict})
 
-    print("------ Starting evaluations")
-    for i in range(args.n_reps):
-        print("------ Starting evaluation", i + 1)
-        spark_collector.start_eval(
-            eval_header=header,
-            configurations=configurations,
-            n_processes=1 if args.enable_runtime_optimizer else args.n_processes,
-            cluster_cores=args.cluster_cores,
-        )
+    print(f"------ Starting evaluations {len(configurations)} configurations")
+    spark_collector.start_eval(
+        eval_header=header,
+        configurations=configurations,
+        n_processes=1 if args.enable_runtime_optimizer else args.n_processes,
+        cluster_cores=args.cluster_cores,
+    )
     print("------ Finished all evaluations")
