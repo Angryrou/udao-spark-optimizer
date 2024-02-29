@@ -19,6 +19,7 @@ def get_agg_task_parser() -> ArgumentParser:
     parser = ArgumentParser()
     parser.add_argument("--benchmark", type=str, default="tpch")
     parser.add_argument("--setting", type=str, default="divB_new_grids")
+    parser.add_argument("--prefs", nargs="+", type=int, default=[0, 1, 5, 9, 10])
     return parser
 
 
@@ -36,9 +37,12 @@ def extract_configure_from_fine_grained(file_path: str, join_ids: List[str]) -> 
             )
         )
         theta_p[s4] = "{}MB".format(
-            min(
-                int(j["runtime_theta"][f"qs{ji}"]["theta_p"][s4][:-2])
-                for ji in join_ids
+            max(
+                10,
+                min(
+                    int(j["runtime_theta"][f"qs{ji}"]["theta_p"][s4][:-2])
+                    for ji in join_ids
+                ),
             )
         )
         theta_p[s5] = str(
@@ -103,8 +107,11 @@ for template, raw_trace in zip(benchmark.templates, raw_traces):
 
 # step 2: get all recommended configurations in a big DataFrame
 pref_dict = {}
-for lat_pref in [1, 5, 9]:
-    header = f"evaluations/{bm}100/{params.setting}/0.{lat_pref}_0.{10-lat_pref}"
+prefs = params.prefs
+for lat_pref in prefs:
+    header = (
+        f"evaluations/{bm}100/{params.setting}/{lat_pref/10:.1f}_{(10-lat_pref)/10:.1f}"
+    )
     data = []
     for template in benchmark.templates:
         query_id = f"{template}-1"
@@ -128,9 +135,15 @@ for i, row in df.drop_duplicates().iterrows():
     query_id, conf = row["query_id"], row["conf"]
     torun_dict[query_id].append(conf)
 
+suffix = "_".join(map(str, prefs)) + "_s4_lb_10MB"
 JsonHandler.dump_to_file(
-    torun_dict, f"evaluations/{bm}100/{setting}/on_demand/distinct.json", indent=2
+    torun_dict,
+    f"evaluations/{bm}100/{setting}/on_demand/distinct_{suffix}.json",
+    indent=2,
 )
 PickleHandler.save(
-    pref_dict, f"evaluations/{bm}100/{setting}/", "pref_to_df.pkl", overwrite=True
+    pref_dict,
+    f"evaluations/{bm}100/{setting}/",
+    f"pref_to_df_{suffix}.pkl",
+    overwrite=True,
 )
