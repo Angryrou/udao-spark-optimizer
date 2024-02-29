@@ -21,6 +21,8 @@ import torch as th
 from botorch.utils.multi_objective.hypervolume import Hypervolume #type: ignore
 from udao_spark.optimizer.utils import save_results, is_pareto_efficient, even_weights
 
+import seaborn as sns
+import pandas as pd
 
 def dominated_space(pareto_set: th.Tensor, ref_point: th.Tensor) -> float:
     hv = Hypervolume(ref_point=ref_point)
@@ -599,12 +601,16 @@ def compare_query_finer_control_HV(queries, stages, cpu_mode, sample_mode, evo_s
     colors = ["blue", "orange", "green", "cyan"]
     # methods = ["ws", "evo", "ppf", "approx_solve"]
     methods = ["ws", "evo", "ppf", "div_and_conq_moo%B"]
+    # methods = ["div_and_conq_moo%B"]
     algo_labels = []
 
     all_F_list = []
     all_hv_list, all_tc_list = [], []
     for i, (query_id, n_s) in enumerate(zip(queries, stages)):
         utopia_and_nadir_path = f"{save_data_header}/utopia_and_nadir/query_{query_id}_n_{n_s}"
+
+        # utopia_and_nadir_path = f"./output/0218test/utopia_and_nadir/query_{query_id}_n_{n_s}"
+
         utopia_and_nadir = np.loadtxt(f"{utopia_and_nadir_path}/utopia_and_nadir.txt")
         all_utopia = utopia_and_nadir[0, :]
         all_nadir = utopia_and_nadir[1, :]
@@ -708,6 +714,17 @@ def compare_query_finer_control_HV(queries, stages, cpu_mode, sample_mode, evo_s
     print(f"min solving time with mode {cpu_mode} is {tc_min}")
     print(f"max solving time with mode {cpu_mode} is {tc_max}")
     print()
+    our_vs_ws_hv = (hv_mean[-1] - hv_mean[0]) / hv_mean[0]
+    our_vs_evo_hv = (hv_mean[-1] - hv_mean[1]) / hv_mean[1]
+    our_vs_ppf_hv = (hv_mean[-1] - hv_mean[2]) / hv_mean[2]
+    print(f"the improvement of HV v.s. (ws, evo, ppf) is: "
+          f"{our_vs_ws_hv}, {our_vs_evo_hv}, {our_vs_ppf_hv}")
+
+    our_vs_ws_tc = (tc_mean[0] - tc_mean[-1]) / tc_mean[0]
+    our_vs_evo_tc = (tc_mean[1] - tc_mean[-1]) / tc_mean[1]
+    our_vs_ppf_tc = (tc_mean[2] - tc_mean[-1]) / tc_mean[2]
+    print(f"the improvement of Time cost v.s. (ws, evo, ppf) is: "
+          f"{our_vs_ws_tc}, {our_vs_evo_tc}, {our_vs_ppf_tc}")
 
     plot_err_bar(hv_mean, hv_std, algo_labels, queries, sample_mode, mode="hv", cpu_mode=cpu_mode, temp=temp,
                  is_query_control=is_query_control,
@@ -960,8 +977,11 @@ def save_utopia_and_nadir_w_query_control(methods, queries, stages, cpu_mode, sa
 
 
 def compare_approx_seq_div(queries, stages, temp, save_data=False, expr="expr"):
-    fig, ax = plt.subplots()
+    from matplotlib.ticker import FormatStrFormatter
 
+    fig, ax = plt.subplots()
+    ax.xaxis.set_major_formatter(FormatStrFormatter('%.3f'))
+    ax.xaxis.set_ticks(np.arange(0.145, 0.165, 0.005))
     # options = ["2_2g_8", "1_1g_16", "5_20g_16"]
     if len(queries) == 1 and "10" in queries[0]:
         # options = ["1_1g_4_po", "1_1g_16_po", "2_2g_16_po"]
@@ -974,10 +994,10 @@ def compare_approx_seq_div(queries, stages, temp, save_data=False, expr="expr"):
     elif len(queries) == 1 and "2" in queries[0]:
         # options = ["1_1g_4_po", "2_2g_4_po", "1_1g_16_po"]
         # options = ["2_2g_4_po", "2_2g_4_po1", "2_2g_4_po_random2"]
-        options = ["1_1g_4", "3_3g_16", "5_20g_16"]
+        options = ["1_1g_4", "1_4g_16", "3_3g_16", "5_20g_16"]
         # ax.set_xlim([0.055, 0.085])
         # ax.set_ylim([105, 195])
-        colors = ["blue", "orange", "green"]
+        colors = ["blue", "orange", "green", "olive", "cyan"]
         # colors = ["orange", "cyan", "olive"]
 
     for color, option in zip(colors, options):
@@ -1016,16 +1036,20 @@ def compare_approx_seq_div(queries, stages, temp, save_data=False, expr="expr"):
     # F_approx = np.loadtxt(f"{data_path_approx}/F.txt")
     # ax.scatter(F_approx[:, 1], F_approx[:, 0], marker=">", color="red")
 
-    ax.set_xlabel("Query Cost")
-    ax.set_ylabel("Query Latency")
-    if len(queries) == 1:
-        ax.set_title(f"{temp} query {queries[0]} with {stages[0]} subQs")
-    else:
-        ax.set_title(f"All {len(queries)} {temp} queries")
+
+    ax.set_xlabel("Query Cost", fontdict={"size": 20})
+    ax.set_ylabel("Query Latency", fontdict={"size": 20})
+    # if len(queries) == 1:
+    #     ax.set_title(f"{temp} query {queries[0]} with {stages[0]} subQs")
+    # else:
+    #     ax.set_title(f"All {len(queries)} {temp} queries")
+    plt.xlim([0.145, 0.165])
+    plt.ylim([3, 45])
+    plt.xticks(fontsize=18)
+    plt.yticks(fontsize=18)
     ax.legend()
     # plt.show()
     plt.tight_layout()
-
     if save_data:
         if temp == "tpch":
             plot_path = f"./output/0218test/plots/{expr}/diff_res"
@@ -1034,6 +1058,39 @@ def compare_approx_seq_div(queries, stages, temp, save_data=False, expr="expr"):
         if not os.path.exists(plot_path):
             os.makedirs(plot_path, exist_ok=True)
         plt.savefig(f"{plot_path}/diff_res_query_2-1_n_subQ_14.pdf")
+
+
+    fig1, ax1 = plt.subplots()
+    ax1.xaxis.set_major_formatter(FormatStrFormatter('%.3f'))
+    ax1.xaxis.set_ticks(np.arange(0.145, 0.165, 0.005))
+
+    q_pareto = np.loadtxt(
+        "./output/0218test/query_control_False/latest_model_cpu/ag/oracle_False/div_and_conq_moo%B/128_256/time_-1/query_2-1_n_14/grid/B/F.txt")
+    lat_q_pareto, cost_q_pareto = q_pareto[:, 0], q_pareto[:, 1]
+    ax1.plot(cost_q_pareto, lat_q_pareto, marker="o", color="red", label="Pareto")
+
+    ax1.set_xlabel("Query Cost", fontdict={"size": 20})
+    ax1.set_ylabel("Query Latency", fontdict={"size": 20})
+
+    # if len(queries) == 1:
+    #     ax.set_title(f"{temp} query {queries[0]} with {stages[0]} subQs")
+    # else:
+    #     ax.set_title(f"All {len(queries)} {temp} queries")
+    plt.xlim([0.145, 0.165])
+    plt.ylim([3, 45])
+    plt.xticks(fontsize=18)
+    plt.yticks(fontsize=18)
+    ax1.legend()
+    # plt.show()
+    plt.tight_layout()
+    if save_data:
+        if temp == "tpch":
+            plot_path = f"./output/0218test/plots/{expr}/diff_res"
+        else:
+            plot_path = f"./output0218test/tpcds_traces/plots/{expr}/diff_res"
+        if not os.path.exists(plot_path):
+            os.makedirs(plot_path, exist_ok=True)
+        plt.savefig(f"{plot_path}/ori_po_query_2-1_n_subQ_14.pdf")
 
 
 def a_test_moo():
@@ -1300,118 +1357,68 @@ def plot_frontier_one_query():
 def expr5(temp, queries, stages, save_fig=False):
 
 
-    div_moo_setting_tpch = "128_256"  # tpch
-    save_data_header_tpch = f"./output/0218test"
-    div_moo_setting_tpcds = "128_32"  # tpcds
-    save_data_header_tpcds = f"./output/0218test/tpcds_traces"
+    # div_moo_setting_tpch = "128_256"  # tpch
+    # save_data_header_tpch = f"./output/0218test"
+    # div_moo_setting_tpcds = "128_32"  # tpcds
+    # save_data_header_tpcds = f"./output/0218test/tpcds_traces"
+
+    if temp == "tpch":
+        div_moo_setting = "128_256"  # tpch
+        save_data_header = f"./output/0218test"
+    else:
+        div_moo_setting = "128_32"  # tpcds
+        save_data_header = f"./output/0218test/tpcds_traces"
+
     cpu_mode = "cpu"
     sample_mode = "grid"
     is_oracle = False
     model_name = "ag"
     expr = "expr5"
 
-    compare_diff_dag_opt(queries, stages, cpu_mode=cpu_mode,
-                         sample_mode=sample_mode,
-                         div_moo_setting=div_moo_setting_tpcds,
-                         save_data_header=save_data_header_tpcds,
-                         is_oracle=is_oracle,
-                         is_query_control=False,
-                         save_pareto_front=True,
-                         model_name=model_name,
-                         save_fig=save_fig,
-                         expr=expr,
-                         temp=temp)
+    # compare_diff_dag_opt(queries, stages, cpu_mode=cpu_mode,
+    #                      sample_mode=sample_mode,
+    #                      div_moo_setting=div_moo_setting_tpcds,
+    #                      save_data_header=save_data_header_tpcds,
+    #                      is_oracle=is_oracle,
+    #                      is_query_control=False,
+    #                      save_pareto_front=True,
+    #                      model_name=model_name,
+    #                      save_fig=save_fig,
+    #                      expr=expr,
+    #                      temp=temp)
 
     compare_approx_seq_div([queries_tpch[1]], [stages_tpch[1]], temp="tpch", save_data=True, expr=expr)
-
-def get_all_values(methods, queries, stages, save_data_header, save_pareto_front):
-    for query_id, n_s in zip(queries, stages):
-        # utopia_and_nadir_path = f"{save_data_header}/utopia_and_nadir/query_{query_id}_n_{n_s}"
-        # utopia_and_nadir = np.loadtxt(f"{utopia_and_nadir_path}/utopia_and_nadir.txt")
-        # all_utopia = utopia_and_nadir[0, :]
-        # all_nadir = utopia_and_nadir[1, :]
-        F_list = []
-        hv_list = []
-        tc_list = []
-        algo_labels = []
-        utopia_and_nadir_path = f"{save_data_header}/utopia_and_nadir/query_{query_id}_n_{n_s}"
-        utopia_and_nadir = np.loadtxt(f"{utopia_and_nadir_path}/utopia_and_nadir.txt")
-        all_utopia = utopia_and_nadir[0, :]
-        all_nadir = utopia_and_nadir[1, :]
-
-        if save_pareto_front:
-            fig, ax = plt.subplots()
-            colors = ["blue", "orange", "green"]
-            markers = ["s", "o", "*"]
-
-        for i, method in enumerate(methods):
-            dag_opt_algo = method.split("%")[1]
-            # div_moo_setting = f"{n_c_samples}_{n_p_samples}"
-
-            if "WS" in dag_opt_algo:
-                # data_path = f"./output/0218test/norm_div_WS/query_control_False/latest_model_{cpu_mode}/ag/oracle_False/{method}/" \
-                #             f"{div_moo_setting}/time_-1/query_{query_id}_n_{n_s}/{sample_mode}/{dag_opt_algo}"
-                data_path = f"{save_data_header}/query_control_False/latest_model_{cpu_mode}/{model_name}/oracle_False/{method}/" \
-                            f"{div_moo_setting}/time_-1/query_{query_id}_n_{n_s}/{sample_mode}/{dag_opt_algo}"
-                algo_labels.append("WS-based")
-            else:
-                data_path = f"{save_data_header}/query_control_False/latest_model_{cpu_mode}/{model_name}/oracle_False/{method}/" \
-                        f"{div_moo_setting}/time_-1/query_{query_id}_n_{n_s}/{sample_mode}/{dag_opt_algo}"
-                algo_labels.append(dag_opt_algo)
-
-            F = np.loadtxt(f"{data_path}/F.txt")
-            F_uniq = np.around(np.unique(F.reshape(-1, 2), axis=0), 5)
-            F_list.append(F_uniq)
-            # tc = np.loadtxt(f"{data_path}/time.txt")
-            # tc_list.append(tc.item())
-            tc_dict_file = f"{data_path}/end_to_end.json"
-            with open(tc_dict_file) as f:
-                d = json.load(f)
-            tc = d["end_to_end"]
-            tc_list.append(tc)
-
-            if save_pareto_front:
-                ax.scatter(F[:, 1], F[:, 0], marker=markers[i], color=colors[i], label=f"{algo_labels[i]} ({F_uniq.shape[0]})")
-                ax.legend()
-                ax.set_xlabel("Query Cost")
-                ax.set_ylabel("Query Latency")
-                ax.set_title(f"Pareto frontier of query {query_id} with {n_s} subQs")
-                # plt.tight_layout()
-                # plt.show()
-                plot_path = f"{save_data_header}/plots/{expr}/compare_dag_opt"
-                if not os.path.exists(plot_path):
-                    os.makedirs(plot_path, exist_ok=True)
-                plt.savefig(f"{plot_path}/query_{query_id}_n_subQ_{n_s}.pdf")
-        hv = cal_hv(F_list, all_nadir, all_utopia)
-
-        all_tc_list.append(tc_list)
-
-        if max(hv) > 100:
-            print("There is something wrong with the reference points!")
-
-        all_hv_list.append(hv)
-
-    return all_hv_list, all_tc_list
 
 def expr6(temp,
           queries,
           stages,
           save_fig):
-    div_moo_setting_tpch = "128_256"  # tpch
-    save_data_header_tpch = f"./output/0218test"
-    div_moo_setting_tpcds = "128_32"  # tpcds
-    save_data_header_tpcds = f"./output/0218test/tpcds_traces"
+    # div_moo_setting_tpch = "128_256"  # tpch
+    # save_data_header_tpch = f"./output/0218test"
+    # div_moo_setting_tpcds = "128_32"  # tpcds
+    # save_data_header_tpcds = f"./output/0218test/tpcds_traces"
+    if temp == "tpch":
+        div_moo_setting = "128_256"  # tpch
+        save_data_header = f"./output/0218test"
+        # div_moo_setting = "160_162"  # tpch
+        # save_data_header = f"./output/0218test/tpch_traces/run_new_grid_new_s"
+    else:
+        div_moo_setting = "128_32"  # tpcds
+        save_data_header = f"./output/0218test/tpcds_traces"
+        # div_moo_setting = "36_24"  # tpcds
+        # save_data_header = f"./output/0218test/tpcds_traces/run_new_grid_new_s"
     cpu_mode = "cpu"
     sample_mode = "grid"
     is_oracle = False
     model_name = "ag"
     expr = "expr6"
+
     compare_query_finer_control_HV(queries, stages, cpu_mode, sample_mode,
-                                   save_data_header=save_data_header_tpch,
+                                   save_data_header=save_data_header,
                                    evo_setting=evo_setting,
                                    ws_setting=ws_setting,
                                    ppf_setting=ppf_setting,
-                                   div_moo_setting=div_moo_setting_tpch,
+                                   div_moo_setting=div_moo_setting,
                                    is_query_control=False,
                                    is_oracle=is_oracle,
                                    model_name=model_name,
@@ -1471,6 +1478,484 @@ def expr7(temp,
                                                 temp=temp,
                                                 expr=expr)
 
+def get_all_hv_tc_expr5(methods,
+                        queries,
+                        stages,
+                        cpu_mode,
+                        sample_mode,
+                        div_moo_setting,
+                        save_data_header="",
+                        save_pareto_front=False,
+                         model_name="mlp",
+                        expr="expr",
+                        ):
+    # methods = ["div_and_conq_moo%GD", "div_and_conq_moo%WS&11", "div_and_conq_moo%B"]
+
+    all_tc_list = []
+    all_hv_list = []
+
+    for query_id, n_s in zip(queries, stages):
+        F_list = []
+        tc_list = []
+        algo_labels = []
+        utopia_and_nadir_path = f"{save_data_header}/utopia_and_nadir/query_{query_id}_n_{n_s}"
+        utopia_and_nadir = np.loadtxt(f"{utopia_and_nadir_path}/utopia_and_nadir.txt")
+        all_utopia = utopia_and_nadir[0, :]
+        all_nadir = utopia_and_nadir[1, :]
+
+        if save_pareto_front:
+            # fig, ax = plt.subplots()
+            plt.figure(figsize=(3.5, 2.5))
+            colors = ["blue", "orange", "green"]
+            markers = ["s", "o", "*"]
+
+        for i, method in enumerate(methods):
+            dag_opt_algo = method.split("%")[1]
+            # div_moo_setting = f"{n_c_samples}_{n_p_samples}"
+
+            if "WS" in dag_opt_algo:
+                # data_path = f"./output/0218test/norm_div_WS/query_control_False/latest_model_{cpu_mode}/ag/oracle_False/{method}/" \
+                #             f"{div_moo_setting}/time_-1/query_{query_id}_n_{n_s}/{sample_mode}/{dag_opt_algo}"
+                data_path = f"{save_data_header}/query_control_False/latest_model_{cpu_mode}/{model_name}/oracle_False/{method}/" \
+                            f"{div_moo_setting}/time_-1/query_{query_id}_n_{n_s}/{sample_mode}/{dag_opt_algo}"
+                algo_labels.append("WS-based")
+            else:
+                data_path = f"{save_data_header}/query_control_False/latest_model_{cpu_mode}/{model_name}/oracle_False/{method}/" \
+                            f"{div_moo_setting}/time_-1/query_{query_id}_n_{n_s}/{sample_mode}/{dag_opt_algo}"
+                algo_labels.append(dag_opt_algo)
+
+            F = np.loadtxt(f"{data_path}/F.txt")
+            F_uniq = np.around(np.unique(F.reshape(-1, 2), axis=0), 5)
+            F_list.append(F_uniq)
+            # tc = np.loadtxt(f"{data_path}/time.txt")
+            # tc_list.append(tc.item())
+            tc_dict_file = f"{data_path}/end_to_end.json"
+            with open(tc_dict_file) as f:
+                d = json.load(f)
+            tc = d["end_to_end"]
+            tc_list.append(tc)
+
+            if save_pareto_front:
+                plt.scatter(F[:, 1], F[:, 0], marker=markers[i], color=colors[i],
+                           label=f"{algo_labels[i]} ({F_uniq.shape[0]})")
+                plt.legend()
+                plt.xlabel("Query Cost")
+                plt.ylabel("Query Analytical Latency")
+                # plt.set_title(f"Pareto frontier of query {query_id} with {n_s} subQs")
+                plt.tight_layout()
+                # plt.show()
+                plot_path = f"{save_data_header}/plots/{expr}/compare_dag_opt"
+                if not os.path.exists(plot_path):
+                    os.makedirs(plot_path, exist_ok=True)
+                plt.savefig(f"{plot_path}/query_{query_id}_n_subQ_{n_s}.pdf")
+        hv = cal_hv(F_list, all_nadir, all_utopia)
+
+        all_tc_list.append(tc_list)
+
+        if max(hv) > 100:
+            print("There is something wrong with the reference points!")
+
+        all_hv_list.append(hv)
+
+    hv_mean = np.mean(np.array(all_hv_list), axis=0)
+    tc_mean = np.mean(np.array(all_tc_list), axis=0)
+
+    hv_std = np.std(np.array(all_hv_list), axis=0)
+    tc_std = np.std(np.array(all_tc_list), axis=0)
+
+    hv_min = np.min(np.array(all_hv_list), axis=0)
+    tc_min = np.min(np.array(all_tc_list), axis=0)
+
+    hv_max = np.max(np.array(all_hv_list), axis=0)
+    tc_max = np.max(np.array(all_tc_list), axis=0)
+
+    print(f"mean HV with mode {cpu_mode} is {hv_mean}")
+    print(f"std HV with mode {cpu_mode} is {hv_std}")
+    print(f"min HV with mode {cpu_mode} is {hv_min}")
+    print(f"max HV with mode {cpu_mode} is {hv_max}")
+    print(f"mean solving time with mode {cpu_mode} is {tc_mean}")
+    print(f"std solving time with mode {cpu_mode} is {tc_std}")
+    print(f"min solving time with mode {cpu_mode} is {tc_min}")
+    print(f"max solving time with mode {cpu_mode} is {tc_max}")
+    print()
+
+    return hv_mean, hv_std, all_tc_list
+
+def get_all_hv_tc_expr6_7(methods,
+                        queries,
+                        stages,
+                        cpu_mode,
+                        sample_mode,
+                        div_moo_setting,
+                        save_data_header="",
+                        save_pareto_front=False,
+                        model_name="mlp",
+                        expr="expr",
+                        is_query_control=False,
+                          ):
+    # methods = ["ws", "evo", "ppf", "div_and_conq_moo%B"]
+    algo_labels = []
+
+    all_F_list = []
+    all_hv_list, all_tc_list = [], []
+    for i, (query_id, n_s) in enumerate(zip(queries, stages)):
+        utopia_and_nadir_path = f"{save_data_header}/utopia_and_nadir/query_{query_id}_n_{n_s}"
+        utopia_and_nadir = np.loadtxt(f"{utopia_and_nadir_path}/utopia_and_nadir.txt")
+        all_utopia = utopia_and_nadir[0, :]
+        all_nadir = utopia_and_nadir[1, :]
+
+        F_list = []
+        hv_list, tc_list = [], []
+        for method in methods:
+            if method == "evo":
+                data_path = f"{save_data_header}/query_control_{is_query_control}/latest_model_{cpu_mode}/{model_name}/oracle_{is_oracle}/{method}/{evo_setting}/time_-1/query_{query_id}_n_{n_s}"
+                F = np.loadtxt(f"{data_path}/F.txt")
+
+                F_list.append(np.around(np.unique(F.reshape(-1, 2), axis=0), 5))
+
+                tc_dict_file = f"{data_path}/end_to_end.json"
+                with open(tc_dict_file) as f:
+                    d = json.load(f)
+                tc = d["end_to_end"]
+                tc_list.append(tc)
+                if i == 0:
+                    algo_labels.append(method)
+            elif method == "ws":
+                data_path = f"{save_data_header}/query_control_{is_query_control}/latest_model_{cpu_mode}/{model_name}/oracle_{is_oracle}/{method}/{ws_setting}/time_-1/query_{query_id}_n_{n_s}"
+                F = np.loadtxt(f"{data_path}/F.txt")
+
+                F_list.append(np.around(np.unique(F.reshape(-1, 2), axis=0), 5))
+
+                tc_dict_file = f"{data_path}/end_to_end.json"
+                with open(tc_dict_file) as f:
+                    d = json.load(f)
+                tc = d["end_to_end"]
+                tc_list.append(tc)
+                if i == 0:
+                    algo_labels.append(method)
+            elif method == "ppf":
+                # if is_query_control:
+                #     data_path = f"./output/test/query_control_True/latest_model_{cpu_mode}/ag/ppf/{ppf_setting}/time_-1/query_{query_id}_n_{n_s}"
+                # else:
+                #     data_path = f"./output/test/query_control_False/latest_model_{cpu_mode}/ag/ppf/{ppf_setting}/time_-1/query_{query_id}_n_{n_s}"
+                data_path = f"{save_data_header}/query_control_{is_query_control}/latest_model_{cpu_mode}/{model_name}/oracle_{is_oracle}/{method}/{ppf_setting}/time_-1/query_{query_id}_n_{n_s}"
+
+                F = np.loadtxt(f"{data_path}/F.txt")
+
+                F_list.append(np.around(np.unique(F.reshape(-1, 2), axis=0), 5))
+                # tc = np.loadtxt(f"{data_path}/time.txt")
+                # tc_list.append(tc.item())
+                tc_dict_file = f"{data_path}/end_to_end.json"
+                with open(tc_dict_file) as f:
+                    d = json.load(f)
+                tc = d["end_to_end"]
+                tc_list.append(tc)
+                if i == 0:
+                    algo_labels.append(method)
+            else:
+
+                dag_opt_algo = method.split("%")[1]
+                data_path = f"{save_data_header}/query_control_False/latest_model_{cpu_mode}/{model_name}/oracle_False/{method}/" \
+                            f"{div_moo_setting}/time_-1/query_{query_id}_n_{n_s}/{sample_mode}/{dag_opt_algo}"
+                F = np.loadtxt(f"{data_path}/F.txt")
+
+                F_list.append(np.around(np.unique(F.reshape(-1, 2), axis=0), 5))
+                # tc = np.loadtxt(f"{data_path}/time.txt")
+                # tc_list.append(tc.item())
+                tc_dict_file = f"{data_path}/end_to_end.json"
+                with open(tc_dict_file) as f:
+                    d = json.load(f)
+                tc = d["end_to_end"]
+                tc_list.append(tc)
+                if i == 0:
+                    algo_labels.append(f"ours")
+
+                #
+        hv = cal_hv(F_list, all_nadir, all_utopia)
+
+        if max(hv) > 100:
+            print("There is something wrong with the reference points!")
+
+        hv_list.extend(hv)
+
+        all_hv_list.append(hv_list)
+        all_tc_list.append(tc_list)
+        all_F_list.append(F_list)
+
+    hv_mean = np.mean(np.array(all_hv_list), axis=0)
+    tc_mean = np.mean(np.array(all_tc_list).reshape(-1, hv_mean.shape[0]), axis=0)
+
+    hv_std = np.std(np.array(all_hv_list), axis=0)
+    tc_std = np.std(np.array(all_tc_list), axis=0)
+
+    hv_min = np.min(np.array(all_hv_list), axis=0)
+    tc_min = np.min(np.array(all_tc_list), axis=0)
+
+    hv_max = np.max(np.array(all_hv_list), axis=0)
+    tc_max = np.max(np.array(all_tc_list), axis=0)
+
+    print(f"mean HV with mode {cpu_mode} is {hv_mean}")
+    print(f"std HV with mode {cpu_mode} is {hv_std}")
+    print(f"min HV with mode {cpu_mode} is {hv_min}")
+    print(f"max HV with mode {cpu_mode} is {hv_max}")
+    print(f"mean solving time with mode {cpu_mode} is {tc_mean}")
+    print(f"std solving time with mode {cpu_mode} is {tc_std}")
+    print(f"min solving time with mode {cpu_mode} is {tc_min}")
+    print(f"max solving time with mode {cpu_mode} is {tc_max}")
+    print()
+    our_vs_ws_hv = (hv_mean[-1] - hv_mean[0]) / hv_mean[0]
+    our_vs_evo_hv = (hv_mean[-1] - hv_mean[1]) / hv_mean[1]
+    our_vs_ppf_hv = (hv_mean[-1] - hv_mean[2]) / hv_mean[2]
+    print(f"the improvement of HV v.s. (ws, evo, ppf) is: "
+          f"{our_vs_ws_hv}, {our_vs_evo_hv}, {our_vs_ppf_hv}")
+
+    our_vs_ws_tc = (tc_mean[0] - tc_mean[-1]) / tc_mean[0]
+    our_vs_evo_tc = (tc_mean[1] - tc_mean[-1]) / tc_mean[1]
+    our_vs_ppf_tc = (tc_mean[2] - tc_mean[-1]) / tc_mean[2]
+    print(f"the improvement of Time cost v.s. (ws, evo, ppf) is: "
+          f"{our_vs_ws_tc}, {our_vs_evo_tc}, {our_vs_ppf_tc}")
+
+    return hv_mean, hv_std, all_tc_list
+
+
+def expr5_plus(save_fig):
+    # for TPCH
+    queries_tpch = [f"{i}-1" for i in np.arange(1, 23)]
+    stages_tpch = [3, 14, 5, 5, 11, 2, 11, 13, 12, 7, 10, 5, 5, 4, 7, 7, 7, 9, 5, 14, 12, 7]
+
+    # for TPCDS
+    save_data_header_tpcds = f"./output/0218test/tpcds_traces"
+    query_id_path = f"{save_data_header_tpcds}/query_info/query_id_list.txt"
+    n_stages_path = f"{save_data_header_tpcds}/query_info/n_stages_list.txt"
+
+    queries_tpcds = np.loadtxt(f"{query_id_path}", delimiter=" ", dtype=str).tolist()
+    stages_tpcds = np.loadtxt(f"{n_stages_path}").astype(int).tolist()
+
+    div_moo_setting_tpch = "128_256"  # tpch
+    save_data_header_tpch = f"./output/0218test"
+    div_moo_setting_tpcds = "128_32"  # tpcds
+    save_data_header_tpcds = f"./output/0218test/tpcds_traces"
+    cpu_mode = "cpu"
+    sample_mode = "grid"
+    model_name = "ag"
+    expr = "expr5"
+    methods = ["div_and_conq_moo%GD", "div_and_conq_moo%WS&11", "div_and_conq_moo%B"]
+    temp_list = ["TPCH", "TPCDS"]
+    algo_labels = ["GD", "WSA", "BA"]
+
+    hv_mean_tpch, hv_std_tpch, all_tc_list_tpch = get_all_hv_tc_expr5(
+                                                            methods=methods,
+                                                            queries=queries_tpch,
+                                                            stages=stages_tpch,
+                                                            cpu_mode=cpu_mode,
+                                                            sample_mode=sample_mode,
+                                                            div_moo_setting=div_moo_setting_tpch,
+                                                            save_data_header=save_data_header_tpch,
+                                                            save_pareto_front=False,
+                                                            model_name=model_name,
+                                                            expr=expr)
+
+    hv_mean_tpcds, hv_std_tpcds, all_tc_list_tpcds = get_all_hv_tc_expr5(
+        methods=methods,
+        queries=queries_tpcds,
+        stages=stages_tpcds,
+        cpu_mode=cpu_mode,
+        sample_mode=sample_mode,
+        div_moo_setting=div_moo_setting_tpcds,
+        save_data_header=save_data_header_tpcds,
+        save_pareto_front=False,
+        model_name=model_name,
+        expr=expr)
+
+
+
+    x = np.repeat(temp_list, len(algo_labels)).tolist()
+
+    hv_mean_all = np.round(hv_mean_tpch, 2).tolist() + np.round(hv_mean_tpcds, 3).tolist()
+    hv_std_all = np.round(hv_std_tpch, 2).tolist() + np.round(hv_std_tpcds, 3).tolist()
+
+    category = np.tile(algo_labels, (len(temp_list), 1)).flatten().tolist()
+
+    raw_data = {'Queries': x,
+                "HyperVolume (%)": hv_mean_all,
+                "hv_std": hv_std_all,
+                "DAG Aggregation": category}
+    sns.set(rc={'figure.figsize': (6.5, 4.5)}) # hi
+    sns.set(font_scale=1.3)
+    sns.set_theme(style="ticks")
+    ax = sns.barplot(x="Queries",
+                     y="HyperVolume (%)",
+                     hue="DAG Aggregation",
+                     data=raw_data,
+                     errorbar="sd")
+    ax.set(xlabel=None)
+    for container in ax.containers:
+        ax.bar_label(container)
+    sns.move_legend(ax, "lower right")
+    plt.tight_layout()
+    plt.show()
+
+    figure = ax.get_figure()
+    if save_fig:
+        plot_path = f"./output/final_expts/plots/{expr}/query_control_False"
+        if not os.path.exists(plot_path):
+            os.makedirs(plot_path, exist_ok=True)
+        figure.savefig(f"{plot_path}/HV.pdf")
+
+    # g = sns.catplot(kind='box', data=df_long, x='a', y='c', hue='b', height=5, aspect=1)
+
+    columns = ["Time (s)", "Queries", "DAG Aggregation"]
+    algo_tpch = np.tile(algo_labels, (len(all_tc_list_tpch), 1)).flatten()
+    temp_tpch = np.array([temp_list[0]] * len(all_tc_list_tpch) * len(algo_labels))
+    tc_tpch_arr = np.vstack((np.array(all_tc_list_tpch).flatten(), temp_tpch, algo_tpch)).T
+    tc_tpch_df = pd.DataFrame(data=tc_tpch_arr, columns=columns, index=np.arange(tc_tpch_arr.shape[0]))
+
+    algo_tpcds = np.tile(algo_labels, (len(all_tc_list_tpcds), 1)).flatten()
+    temp_tpcds = np.array([temp_list[1]] * len(all_tc_list_tpcds) * len(algo_labels))
+    tc_tpcds_arr = np.vstack((np.array(all_tc_list_tpcds).flatten(), temp_tpcds, algo_tpcds)).T
+    tc_tpcds_df = pd.DataFrame(data=tc_tpcds_arr, columns=columns, index=np.arange(tc_tpch_arr.shape[0],
+                                                                                   tc_tpch_arr.shape[0] + tc_tpcds_arr.shape[0]))
+
+    tc_all_df = pd.concat([tc_tpch_df, tc_tpcds_df], axis=0)
+
+    tc_all_df["Time (s)"] = tc_all_df["Time (s)"].astype(np.float64)
+    ax1 = sns.boxplot(x="Queries",
+                y="Time (s)",
+                hue="DAG Aggregation",
+                data=tc_all_df,
+                log_scale=True)
+    ax1.set(xlabel=None)
+    plt.tight_layout()
+    plt.show()
+    figure1 = ax1.get_figure()
+    if save_fig:
+        plot_path = f"./output/final_expts/plots/{expr}/query_control_False"
+        if not os.path.exists(plot_path):
+            os.makedirs(plot_path, exist_ok=True)
+        figure1.savefig(f"{plot_path}/Time.pdf")
+
+def expr6_7_plus(temp="TPCH", save_fig=False):
+
+    if temp == "TPCH":
+        # for TPCH
+        queries = [f"{i}-1" for i in np.arange(1, 23)]
+        stages = [3, 14, 5, 5, 11, 2, 11, 13, 12, 7, 10, 5, 5, 4, 7, 7, 7, 9, 5, 14, 12, 7]
+        div_moo_setting = "128_256"  # tpch
+        save_data_header = f"./output/0218test"
+    else:
+
+        # for TPCDS
+        save_data_header = f"./output/0218test/tpcds_traces"
+        query_id_path = f"{save_data_header}/query_info/query_id_list.txt"
+        n_stages_path = f"{save_data_header}/query_info/n_stages_list.txt"
+
+        queries = np.loadtxt(f"{query_id_path}", delimiter=" ", dtype=str).tolist()
+        stages = np.loadtxt(f"{n_stages_path}").astype(int).tolist()
+
+        div_moo_setting = "128_32"  # tpcds
+
+    cpu_mode = "cpu"
+    sample_mode = "grid"
+    model_name = "ag"
+    expr = "expr6_7"
+    methods_finer = ["ws", "evo", "ppf", "div_and_conq_moo%B"]
+    methods_query = ["ws", "evo", "ppf"]
+
+    control_list = ["SubQ", "Query"]
+    algo_labels_finer = ["WS", "EVO", "PF", "HMOOC3"]
+    algo_labels_query = ["WS", "EVO", "PF"]
+
+    hv_mean_fine, hv_std_fine, all_tc_list_fine = get_all_hv_tc_expr6_7(
+                                                            methods=methods_finer,
+                                                            queries=queries,
+                                                            stages=stages,
+                                                            cpu_mode=cpu_mode,
+                                                            sample_mode=sample_mode,
+                                                            div_moo_setting=div_moo_setting,
+                                                            save_data_header=save_data_header,
+                                                            save_pareto_front=False,
+                                                            model_name=model_name,
+                                                            expr=expr,
+                                                            is_query_control=False)
+
+    hv_mean_query, hv_std_query, all_tc_list_query = get_all_hv_tc_expr6_7(
+        methods=methods_query,
+        queries=queries,
+        stages=stages,
+        cpu_mode=cpu_mode,
+        sample_mode=sample_mode,
+        div_moo_setting=div_moo_setting,
+        save_data_header=save_data_header,
+        save_pareto_front=False,
+        model_name=model_name,
+        expr=expr,
+        is_query_control=True)
+
+    sns.set_theme(style="ticks")
+    # for HV
+    columns_hv = ["HyperVolume (%)", "Control", f"MOO algos in {temp}"]
+    algo_fine_hv = algo_labels_finer
+    control_fine_hv = np.array([control_list[0]] * hv_mean_fine.shape[0])
+    hv_fine_arr = np.vstack((np.round(hv_mean_fine, 2), control_fine_hv, algo_fine_hv)).T
+    hv_fine_df = pd.DataFrame(data=hv_fine_arr, columns=columns_hv, index=np.arange(hv_fine_arr.shape[0]))
+
+    algo_query_hv = algo_labels_query
+    control_query_hv = np.array([control_list[1]] * hv_mean_query.shape[0])
+    hv_query_arr = np.vstack((np.round(hv_mean_query, 2), control_query_hv, algo_query_hv)).T
+    hv_query_df = pd.DataFrame(data=hv_query_arr, columns=columns_hv, index=np.arange(hv_fine_arr.shape[0],
+                                                                                   hv_fine_arr.shape[0] +
+                                                                                   hv_query_arr.shape[0]))
+
+    hv_all_df = pd.concat([hv_fine_df, hv_query_df], axis=0)
+
+    hv_all_df["HyperVolume (%)"] = hv_all_df["HyperVolume (%)"].astype(np.float64)
+    ax = sns.barplot(x=f"MOO algos in {temp}",
+                      y="HyperVolume (%)",
+                      hue="Control",
+                      data=hv_all_df,
+                     errorbar="sd")
+    for container in ax.containers:
+        ax.bar_label(container)
+    sns.move_legend(ax, "lower right")
+    plt.tight_layout()
+    plt.show()
+    figure = ax.get_figure()
+    if save_fig:
+        plot_path = f"./output/final_expts/plots/{expr}/query_control_False/{temp}"
+        if not os.path.exists(plot_path):
+            os.makedirs(plot_path, exist_ok=True)
+        figure.savefig(f"{plot_path}/HV.pdf")
+
+    # for time cost
+    columns = ["Time (s)", "Control", f"MOO algos in {temp}"]
+    algo_fine = np.tile(algo_labels_finer, (len(all_tc_list_fine), 1)).flatten()
+    control_fine = np.array([control_list[0]] * len(all_tc_list_fine) * len(algo_labels_finer))
+    tc_fine_arr = np.vstack((np.array(all_tc_list_fine).flatten(), control_fine, algo_fine)).T
+    tc_fine_df = pd.DataFrame(data=tc_fine_arr, columns=columns, index=np.arange(tc_fine_arr.shape[0]))
+
+    algo_query = np.tile(algo_labels_query, (len(all_tc_list_query), 1)).flatten()
+    control_query = np.array([control_list[1]] * len(all_tc_list_query) * len(algo_labels_query))
+    tc_query_arr = np.vstack((np.array(all_tc_list_query).flatten(), control_query, algo_query)).T
+    tc_query_df = pd.DataFrame(data=tc_query_arr, columns=columns, index=np.arange(tc_fine_arr.shape[0],
+                                                                                   tc_fine_arr.shape[0] + tc_query_arr.shape[0]))
+
+    tc_all_df = pd.concat([tc_fine_df, tc_query_df], axis=0)
+
+    tc_all_df["Time (s)"] = tc_all_df["Time (s)"].astype(np.float64)
+    ax1 = sns.boxplot(x=f"MOO algos in {temp}",
+                y="Time (s)",
+                hue="Control",
+                data=tc_all_df,
+                log_scale=True)
+    plt.tight_layout()
+    plt.show()
+    figure1 = ax1.get_figure()
+    if save_fig:
+        plot_path = f"./output/final_expts/plots/{expr}/query_control_False/{temp}"
+        if not os.path.exists(plot_path):
+            os.makedirs(plot_path, exist_ok=True)
+        figure1.savefig(f"{plot_path}/Time.pdf")
+
 if __name__ == "__main__":
     # for TPCH
     queries_tpch = [f"{i}-1" for i in np.arange(1, 23)]
@@ -1490,19 +1975,25 @@ if __name__ == "__main__":
     is_oracle = False
     is_query_control = True
 
-    # expr5(temp="tpcds",
+    # expr5(temp="tpch",
+    #       queries=queries_tpch,
+    #       stages=stages_tpch,
+    #       save_fig=True)
+    # expr6(temp="tpcds",
     #       queries=queries_tpcds,
     #       stages=stages_tpcds,
     #       save_fig=True)
-    # expr6(temp="tpch",
+
+    # expr7(temp="tpch",
     #       queries=queries_tpch,
     #       stages=stages_tpch,
     #       save_fig=True)
 
-    expr7(temp="tpch",
-          queries=queries_tpch,
-          stages=stages_tpch,
-          save_fig=True)
+    # for final plots in paper
+    expr5_plus(save_fig=True)
+
+    expr6_7_plus(temp="TPCDS", save_fig=True)
+
 
 
 
