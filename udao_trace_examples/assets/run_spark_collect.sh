@@ -4,28 +4,31 @@
 query="9 1"
 conf="1 1g 16 16 48m 200 true 0.6 64MB 0.2 0MB 10MB 200 256MB 5.0 128MB 4MB 0.2 1024KB"
 name="unnamed"
+runtime="false localhost 12345"
 xpath="./outs"
 verbose_mode=false
 
 # Define usage function
 usage() {
-  echo "Usage: $0 -q <query> -c <theta_c> -p <theta_p> -s <theta_s> -n <name> -x <xpath> [-v]"
+  echo "Usage: $0 -q <query> -c <conf> -b <benchmark> -n <name> -r <runtime> -x <xpath> [-v]"
   echo "  -q <query>: Specify template id (tid) and query variant id (qid)."
   echo "  -c <conf>: Specify context parameters from k1 to k8 + s1 to s11"
   echo "  -b <benchmark>: Specify the benchmark of running TPC-query, e.g., tpch, tpcds"
   echo "  -n <name>: Specify the name of spark app"
+  echo "  -r <runtime>: Specify the runtime optimizer"
   echo "  -x <xpath>: Specify the path for the extracted traces"
   echo "  -v: Enable verbose mode."
   exit 1
 }
 
 # Parse command line options with getopts
-while getopts "q:c:b:n:x:v" opt; do
+while getopts "q:c:b:n:r:x:v" opt; do
   case "$opt" in
     q) query="$OPTARG";;
     c) conf="$OPTARG";;
     b) benchmark="$OPTARG";;
     n) name="$OPTARG";;
+    r) runtime="$OPTARG";;
     x) xpath="$OPTARG";;
     v) verbose_mode=true;;
     \?) usage;;
@@ -33,6 +36,7 @@ while getopts "q:c:b:n:x:v" opt; do
 done
 read tid qid <<< "$query"
 read k1 k2 k3 k4 k5 k6 k7 k8 s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 <<< "$conf"
+read if_runtime runtime_host runtime_port <<< "$runtime"
 
 spath=/opt/hex_users/$USER/chenghao/spark-stage-tuning
 jpath=/opt/hex_users/$USER/spark-3.2.1-hadoop3.3.0/jdk1.8
@@ -83,4 +87,6 @@ qpath=/opt/hex_users/$USER/chenghao/UDAO2022
 --files "$lpath" \
 --jars ~/spark/examples/jars/scopt_2.12-3.7.1.jar \
 $spath/target/scala-2.12/spark-stage-tuning_2.12-1.0-SNAPSHOT.jar \
--b $benchmark -t ${tid} -q ${qid} -s 100 -x ${xpath} -l ${qpath}/resources/${benchmark}-kit/spark-sqls -v $verbose_mode
+-b $benchmark -t ${tid} -q ${qid} -s 100 -x ${xpath} \
+-u ${if_runtime} --runtimeSolverHost ${runtime_host} --runtimeSolverPort ${runtime_port} \
+-l ${qpath}/resources/${benchmark}-kit/spark-sqls -v $verbose_mode

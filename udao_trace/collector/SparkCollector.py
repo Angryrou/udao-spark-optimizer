@@ -26,6 +26,9 @@ class SparkCollector:
         parametric_bash_file: str = "assets/run_spark_tpc.sh",
         header: str = "spark_collector",
         debug: bool = False,
+        enable_runtime_optimizer: bool = False,
+        runtime_optimizer_host: str = "localhost",
+        runtime_optimizer_port: int = 12345,
     ):
         spark_conf = SparkConf(knob_meta_file)
         benchmark = Benchmark(benchmark_type=benchmark_type, scale_factor=scale_factor)
@@ -43,6 +46,9 @@ class SparkCollector:
         self.parametric_bash_file = parametric_bash_file
 
         self.debug = debug
+        self.enable_runtime_optimizer = "true" if enable_runtime_optimizer else "false"
+        self.runtime_optimizer_host = runtime_optimizer_host
+        self.runtime_optimizer_port = runtime_optimizer_port
 
     @staticmethod
     def _exec_cmd(template: str, qid: int, cmd: str) -> bool:
@@ -79,18 +85,32 @@ class SparkCollector:
     def _submit(
         self, template: str, qid: int, knob_sign: str, cores: int, header: str
     ) -> None:
+        rt_enable, rt_host, rt_port = (
+            self.enable_runtime_optimizer,
+            self.runtime_optimizer_host,
+            self.runtime_optimizer_port,
+        )
+
         trace_header = f"{header}/trace"
         log_header = f"{header}/log"
+        app_name = self.benchmark.get_prefix() + f"_{template}-{qid}_{knob_sign}"
+
+        if rt_enable == "true":
+            trace_header += "_rt_enabled"
+            log_header += "_rt_enabled"
+            app_name += "_rt_enabled"
         os.makedirs(trace_header, exist_ok=True)
         os.makedirs(log_header, exist_ok=True)
 
-        app_name = self.benchmark.get_prefix() + f"_{template}-{qid}_{knob_sign}"
-        logger.info(f"-[{template}-{qid}]: start running")
+        logger.info(f"-[{template}-{qid}]: start running {app_name}")
         start = time.time()
         conf_str = knob_sign.replace(",", " ")
+
         exec_str = (
             f'bash {self.parametric_bash_file} -q "{template} {qid}" -c "{conf_str}" '
-            f"-b {self.benchmark.get_name()} -n {app_name} -x {trace_header} 2>&1 "
+            f"-b {self.benchmark.get_name()} -n {app_name} "
+            f'-r "{rt_enable} {rt_host} {rt_port}" '
+            f"-x {trace_header} 2>&1 "
             f"| tee {log_header}/{template}-{qid}.log"
         )
 

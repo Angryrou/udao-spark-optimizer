@@ -12,6 +12,10 @@ from udao_trace.parser.spark_parser import parse_lqp_objectives
 from udao_trace.utils import BenchmarkType, ClusterName, JsonHandler
 from udao_trace_examples.params import get_collector_parser
 
+s3 = "spark.sql.adaptive.maxShuffledHashJoinLocalMapThreshold"
+s4 = "spark.sql.autoBroadcastJoinThreshold"
+s5 = "spark.sql.shuffle.partitions"
+
 
 def parse_configuration(j: Dict, fine_grained: bool) -> Dict:
     if "submit_theta" not in j:
@@ -78,6 +82,12 @@ def get_eval_parser() -> ArgumentParser:
                         help="Only parse configurations, do not start evaluations")
     parser.add_argument("--force", action="store_true",
                         help="Force parsing even if the file already exists")
+    parser.add_argument("--enable_runtime_optimizer", action="store_true",
+                        help="Enable runtime optimizer")
+    parser.add_argument("--runtime_optimizer_host", type=str, default="localhost",
+                        help="Host for runtime optimizer")
+    parser.add_argument("--runtime_optimizer_port", type=int, default=12345,
+                        help="Port for runtime optimizer")
     # fmt: on
 
     return parser
@@ -88,6 +98,11 @@ if __name__ == "__main__":
     if args.trace_header != "evaluations":
         raise ValueError("trace_header must be 'evaluations'")
 
+    if args.fine_grained:
+        raise NotImplementedError(
+            "theta_p should be extracted based on QS with join operators"
+        )
+
     spark_collector = SparkCollector(
         knob_meta_file=args.knob_meta_file,
         benchmark_type=BenchmarkType[args.benchmark_type],
@@ -96,6 +111,9 @@ if __name__ == "__main__":
         parametric_bash_file=args.parametric_bash_file,
         header=args.trace_header,
         debug=args.debug,
+        enable_runtime_optimizer=args.enable_runtime_optimizer,
+        runtime_optimizer_host=args.runtime_optimizer_host,
+        runtime_optimizer_port=args.runtime_optimizer_port,
     )
 
     if args.default:
@@ -122,14 +140,16 @@ if __name__ == "__main__":
             spark_collector.start_eval(
                 eval_header=header,
                 configurations=configurations,
-                n_processes=args.n_processes,
+                n_processes=1 if args.enable_runtime_optimizer else args.n_processes,
                 cluster_cores=args.cluster_cores,
             )
         print("------ Finished all evaluations")
 
     print("------ Start parsing")
-
-    file_name = f"{header}/evaluations.json"
+    if args.enable_runtime_optimizer:
+        file_name = f"{header}/evaluations_with_runtime_optimizer.json"
+    else:
+        file_name = f"{header}/evaluations.json"
 
     if args.force:
         print("------ Force parsing")
@@ -147,14 +167,21 @@ if __name__ == "__main__":
     agg_stats_dict = {}
     for conf in configurations:
         (template, qid), configuration = list(conf.items())[0]
-        json_files = glob.glob(f"{header}/trace/*_{template}-{qid}_*.json")
+        if args.enable_runtime_optimizer:
+            json_files = glob.glob(
+                f"{header}/trace_rt_enabled/*_{template}-{qid}_*.json"
+            )
+        else:
+            json_files = glob.glob(f"{header}/trace/*_{template}-{qid}_*.json")
         print(f"------ Parsing {template}-{qid}, found {len(json_files)} files")
         stats: Dict[str, List[Any]] = defaultdict(list)
         for json_file in json_files:
             try:
                 d = JsonHandler.load_json(json_file)
             except Exception as e:
-                raise Exception(f"Failed to load {json_file} with error: {e}")
+                print(f"Skip due to - failed to load {json_file} with error: {e}")
+                continue
+                # raise Exception(f"Failed to load {json_file} with error: {e}")
             obj_dict = parse_lqp_objectives(d["Objectives"])
             lat_s = obj_dict["latency_s"]
             io_mb = obj_dict["io_mb"]
