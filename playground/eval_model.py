@@ -77,8 +77,6 @@ if __name__ == "__main__":
     print(f"model lat_predictor_path: {lat_predictor_path}")
 
     # 4. predict the latency
-    lat_pred = lat_predictor.predict(
-        target_df, model=params.ag_model_q_latency or "WeightedEnsemble_L2"
-    )
+    lat_pred = lat_predictor.predict(target_df, model="WeightedEnsemble_L2")
 
     print(lat_pred)
