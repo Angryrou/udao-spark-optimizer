@@ -1,4 +1,3 @@
-from argparse import Namespace
 from pathlib import Path
 
 import numpy as np
@@ -7,22 +6,6 @@ import pandas as pd
 from udao_spark.utils.analyzer import get_non_decision_inputs
 from udao_spark.utils.params import get_ag_parameters
 from udao_trace.configuration import SparkConf
-
-
-def get_eval_params() -> Namespace:
-    return Namespace(
-        benchmark="tpch",
-        q_type="q_compile",
-        hp_choice="tuned-0215",
-        graph_choice="gtn",
-        ag_sign="medium_quality",
-        infer_limit=1e-5,
-        infer_limit_batch_size=10000,
-        ag_time_limit=None,
-        ag_model_q_latency="WeightedEnsemble_L2",
-        ag_model_q_io="WeightedEnsemble_L2",
-    )
-
 
 if __name__ == "__main__":
     params = get_ag_parameters().parse_args()
