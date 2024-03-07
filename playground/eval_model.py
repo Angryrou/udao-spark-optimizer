@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 
 from udao_spark.utils.analyzer import get_non_decision_inputs
+from udao_spark.utils.params import get_ag_parameters
 from udao_trace.configuration import SparkConf
 
 
@@ -24,9 +25,13 @@ def get_eval_params() -> Namespace:
 
 
 if __name__ == "__main__":
-    params = get_eval_params()
+    params = get_ag_parameters().parse_args()
     if params.q_type != "q_compile":
         raise ValueError(f"Diagnosing {params.q_type} is not our focus.")
+    if params.hp_choice != "tuned-0215":
+        raise ValueError(f"hp_choice {params.hp_choice} is not supported.")
+    if params.graph_choice != "gtn":
+        raise ValueError(f"graph_choice {params.graph_choice} is not supported.")
 
     # theta includes 19 decision variables
     decision_variables = (
