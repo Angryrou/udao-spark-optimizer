@@ -386,6 +386,7 @@ def get_graph_embedding(
 
 
 def get_ag_data(
+    base_dir: Path,
     bm: str,
     q_type: QType,
     debug: bool,
@@ -403,7 +404,7 @@ def get_ag_data(
             "debug": debug,
         }
     )
-    pw = PathWatcher(Path(__file__).parent, bm, debug, extract_params)
+    pw = PathWatcher(base_dir, bm, debug, extract_params)
     df = ParquetHandler.load(pw.cc_prefix, f"df_{ta.get_q_type_for_cache()}.parquet")
     index_splits = PickleHandler.load(
         pw.cc_prefix, f"index_splits_{ta.get_q_type_for_cache()}.pkl"

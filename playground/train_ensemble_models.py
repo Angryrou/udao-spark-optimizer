@@ -1,4 +1,5 @@
 import os.path
+from pathlib import Path
 
 from udao_spark.data.utils import get_ag_data
 from udao_spark.model.mulitlabel_predictor import MultilabelPredictor  # type: ignore
@@ -14,7 +15,7 @@ if __name__ == "__main__":
     infer_limit = params.infer_limit
     infer_limit_batch_size = params.infer_limit_batch_size
     time_limit = params.ag_time_limit
-
+    base_dir = Path(__file__).parent
     ag_meta = get_ag_meta(
         bm,
         hp_choice,
@@ -28,7 +29,7 @@ if __name__ == "__main__":
     weights_path = ag_meta["graph_weights_path"]
     ag_path = ag_meta["ag_path"] + "/"
 
-    ret = get_ag_data(bm, q_type, debug, graph_choice, weights_path)
+    ret = get_ag_data(base_dir, bm, q_type, debug, graph_choice, weights_path)
     train_data, val_data, test_data = ret["data"]
     ta, pw, objectives = ret["ta"], ret["pw"], ret["objectives"]
     if q_type.startswith("qs_"):

@@ -23,6 +23,8 @@ def data_preparation(
     if params.graph_choice != "gtn":
         raise ValueError(f"graph_choice {params.graph_choice} is not supported.")
     bm, q_type, debug = params.benchmark, params.q_type, params.debug
+    base_dir = Path(__file__).parent
+
     ag_meta = get_ag_meta(
         bm,
         params.hp_choice,
@@ -34,7 +36,9 @@ def data_preparation(
         params.ag_time_limit,
     )
     weights_path = ag_meta["graph_weights_path"]
-    ret = get_ag_data(bm, q_type, debug, params.graph_choice, weights_path, if_df=True)
+    ret = get_ag_data(
+        base_dir, bm, q_type, debug, params.graph_choice, weights_path, if_df=True
+    )
     data_tr, data_val, data_te = ret[
         "data"
     ]  # choose the validation data set ~5K queries
@@ -46,7 +50,6 @@ def data_preparation(
     data_te[["template", "q"]] = data_query_te.values.astype(str)
     data_te["query_id"] = data_te["template"] + "-" + data_te["q"]
 
-    base_dir = Path(__file__).parent
     ag_server = AGServer.from_ckp_path(
         model_sign=ag_meta["model_sign"],
         graph_model_params_path=ag_meta["model_params_path"],
@@ -175,6 +178,7 @@ if __name__ == "__main__":
         print(f"model lat_predictor_path: {lat_predictor_path}")
         # 4. predict the latency
         lat_pred = lat_predictor.predict(target_df, model=params.ag_model_q_latency)
+        print(lat_pred)
     else:
         print("demo mode is off")
         # TODO
