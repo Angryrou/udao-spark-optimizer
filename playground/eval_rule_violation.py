@@ -178,7 +178,8 @@ if __name__ == "__main__":
         print(f"model lat_predictor_path: {lat_predictor_path}")
         # 4. predict the latency
         lat_pred = lat_predictor.predict(target_df, model=params.ag_model_q_latency)
-        print(lat_pred)
+        print(lat_pred.mean(), lat_pred.std())
+        print(lat_pred.head())
     else:
         print("demo mode is off")
         # TODO
