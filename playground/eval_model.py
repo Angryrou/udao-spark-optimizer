@@ -1,32 +1,20 @@
-from argparse import Namespace
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 from udao_spark.utils.analyzer import get_non_decision_inputs
+from udao_spark.utils.params import get_ag_parameters
 from udao_trace.configuration import SparkConf
 
-
-def get_eval_params() -> Namespace:
-    return Namespace(
-        benchmark="tpch",
-        q_type="q_compile",
-        hp_choice="tuned-0215",
-        graph_choice="gtn",
-        ag_sign="medium_quality",
-        infer_limit=1e-5,
-        infer_limit_batch_size=10000,
-        ag_time_limit=None,
-        ag_model_q_latency="WeightedEnsemble_L2",
-        ag_model_q_io="WeightedEnsemble_L2",
-    )
-
-
 if __name__ == "__main__":
-    params = get_eval_params()
+    params = get_ag_parameters().parse_args()
     if params.q_type != "q_compile":
         raise ValueError(f"Diagnosing {params.q_type} is not our focus.")
+    if params.hp_choice != "tuned-0215":
+        raise ValueError(f"hp_choice {params.hp_choice} is not supported.")
+    if params.graph_choice != "gtn":
+        raise ValueError(f"graph_choice {params.graph_choice} is not supported.")
 
     # theta includes 19 decision variables
     decision_variables = (
@@ -89,8 +77,6 @@ if __name__ == "__main__":
     print(f"model lat_predictor_path: {lat_predictor_path}")
 
     # 4. predict the latency
-    lat_pred = lat_predictor.predict(
-        target_df, model=params.ag_model_q_latency or "WeightedEnsemble_L2"
-    )
+    lat_pred = lat_predictor.predict(target_df, model="WeightedEnsemble_L2")
 
     print(lat_pred)

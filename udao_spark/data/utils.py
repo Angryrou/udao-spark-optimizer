@@ -1,13 +1,16 @@
+import os
 from itertools import chain
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 import torch as th
-from udao.data import BaseIterator
+from autogluon.core import TabularDataset
+from udao.data import BaseIterator, QueryPlanIterator
 from udao.data.handler.data_handler import DataHandler
 from udao.data.utils.utils import DatasetType, train_test_val_split_on_column
+from udao.optimization.utils.moo_utils import get_default_device
 
 from udao_spark.utils.constants import (
     ALPHA_LQP_RAW,
@@ -25,9 +28,10 @@ from udao_trace.configuration import SparkConf
 from udao_trace.utils import BenchmarkType, JsonHandler, ParquetHandler, PickleHandler
 from udao_trace.workload import Benchmark
 
+from ..model.model_server import ModelServer
 from ..utils.collaborators import PathWatcher, TypeAdvisor
 from ..utils.logging import logger
-from ..utils.params import UdaoParams
+from ..utils.params import ExtractParams, QType, UdaoParams
 from .handlers.data_processor import create_udao_data_processor
 
 
@@ -338,3 +342,135 @@ def get_split_iterators(
     if not isinstance(split_iterators, Dict):
         raise TypeError("split_iterators not found or not a desired type")
     return split_iterators
+
+
+def get_graph_embedding(
+    ms: ModelServer,
+    split_iterators: Dict[str, QueryPlanIterator],
+    index_splits: Dict[str, np.ndarray],
+    weights_header: str,
+) -> Dict[str, np.ndarray]:
+    name = "graph_np_dict.pkl"
+    try:
+        graph_np_dict = PickleHandler.load(weights_header, name)
+        print(f"found {weights_header}/{name}")
+        if not isinstance(graph_np_dict, Dict):
+            raise TypeError(f"graph_np_dict is not a dict: {graph_np_dict}")
+        return graph_np_dict
+    except FileNotFoundError:
+        print("not found, generating...")
+    graph_embedding_dict = {}
+    bs = 1024
+    device = get_default_device()
+    for split, iterator in split_iterators.items():
+        print(f"start working on {split}")
+        n_items = len(index_splits[split])
+        dataloader = iterator.get_dataloader(
+            batch_size=1024, shuffle=False, num_workers=16
+        )
+        with th.no_grad():
+            all_embeddings = []  # List to store embeddings of all batches
+            for batch_id, (batch_input, _) in enumerate(dataloader):
+                embedding_input = batch_input.embedding_input
+                graph_embedding = ms.model.embedder(embedding_input.to(device))
+                all_embeddings.append(
+                    graph_embedding
+                )  # Append the embeddings of the current batch
+                if (batch_id + 1) % 10 == 0:
+                    print(f"finished batch {batch_id + 1} / {n_items // bs + 1}")
+        # Concatenate all batch embeddings to get the complete embeddings for the split
+        graph_embedding_dict[split] = th.cat(all_embeddings, dim=0)
+    graph_np_dict = {k: v.cpu().numpy() for k, v in graph_embedding_dict.items()}
+    PickleHandler.save(graph_np_dict, weights_header, name)
+    return graph_np_dict
+
+
+def get_ag_data(
+    base_dir: Path,
+    bm: str,
+    q_type: QType,
+    debug: bool,
+    graph_choice: str,
+    weights_path: Optional[str],
+    if_df: bool = False,
+) -> Dict:
+    ta = TypeAdvisor(q_type=q_type)
+    extract_params = ExtractParams.from_dict(  # placeholder
+        {
+            "lpe_size": 0,
+            "vec_size": 0,
+            "seed": 0,
+            "q_type": q_type,
+            "debug": debug,
+        }
+    )
+    pw = PathWatcher(base_dir, bm, debug, extract_params)
+    df = ParquetHandler.load(pw.cc_prefix, f"df_{ta.get_q_type_for_cache()}.parquet")
+    index_splits = PickleHandler.load(
+        pw.cc_prefix, f"index_splits_{ta.get_q_type_for_cache()}.pkl"
+    )
+    if not isinstance(index_splits, Dict):
+        raise TypeError(f"index_splits is not a dict: {index_splits}")
+    objectives = ta.get_objectives()
+
+    df_splits = {}
+    df_splits_queries = {}
+    if graph_choice == "none":
+        for split, index in index_splits.items():
+            df_split = df.loc[index].copy()
+            df_split = df_split[ta.get_tabular_columns() + objectives]
+            df_splits[split] = df_split
+    elif graph_choice in ("avg", "gtn"):
+        model_sign = f"graph_{graph_choice}"
+        if (
+            weights_path is None
+            or not os.path.exists(weights_path)
+            or len(weights_path.split("/")) != 7
+        ):
+            raise ValueError(f"weights_path is None: {weights_path}")
+        header = "/".join(weights_path.split("/")[:4])
+        model_params_path = (
+            "/".join(weights_path.split("/")[:5]) + "/model_struct_params.json"
+        )
+        weights_header = "/".join(weights_path.split("/")[:6])
+        ms = ModelServer.from_ckp_path(model_sign, model_params_path, weights_path)
+        split_iterators = PickleHandler.load(header, "split_iterators.pkl")
+        if not isinstance(split_iterators, Dict):
+            raise TypeError("split_iterators not found or not a desired type")
+        graph_np_dict = get_graph_embedding(
+            ms, split_iterators, index_splits, weights_header
+        )
+
+        for split, index in index_splits.items():
+            df_split = df.loc[index].copy()
+            df_split = df_split[ta.get_tabular_columns() + ta.get_objectives()]
+            df_split_queries = df.loc[index].copy()[["template", "qid"]]
+            graph_np = graph_np_dict[split]
+            ge_dim = graph_np.shape[1]
+            ge_cols = [f"ge_{i}" for i in range(ge_dim)]
+            df_split[ge_cols] = graph_np
+            df_splits[split] = df_split
+            df_splits_queries[split] = df_split_queries
+    else:
+        raise ValueError(f"Unknown graph choice: {graph_choice}")
+
+    train_data = TabularDataset(df_splits["train"])
+    val_data = TabularDataset(df_splits["val"])
+    test_data = TabularDataset(df_splits["test"])
+    data = (
+        [df_splits["train"], df_splits["val"], df_splits["test"]]
+        if if_df
+        else [train_data, val_data, test_data]
+    )
+    data_queries = [
+        df_splits_queries["train"],
+        df_splits_queries["val"],
+        df_splits_queries["test"],
+    ]
+    return {
+        "data": data,
+        "data_queries": data_queries,
+        "ta": ta,
+        "pw": pw,
+        "objectives": objectives,
+    }
