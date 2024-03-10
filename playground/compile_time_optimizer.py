@@ -155,15 +155,9 @@ if __name__ == "__main__":
         query_id: np.unique([c for c in confs_dict.values()]).tolist()
         for query_id, confs_dict in target_confs.items()
     }
-    torun_file = (
-        f"../udao_trace_examples/evaluations/{bm}100/lhs/run_confs_{n_samples}.json"
-    )
-    toanalyze_file = (
-        f"../udao_trace_examples/evaluations/{bm}100/lhs/full_confs_{n_samples}.json"
-    )
-    runtime_file = (
-        f"../udao_trace_examples/evaluations/{bm}100/lhs/runtime_{n_samples}.json"
-    )
+    torun_file = f"compile_time_output/{bm}100/lhs/run_confs_{n_samples}.json"
+    toanalyze_file = f"compile_time_output/{bm}100/lhs/full_confs_{n_samples}.json"
+    runtime_file = f"compile_time_output/{bm}100/lhs/runtime_{n_samples}.json"
     os.makedirs(os.path.dirname(torun_file), exist_ok=True)
     JsonHandler.dump_to_file(target_confs, toanalyze_file, indent=2)
     JsonHandler.dump_to_file(todo_confs, torun_file, indent=2)
