@@ -245,3 +245,31 @@ def weighted_utopia_nearest_impl(
     picked_confs = pareto_confs[wun_id]
 
     return picked_pareto, picked_confs
+
+
+def weighted_utopia_nearest(
+    pareto_objs: np.ndarray,
+    pareto_confs: np.ndarray,
+    weights: np.ndarray,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    return the Pareto point that is closest to the utopia point
+    in a weighted distance function
+    """
+    n_pareto = pareto_objs.shape[0]
+    assert n_pareto > 0
+    if n_pareto == 1:
+        # (2,), (n, 2)
+        return pareto_objs[0], pareto_confs[0]
+
+    utopia = np.zeros_like(pareto_objs[0])
+    min_objs, max_objs = pareto_objs.min(0), pareto_objs.max(0)
+    pareto_norm = (pareto_objs - min_objs) / (max_objs - min_objs)
+    pareto_weighted_norm = pareto_norm * weights
+    dists = np.sum((pareto_weighted_norm - utopia) ** 2, axis=1)
+    wun_id = np.argmin(dists)
+
+    picked_pareto = pareto_objs[wun_id]
+    picked_confs = pareto_confs[wun_id]
+
+    return picked_pareto, picked_confs

@@ -23,13 +23,14 @@ if __name__ == "__main__":
         + ["s10", "s11"]
     )
     base_dir = Path(__file__).parent
-    df, ag_server = get_non_decision_inputs(
+    df, optimizer = get_non_decision_inputs(
         base_dir=base_dir,
         params=params,
         decision_vars=decision_variables,
     )
+    ag_server = optimizer.ag_ms
     # example of setting different theta for TPCH q1-1
-    target_query = "q1-1"
+    target_query = "1-1"
 
     # 1. get non decision inputs from input_dict
     target_df = df.loc[[target_query]]
