@@ -32,6 +32,7 @@ class AtomicOptimizer(BaseOptimizer):
         ag_model: Dict[str, str] = dict(),
         sample_mode: str = "random",
         n_samples: int = 1,
+        pre_samples: Optional[np.ndarray] = None,
         moo_mode: str = "BF",
         monitor: UdaoMonitor = UdaoMonitor(),
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
@@ -58,6 +59,10 @@ class AtomicOptimizer(BaseOptimizer):
             if seed is None:
                 seed = 0
             sampled_theta = get_lhs_confs(self.sc, n_samples, seed=seed).values
+        elif sample_mode == "preset":
+            if pre_samples is None:
+                raise ValueError("samples is required for preset sampling")
+            sampled_theta = pre_samples
         elif sample_mode == "grid":
             raise NotImplementedError
         else:
