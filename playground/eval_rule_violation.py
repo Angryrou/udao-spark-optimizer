@@ -5,7 +5,7 @@ from typing import Dict, Tuple
 import numpy as np
 import pandas as pd
 
-from udao_spark.data.utils import get_ag_data
+from udao_spark.data.utils import get_ag_data, get_lhs_confs
 from udao_spark.model.model_server import AGServer
 from udao_spark.optimizer.utils import get_ag_meta
 from udao_spark.utils.params import get_ag_parameters
@@ -65,15 +65,6 @@ def data_preparation(
         "data_val": data_val,
         "data_te": data_te,
     }, ag_server
-
-
-def get_lhs_confs(spark_conf: SparkConf, n_samples: int, seed: int) -> pd.DataFrame:
-    lhs_conf_raw = spark_conf.get_lhs_configurations(n_samples, seed=seed)
-    lhs_conf = pd.DataFrame(
-        data=spark_conf.deconstruct_configuration(lhs_conf_raw.values),
-        columns=spark_conf.knob_ids,
-    )
-    return lhs_conf
 
 
 def get_resource_knob_permutation() -> pd.DataFrame:

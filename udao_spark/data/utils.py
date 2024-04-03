@@ -474,3 +474,12 @@ def get_ag_data(
         "pw": pw,
         "objectives": objectives,
     }
+
+
+def get_lhs_confs(spark_conf: SparkConf, n_samples: int, seed: int) -> pd.DataFrame:
+    lhs_conf_raw = spark_conf.get_lhs_configurations(n_samples, seed=seed)
+    lhs_conf = pd.DataFrame(
+        data=spark_conf.deconstruct_configuration(lhs_conf_raw.values),
+        columns=spark_conf.knob_ids,
+    )
+    return lhs_conf

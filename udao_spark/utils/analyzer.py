@@ -31,7 +31,7 @@ def extract_non_decision_df(non_decision_input_dict: Dict) -> pd.DataFrame:
 
 def get_non_decision_inputs(
     base_dir: Path, params: Namespace, decision_vars: List[str]
-) -> Tuple[pd.DataFrame, AGServer]:
+) -> Tuple[pd.DataFrame, AtomicOptimizer]:
     # prepare parameters
     bm, q_type = params.benchmark, params.q_type
     hp_choice, graph_choice = params.hp_choice, params.graph_choice
@@ -42,11 +42,30 @@ def get_non_decision_inputs(
     cache_header = (
         f"robustness_eval/violation/{bm}/{q_type}/{graph_choice}/{ag_full_name}"
     )
-    cache_file = "non_decision_df.parquet"
+    cache_file = "non_decision_df_0307.parquet"
+
+    spark_conf = SparkConf(str(base_dir / "assets/spark_configuration_aqe_on.json"))
+    # use functions in HierarchicalOptimizer to extract the non-decision inputs
+    atomic_optimizer = AtomicOptimizer(
+        bm=bm,
+        model_sign=ag_meta["model_sign"],
+        graph_model_params_path=ag_meta["model_params_path"],
+        graph_weights_path=ag_meta["graph_weights_path"],
+        q_type=q_type,
+        data_processor_path=ag_meta["data_processor_path"],
+        spark_conf=spark_conf,
+        decision_variables=decision_vars,
+        ag_path=ag_meta["ag_path"],
+        clf_json_path=None
+        if params.disable_failure_clf
+        else str(base_dir / f"assets/{bm}_valid_clf_meta.json"),
+        clf_recall_xhold=params.clf_recall_xhold,
+        verbose=False,
+    )
 
     try:
         df = ParquetHandler.load(cache_header, cache_file)
-        ag_ms = AGServer.from_ckp_path(
+        atomic_optimizer.ag_ms = AGServer.from_ckp_path(
             model_sign=ag_meta["model_sign"],
             graph_model_params_path=ag_meta["model_params_path"],
             graph_weights_path=ag_meta["graph_weights_path"],
@@ -56,7 +75,7 @@ def get_non_decision_inputs(
             clf_recall_xhold=params.clf_recall_xhold,
         )
         print("found cached non_decision_df...")
-        return df, ag_ms
+        return df, atomic_optimizer
     except FileNotFoundError:
         print("no cached non_decision_df found, generating...")
     except Exception as e:
@@ -64,7 +83,6 @@ def get_non_decision_inputs(
         raise e
 
     # prepare the traces
-    spark_conf = SparkConf(str(base_dir / "assets/spark_configuration_aqe_on.json"))
     sample_header = str(base_dir / "assets/query_plan_samples")
     if bm == "tpch":
         benchmark = Benchmark(BenchmarkType.TPCH, params.scale_factor)
@@ -90,24 +108,6 @@ def get_non_decision_inputs(
             print(f"{trace} does not exist")
             raise FileNotFoundError(f"{trace} does not exist")
 
-    # use functions in HierarchicalOptimizer to extract the non-decision inputs
-    atomic_optimizer = AtomicOptimizer(
-        bm=bm,
-        model_sign=ag_meta["model_sign"],
-        graph_model_params_path=ag_meta["model_params_path"],
-        graph_weights_path=ag_meta["graph_weights_path"],
-        q_type=q_type,
-        data_processor_path=ag_meta["data_processor_path"],
-        spark_conf=spark_conf,
-        decision_variables=decision_vars,
-        ag_path=ag_meta["ag_path"],
-        clf_json_path=None
-        if params.disable_failure_clf
-        else str(base_dir / f"assets/{bm}_valid_clf_meta.json"),
-        clf_recall_xhold=params.clf_recall_xhold,
-        verbose=False,
-    )
-
     non_decision_input_dict = {
         f"q-{i + 1}": get_non_decision_inputs_for_q_compile(trace)
         for i, trace in enumerate(raw_traces)
@@ -127,9 +127,9 @@ def get_non_decision_inputs(
     df[ge_cols] = graph_embeddings.numpy()
     ta = TypeAdvisor(q_type=q_type)
     df = df[ge_cols + ta.get_tabular_non_decision_columns()].copy()
-    df["query_name"] = [f"q1-{i + 1}" for i in range(22)]
-    df.set_index("query_name", inplace=True, drop=True)
+    df["query_id"] = [f"{i + 1}-1" for i in range(22)]
+    df.set_index("query_id", inplace=True, drop=True)
     os.makedirs(cache_header, exist_ok=True)
     ParquetHandler.save(df, cache_header, cache_file)
     print("non_decision_df saved...")
-    return df, atomic_optimizer.ag_ms
+    return df, atomic_optimizer

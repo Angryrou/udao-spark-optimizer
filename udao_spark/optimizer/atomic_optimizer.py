@@ -6,6 +6,7 @@ import pandas as pd
 import torch as th
 from udao.optimization.utils.moo_utils import is_pareto_efficient
 
+from ..data.utils import get_lhs_confs
 from ..utils.constants import THETA_COMPILE
 from ..utils.logging import logger
 from ..utils.monitor import UdaoMonitor
@@ -31,6 +32,7 @@ class AtomicOptimizer(BaseOptimizer):
         ag_model: Dict[str, str] = dict(),
         sample_mode: str = "random",
         n_samples: int = 1,
+        pre_samples: Optional[np.ndarray] = None,
         moo_mode: str = "BF",
         monitor: UdaoMonitor = UdaoMonitor(),
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
@@ -48,6 +50,19 @@ class AtomicOptimizer(BaseOptimizer):
             sampled_theta = self.sample_theta_all(
                 n_samples=n_samples, seed=seed, normalize=not use_ag
             )[:, -len(self.decision_variables) :]
+        elif sample_mode == "lhs":
+            if len(self.decision_variables) != 19:
+                raise ValueError(
+                    f"lhs sampling is only supported for 19 decision variables, "
+                    f"but got {len(self.decision_variables)}"
+                )
+            if seed is None:
+                seed = 0
+            sampled_theta = get_lhs_confs(self.sc, n_samples, seed=seed).values
+        elif sample_mode == "preset":
+            if pre_samples is None:
+                raise ValueError("samples is required for preset sampling")
+            sampled_theta = pre_samples
         elif sample_mode == "grid":
             raise NotImplementedError
         else:
