@@ -1,4 +1,5 @@
 import os.path
+from argparse import ArgumentParser
 from pathlib import Path
 
 from udao_spark.model.mulitlabel_predictor import MultilabelPredictor  # type: ignore
@@ -6,8 +7,20 @@ from udao_spark.optimizer.utils import get_ag_meta
 from udao_spark.utils.evaluation import get_ag_data, get_ag_pred_objs
 from udao_spark.utils.params import get_ag_parameters
 
+
+def get_parser() -> ArgumentParser:
+    parser = get_ag_parameters()
+    # fmt: off
+    parser.add_argument("--ag_model_q_latency", type=str, default=None,
+                        help="specific model name for AG for Q_R latency")
+    parser.add_argument("--ag_model_q_io", type=str, default=None,
+                        help="specific model name for AG for Q_R IO")
+    # fmt: on
+    return parser
+
+
 if __name__ == "__main__":
-    params = get_ag_parameters().parse_args()
+    params = get_parser().parse_args()
 
     if params.q_type != "q_compile":
         raise ValueError(f"Diagnosing {params.q_type} is not our focus.")
@@ -64,3 +77,5 @@ if __name__ == "__main__":
         force=False,
         ag_model=ag_model,
     )
+
+    print(f"metrics: {metrics}, throughput: {throughput} K/s")
