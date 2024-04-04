@@ -15,6 +15,8 @@ def get_parser() -> ArgumentParser:
                         help="specific model name for AG for Q_R latency")
     parser.add_argument("--ag_model_q_io", type=str, default=None,
                         help="specific model name for AG for Q_R IO")
+    parser.add_argument("--force", action="store_true",
+                        help="Enable forcing running results")
     # fmt: on
     return parser
 
@@ -74,7 +76,7 @@ if __name__ == "__main__":
         graph_choice,
         split="test",
         ag_meta=ag_meta,
-        force=False,
+        force=params.force,
         ag_model=ag_model,
     )
 
