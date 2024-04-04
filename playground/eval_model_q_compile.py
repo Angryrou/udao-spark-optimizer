@@ -1,20 +1,29 @@
 import os
+from argparse import ArgumentParser
 from pathlib import Path
 
 import pandas as pd
 
 from udao_spark.utils.evaluation import display_ape, display_xput
-from udao_spark.utils.params import get_ag_parameters
+from udao_spark.utils.params import get_base_parser
 from udao_trace.utils import JsonHandler, PickleHandler
 
+
+def get_parser() -> ArgumentParser:
+    parser = get_base_parser()
+    # fmt: off
+    parser.add_argument("--hp_choice", type=str, default="tuned-0215",
+                        choices=["tuned-0215"])
+    # fmt: on
+    return parser
+
+
 if __name__ == "__main__":
-    params = get_ag_parameters().parse_args()
+    params = get_parser().parse_args()
     if params.q_type != "q_compile":
         raise ValueError(f"Diagnosing {params.q_type} is not our focus.")
     if params.hp_choice != "tuned-0215":
         raise ValueError(f"hp_choice {params.hp_choice} is not supported.")
-    if params.graph_choice != "gtn":
-        raise ValueError(f"graph_choice {params.graph_choice} is not supported.")
 
     bm = params.benchmark
     base_dir = Path(__file__).parent
