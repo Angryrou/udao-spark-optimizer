@@ -34,7 +34,6 @@ if __name__ == "__main__":
     data = []
 
     columns = [
-        "bm",
         "model",
         "lat_wmape",
         "lat_p50",
