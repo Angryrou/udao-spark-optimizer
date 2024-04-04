@@ -62,7 +62,7 @@ if __name__ == "__main__":
         raise Exception("run train_ensemble_models.py first")
 
     ag_model = {
-        "ana_latency_s": params.ag_model_q_latency,
+        "latency_s": params.ag_model_q_latency,
         "io_mb": params.ag_model_q_io,
     }
 

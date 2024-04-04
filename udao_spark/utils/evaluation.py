@@ -302,7 +302,7 @@ def get_ag_pred_objs(
     device = "gpu" if th.cuda.is_available() else "cpu"
     cache_name = f"{split}_{ag_sign}_{ag_model_short}_objs_and_metrics_{device}.pkl"
     if not force and os.path.exists(f"{weights_head}/{cache_name}"):
-        # print(f"found {cache_name}")
+        print(f"found {cache_name}")
         cache = PickleHandler.load(weights_head, cache_name)
         if not isinstance(cache, Dict):
             raise TypeError(f"mlp_cache is not a dict: {cache}")
@@ -317,6 +317,7 @@ def get_ag_pred_objs(
         metrics = cache["metrics"]
         return objs_true, objs_pred, dt_s, throughput, metrics
 
+    print(f"not found {weights_head}/{cache_name}, generating...")
     ag_data = get_ag_data(base_dir, bm, q_type, debug, graph_choice, weights_path)
     data_dict = {sp: da for sp, da in zip(["train", "val", "test"], ag_data["data"])}
     data = data_dict[split]
@@ -333,7 +334,7 @@ def get_ag_pred_objs(
             transformed_data = predictor.transform_features(
                 data.drop(columns=objectives)
             )
-        print(predictor.model_names())
+        # print(predictor.model_names())
         start_time_ns = time.perf_counter_ns()
         y_pred = predictor.predict(
             transformed_data,
