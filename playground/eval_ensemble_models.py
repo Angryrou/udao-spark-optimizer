@@ -80,4 +80,4 @@ if __name__ == "__main__":
         ag_model=ag_model,
     )
 
-    print(f"metrics: {metrics}, throughput: {throughput} K/s")
+    print(f"metrics: {metrics}, throughput (regr only): {throughput} K/s")
