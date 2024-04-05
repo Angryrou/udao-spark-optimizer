@@ -177,11 +177,13 @@ if __name__ == "__main__":
         f"xput(K/s): {total_confs / total_ms}"
     )
 
+    device = "gpu" if th.cuda.is_available() else "cpu"
     if not use_ag:
-        suffix = f"{n_samples}_{graph_choice}"
+        suffix = f"{n_samples}_{graph_choice}_{device}"
     else:
         ag_model_short = "_".join(f"{k.split('_')[0]}:{v}" for k, v in ag_model.items())
-        suffix = f"{n_samples}_{graph_choice}_em({ag_model_short})"
+        suffix = f"{n_samples}_{graph_choice}_em({ag_model_short})_{device}"
+
     torun_file = f"compile_time_output/{bm}100/lhs-so/uco-run_confs_{suffix}.json"
     runtime_file = f"compile_time_output/{bm}100/lhs-so/uco-runtime_{suffix}.json"
 

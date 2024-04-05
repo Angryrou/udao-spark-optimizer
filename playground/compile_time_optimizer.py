@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Dict
 
 import numpy as np
+import torch as th
 
 from udao_spark.data.extractors.injection_extractor import (
     get_non_decision_inputs_for_q_compile,
@@ -36,6 +37,8 @@ def get_params() -> ArgumentParser:
     parser.add_argument("--n_conf_samples", type=int, default=10000,
                         help="number of configurations to sample")
     parser.add_argument("--verbose", action="store_true",
+                        help="Enable verbose mode")
+    parser.add_argument("--ensemble", action="store_true",
                         help="Enable verbose mode")
     # fmt: on
     return parser
@@ -64,6 +67,7 @@ if __name__ == "__main__":
     il, bs, tl = params.infer_limit, params.infer_limit_batch_size, params.ag_time_limit
     ag_meta = get_ag_meta(bm, hp_choice, graph_choice, q_type, ag_sign, il, bs, tl)
     ag_full_name = ag_meta["ag_full_name"]
+    use_ag = params.ensemble
 
     # prepare the traces
     spark_conf = SparkConf(str(base_dir / "assets/spark_configuration_aqe_on.json"))
@@ -120,6 +124,10 @@ if __name__ == "__main__":
     target_confs: Dict[str, Dict] = {}
     total_monitor = {}
     n_samples = params.n_conf_samples
+    ag_model = {
+        "latency_s": params.ag_model_q_latency,
+        "io_mb": params.ag_model_q_io,
+    }
     for template, trace in zip(benchmark.templates, raw_traces):
         logger.info(f"Processing {trace}")
         query_id = f"{template}-1"
@@ -129,10 +137,8 @@ if __name__ == "__main__":
             template=template,
             non_decision_input=non_decision_input,
             seed=params.seed,
-            ag_model={
-                "latency_s": params.ag_model_q_latency,
-                "io_mb": params.ag_model_q_io,
-            },
+            use_ag=use_ag,
+            ag_model=ag_model,
             sample_mode="lhs",
             n_samples=n_samples,
             monitor=monitor,
@@ -154,9 +160,17 @@ if __name__ == "__main__":
         query_id: np.unique([c for c in confs_dict.values()]).tolist()
         for query_id, confs_dict in target_confs.items()
     }
-    torun_file = f"compile_time_output/{bm}100/lhs/run_confs_{n_samples}.json"
-    toanalyze_file = f"compile_time_output/{bm}100/lhs/full_confs_{n_samples}.json"
-    runtime_file = f"compile_time_output/{bm}100/lhs/runtime_{n_samples}.json"
+
+    device = "gpu" if th.cuda.is_available() else "cpu"
+    if not use_ag:
+        suffix = f"{n_samples}_{graph_choice}_{device}"
+    else:
+        ag_model_short = "_".join(f"{k.split('_')[0]}:{v}" for k, v in ag_model.items())
+        suffix = f"{n_samples}_{graph_choice}_em({ag_model_short})_{device}"
+
+    torun_file = f"compile_time_output/{bm}100/lhs/run_confs_{suffix}.json"
+    toanalyze_file = f"compile_time_output/{bm}100/lhs/full_confs_{suffix}.json"
+    runtime_file = f"compile_time_output/{bm}100/lhs/runtime_{suffix}.json"
     os.makedirs(os.path.dirname(torun_file), exist_ok=True)
     JsonHandler.dump_to_file(target_confs, toanalyze_file, indent=2)
     JsonHandler.dump_to_file(todo_confs, torun_file, indent=2)
