@@ -5,9 +5,10 @@ from typing import Dict, Tuple
 import numpy as np
 import pandas as pd
 
-from udao_spark.data.utils import get_ag_data, get_lhs_confs
+from udao_spark.data.utils import get_lhs_confs
 from udao_spark.model.model_server import AGServer
 from udao_spark.optimizer.utils import get_ag_meta
+from udao_spark.utils.evaluation import get_ag_data
 from udao_spark.utils.params import get_ag_parameters
 from udao_trace.configuration import SparkConf
 from udao_trace.utils.logging import logger
