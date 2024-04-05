@@ -203,7 +203,7 @@ class BaseOptimizer(ABC):
                 df[self.tabular_normalizer_meta["theta_cols"]].values
                 - self.tabular_normalizer_meta["theta_min"]
             ) / (
-                self.tabular_normalizer["theta_max"]
+                self.tabular_normalizer_meta["theta_max"]
                 - self.tabular_normalizer_meta["theta_min"]
             )
             tabular_input = np.concatenate([norm_non_theta, norm_theta], axis=1)

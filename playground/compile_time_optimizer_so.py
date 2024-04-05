@@ -1,24 +1,21 @@
-"""
-Support compile-time configuration recommendation with the following features:
-- EM models and MLP models at the query level
-- Different objective preferences
-- Different model uncertainty preferences (TODO)
-"""
 import os
+import time
 from argparse import ArgumentParser
 from pathlib import Path
 from typing import Dict
 
 import numpy as np
+import pandas as pd
+import torch as th
 
 from udao_spark.data.extractors.injection_extractor import (
     get_non_decision_inputs_for_q_compile,
 )
+from udao_spark.data.utils import get_lhs_confs
 from udao_spark.optimizer.atomic_optimizer import AtomicOptimizer
-from udao_spark.optimizer.utils import get_ag_meta, weighted_utopia_nearest
+from udao_spark.optimizer.utils import get_ag_meta
 from udao_spark.utils.logging import logger
-from udao_spark.utils.monitor import UdaoMonitor
-from udao_spark.utils.params import QType, get_ag_parameters
+from udao_spark.utils.params import get_ag_parameters
 from udao_trace.configuration import SparkConf
 from udao_trace.utils import BenchmarkType, JsonHandler
 from udao_trace.workload import Benchmark
@@ -37,19 +34,20 @@ def get_params() -> ArgumentParser:
                         help="number of configurations to sample")
     parser.add_argument("--verbose", action="store_true",
                         help="Enable verbose mode")
+    parser.add_argument("--ensemble", action="store_true",
+                        help="Enable verbose mode")
     # fmt: on
     return parser
 
 
 if __name__ == "__main__":
-    R_Q: QType = "q_compile"
     params = get_params().parse_args()
     if params.q_type != "q_compile":
         raise ValueError(f"Diagnosing {params.q_type} is not our focus.")
     if params.hp_choice != "tuned-0215":
         raise ValueError(f"hp_choice {params.hp_choice} is not supported.")
-    if params.graph_choice != "gtn":
-        raise ValueError(f"graph_choice {params.graph_choice} is not supported.")
+    if params.ensemble and params.graph_choice != "gtn":
+        raise ValueError(f"ensembled model only works with {params.graph_choice}.")
 
     # theta includes 19 decision variables
     decision_variables = (
@@ -59,11 +57,7 @@ if __name__ == "__main__":
     )
     base_dir = Path(__file__).parent
     bm, q_type = params.benchmark, params.q_type
-    hp_choice, graph_choice = params.hp_choice, params.graph_choice
-    ag_sign = params.ag_sign
-    il, bs, tl = params.infer_limit, params.infer_limit_batch_size, params.ag_time_limit
-    ag_meta = get_ag_meta(bm, hp_choice, graph_choice, q_type, ag_sign, il, bs, tl)
-    ag_full_name = ag_meta["ag_full_name"]
+    use_ag = params.ensemble
 
     # prepare the traces
     spark_conf = SparkConf(str(base_dir / "assets/spark_configuration_aqe_on.json"))
@@ -92,6 +86,14 @@ if __name__ == "__main__":
             print(f"{trace} does not exist")
             raise FileNotFoundError(f"{trace} does not exist")
 
+    hp_choice, graph_choice = params.hp_choice, params.graph_choice
+    ag_sign = params.ag_sign
+    il, bs, tl = params.infer_limit, params.infer_limit_batch_size, params.ag_time_limit
+    ag_meta = get_ag_meta(bm, hp_choice, graph_choice, q_type, ag_sign, il, bs, tl)
+    ag_model = {
+        "latency_s": params.ag_model_q_latency,
+        "io_mb": params.ag_model_q_io,
+    }
     # use functions in HierarchicalOptimizer to extract the non-decision inputs
     atomic_optimizer = AtomicOptimizer(
         bm=bm,
@@ -110,54 +112,79 @@ if __name__ == "__main__":
         verbose=False,
     )
 
-    wun_weights_pairs = {
-        0: (0.0, 1.0),
-        1: (0.1, 0.9),
-        5: (0.5, 0.5),
-        9: (0.9, 0.1),
-        10: (1.0, 0.0),
-    }
+    todo_confs: Dict[str, Dict] = {}
     target_confs: Dict[str, Dict] = {}
     total_monitor = {}
     n_samples = params.n_conf_samples
+    seed = params.seed
+    sampled_theta = get_lhs_confs(
+        atomic_optimizer.sc, n_samples, seed=seed, normalize=not use_ag
+    ).values
+
     for template, trace in zip(benchmark.templates, raw_traces):
         logger.info(f"Processing {trace}")
         query_id = f"{template}-1"
+        start = time.perf_counter_ns()
         non_decision_input = get_non_decision_inputs_for_q_compile(trace)
-        monitor = UdaoMonitor()
-        po_objs, po_confs = atomic_optimizer.solve(
-            template=template,
-            non_decision_input=non_decision_input,
-            seed=params.seed,
-            ag_model={
-                "latency_s": params.ag_model_q_latency,
-                "io_mb": params.ag_model_q_io,
-            },
-            sample_mode="lhs",
-            n_samples=n_samples,
-            monitor=monitor,
+        non_decision_df = atomic_optimizer.extract_non_decision_df(non_decision_input)
+        (
+            graph_embeddings,
+            non_decision_tabular_features,
+            time_dict,
+        ) = atomic_optimizer.extract_non_decision_embeddings_from_df(
+            non_decision_df, use_ag
         )
-        total_monitor[query_id] = monitor.to_dict()
-        if po_objs is None or po_confs is None:
-            logger.warning(f"Failed to solve {template}")
-            continue
-        target_confs[query_id] = {}
-        for k, wun_weights in wun_weights_pairs.items():
-            reco_obj, reco_conf = weighted_utopia_nearest(
-                pareto_objs=po_objs,
-                pareto_confs=po_confs,
-                weights=np.array(wun_weights),
+        regr_start = time.perf_counter_ns()
+        if use_ag:
+            graph_embeddings = graph_embeddings.detach().cpu()
+            objs_dict = atomic_optimizer.get_objective_values_ag(
+                template,
+                graph_embeddings.tile(n_samples, 1).numpy(),
+                pd.DataFrame(
+                    np.tile(non_decision_df.values, (n_samples, 1)),
+                    columns=non_decision_df.columns,
+                ),
+                sampled_theta,
+                ag_model,
             )
-            target_confs[query_id][k] = ",".join(reco_conf)
+        else:
+            if non_decision_tabular_features is None:
+                raise ValueError(
+                    "non_decision_tabular_features is required for MLP inference"
+                )
+            objs_dict = atomic_optimizer.get_objective_values_mlp(
+                graph_embeddings.tile(n_samples, 1),
+                non_decision_tabular_features.tile(n_samples, 1),
+                th.tensor(sampled_theta, dtype=atomic_optimizer.dtype),
+            )
+        lat, cost = atomic_optimizer.get_latencies_and_objectives(objs_dict)
+        end = time.perf_counter_ns()
+        time_dict["regr_ms"] = (end - regr_start) / 1e6
+        time_dict["total_ms"] = (end - start) / 1e6
+        time_dict["total_confs"] = n_samples
+        total_monitor[query_id] = time_dict
+        ind = np.lexsort((cost, lat))[0]
+        print(lat.sum())
+        po_conf = atomic_optimizer.construct_po_confs(
+            sampled_theta[ind : ind + 1], use_ag
+        )
+        todo_confs[query_id] = [",".join(p) for p in po_conf]  # type: ignore
 
-    todo_confs = {
-        query_id: np.unique([c for c in confs_dict.values()]).tolist()
-        for query_id, confs_dict in target_confs.items()
-    }
-    torun_file = f"compile_time_output/{bm}100/lhs/run_confs_{n_samples}.json"
-    toanalyze_file = f"compile_time_output/{bm}100/lhs/full_confs_{n_samples}.json"
-    runtime_file = f"compile_time_output/{bm}100/lhs/runtime_{n_samples}.json"
+    total_ms = sum([v["total_ms"] for v in total_monitor.values()])
+    total_confs = sum([v["total_confs"] for v in total_monitor.values()])
+    print(
+        f"Model: {graph_choice}, total_ms: {total_ms}, total_confs: {total_confs}, "
+        f"xput(K/s): {total_confs / total_ms}"
+    )
+
+    if not use_ag:
+        suffix = f"{n_samples}_{graph_choice}"
+    else:
+        ag_model_short = "_".join(f"{k.split('_')[0]}:{v}" for k, v in ag_model.items())
+        suffix = f"{n_samples}_{graph_choice}_em({ag_model_short})"
+    torun_file = f"compile_time_output/{bm}100/lhs-so/uco-run_confs_{suffix}.json"
+    runtime_file = f"compile_time_output/{bm}100/lhs-so/uco-runtime_{suffix}.json"
+
     os.makedirs(os.path.dirname(torun_file), exist_ok=True)
-    JsonHandler.dump_to_file(target_confs, toanalyze_file, indent=2)
     JsonHandler.dump_to_file(todo_confs, torun_file, indent=2)
     JsonHandler.dump_to_file(total_monitor, runtime_file, indent=2)

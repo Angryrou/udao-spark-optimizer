@@ -23,6 +23,22 @@ class AtomicOptimizer(BaseOptimizer):
         df["id"] = df.index
         return df
 
+    def construct_po_confs(self, po_theta: np.ndarray, use_ag: bool) -> np.ndarray:
+        non_decision_knobs = [
+            v for v in THETA_COMPILE if v not in self.decision_variables
+        ]
+        n_vars = len(self.decision_variables)
+        n_consts = len(non_decision_knobs)
+        n_po = len(po_theta)
+        po_theta_full = np.hstack([np.zeros((n_po, n_consts)), po_theta])
+        if use_ag:
+            po_confs = self.sc.construct_configuration(po_theta_full)[:, -n_vars:]
+        else:
+            po_confs = self.sc.construct_configuration_from_norm(po_theta_full)[
+                :, -n_vars:
+            ]
+        return po_confs
+
     def solve(
         self,
         template: str,
@@ -58,7 +74,9 @@ class AtomicOptimizer(BaseOptimizer):
                 )
             if seed is None:
                 seed = 0
-            sampled_theta = get_lhs_confs(self.sc, n_samples, seed=seed).values
+            sampled_theta = get_lhs_confs(
+                self.sc, n_samples, seed=seed, normalize=not use_ag
+            ).values
         elif sample_mode == "preset":
             if pre_samples is None:
                 raise ValueError("samples is required for preset sampling")
@@ -96,6 +114,7 @@ class AtomicOptimizer(BaseOptimizer):
                 th.tensor(sampled_theta, dtype=self.dtype),
             )
         lat, cost = self.get_latencies_and_objectives(objs_dict)
+        print(lat.sum())
         objs = np.vstack([lat, cost]).T.astype(np.float32)
         t5 = time.perf_counter_ns()
         monitor.model_inference_ms = (t5 - t4) / 1e6  # monitoring
@@ -119,18 +138,7 @@ class AtomicOptimizer(BaseOptimizer):
             return None, None
 
         logger.debug(f"po_objs: {po_objs}, po_theta: {po_theta}")
-        non_decision_knobs = [
-            v for v in THETA_COMPILE if v not in self.decision_variables
-        ]
-        n_vars = len(self.decision_variables)
-        n_consts = len(non_decision_knobs)
-        po_theta_full = np.hstack([np.zeros((n_po, n_consts)), po_theta])
-        if use_ag:
-            po_confs = self.sc.construct_configuration(po_theta_full)[:, -n_vars:]
-        else:
-            po_confs = self.sc.construct_configuration_from_norm(po_theta_full)[
-                :, -n_vars:
-            ]
+        po_confs = self.construct_po_confs(po_theta, use_ag)
         logger.debug(f"found {len(po_objs)} po points, po_confs: {po_confs}")
 
         t7 = time.perf_counter_ns()

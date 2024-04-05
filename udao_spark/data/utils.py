@@ -340,10 +340,21 @@ def get_split_iterators(
     return split_iterators
 
 
-def get_lhs_confs(spark_conf: SparkConf, n_samples: int, seed: int) -> pd.DataFrame:
+def get_lhs_confs(
+    spark_conf: SparkConf, n_samples: int, seed: int, normalize: bool
+) -> pd.DataFrame:
     lhs_conf_raw = spark_conf.get_lhs_configurations(n_samples, seed=seed)
     lhs_conf = pd.DataFrame(
         data=spark_conf.deconstruct_configuration(lhs_conf_raw.values),
         columns=spark_conf.knob_ids,
     )
+    if normalize:
+        theta_all_minmax = (
+            np.array(spark_conf.knob_min),
+            np.array(spark_conf.knob_max),
+        )
+        lhs_conf_norm = (lhs_conf - theta_all_minmax[0]) / (
+            theta_all_minmax[1] - theta_all_minmax[0]
+        )
+        return lhs_conf_norm
     return lhs_conf
