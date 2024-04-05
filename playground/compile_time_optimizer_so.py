@@ -176,7 +176,11 @@ if __name__ == "__main__":
         f"Model: {graph_choice}, total_ms: {total_ms}, total_confs: {total_confs}, "
         f"xput(K/s): {total_confs / total_ms}"
     )
-
+    total_monitor["agg"] = {
+        "total_ms": total_ms,
+        "total_confs": total_confs,
+        "xput": total_confs / total_ms,
+    }
     device = "gpu" if th.cuda.is_available() else "cpu"
     if not use_ag:
         suffix = f"{n_samples}_{graph_choice}_{device}"
