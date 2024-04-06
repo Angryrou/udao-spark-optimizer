@@ -46,7 +46,10 @@ def extract_non_decision_df(non_decision_input_dict: Dict) -> pd.DataFrame:
 
 
 def get_non_decision_inputs(
-    base_dir: Path, params: Namespace, decision_vars: List[str]
+    base_dir: Path,
+    params: Namespace,
+    decision_vars: List[str],
+    cache_file: str = "non_decision_df_03-07.parquet",
 ) -> Tuple[pd.DataFrame, AtomicOptimizer]:
     # prepare parameters
     bm, q_type = params.benchmark, params.q_type
@@ -58,8 +61,6 @@ def get_non_decision_inputs(
     cache_header = (
         f"robustness_eval/violation/{bm}/{q_type}/{graph_choice}/{ag_full_name}"
     )
-    cache_file = "non_decision_df_0307.parquet"
-
     spark_conf = SparkConf(str(base_dir / "assets/spark_configuration_aqe_on.json"))
     # use functions in HierarchicalOptimizer to extract the non-decision inputs
     atomic_optimizer = AtomicOptimizer(

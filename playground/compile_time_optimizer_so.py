@@ -132,7 +132,7 @@ if __name__ == "__main__":
             non_decision_tabular_features,
             time_dict,
         ) = atomic_optimizer.extract_non_decision_embeddings_from_df(
-            non_decision_df, use_ag
+            non_decision_df, use_ag, ercilla=False
         )
         regr_start = time.perf_counter_ns()
         if use_ag:
