@@ -41,11 +41,10 @@ class ModelServer:
             model = get_graph_avg_mlp(graph_avg_ml_params)
             logger.info("GRAPH MODEL DETAILS:\n")
             logger.info(model)
-        elif model_sign in ["graph_gtn", "graph_qf"]:
+        elif model_sign in ["graph_gtn", "graph_qf", "graph_raal"]:
             param_dict = JsonHandler.load_json(model_params_path)
-            # if model_sign == "graph_raal" and non_siblings_map is None:
-            #     raise ValueError("non_sibling_maps is required for RAAL model")
-            # param_dict["non_siblings_map"] = non_siblings_map
+            if model_sign == "graph_raal":
+                param_dict["non_siblings_map"] = {}
             graph_gtn_ml_params = GraphTransformerMLPParams.from_dict(param_dict)
             objectives = graph_gtn_ml_params.iterator_shape.output_names
             model = get_graph_transformer_mlp(graph_gtn_ml_params)

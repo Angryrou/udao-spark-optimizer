@@ -48,8 +48,6 @@ if __name__ == "__main__":
         raise ValueError(f"hp_choice {params.hp_choice} is not supported.")
     if params.ensemble and params.graph_choice != "gtn":
         raise ValueError(f"ensembled model only works with {params.graph_choice}.")
-    if params.graph_choice in ["qppnet", "raal"]:
-        raise ValueError(f"graph_choice {params.graph_choice} is not supported.")
 
     # theta includes 19 decision variables
     decision_variables = (
@@ -134,7 +132,7 @@ if __name__ == "__main__":
             non_decision_tabular_features,
             time_dict,
         ) = atomic_optimizer.extract_non_decision_embeddings_from_df(
-            non_decision_df, use_ag, ercilla=False, graph_choice=graph_choice
+            non_decision_df, use_ag, ercilla=True, graph_choice=graph_choice
         )
         regr_start = time.perf_counter_ns()
         if use_ag:

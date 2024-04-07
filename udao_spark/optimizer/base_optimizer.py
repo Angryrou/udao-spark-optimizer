@@ -12,6 +12,8 @@ from udao.data.handler.data_processor import DataProcessor
 from udao.data.iterators.query_plan_iterator import QueryPlanInput
 from udao.data.predicate_embedders.utils import prepare_operation
 from udao.data.utils.query_plan import add_positional_encoding
+from udao.model import GraphTransformer
+from udao.model.embedders.layers.multi_head_attention import RAALMultiHeadAttentionLayer
 from udao.optimization.utils.moo_utils import Point, get_default_device
 
 from udao_trace.configuration import SparkConf
@@ -21,7 +23,7 @@ from ..data.extractors.query_structure_extractor import (
     extract_query_plan_features_from_serialized_json,
 )
 from ..model.model_server import AGServer
-from ..model.utils import add_dist_to_graph
+from ..model.utils import add_dist_to_graph, get_non_siblings_map
 from ..utils.constants import THETA_C, THETA_COMPILE, THETA_P, THETA_S
 from ..utils.logging import logger
 from ..utils.monitor import UdaoMonitor
@@ -47,17 +49,6 @@ class BaseOptimizer(ABC):
         clf_recall_xhold: float,
         verbose: bool = False,
     ) -> None:
-        self.bm = bm
-        self.ag_ms = AGServer.from_ckp_path(
-            model_sign,
-            graph_model_params_path,
-            graph_weights_path,
-            q_type,
-            ag_path,
-            clf_json_path,
-            clf_recall_xhold,
-        )
-        self.ta = self.ag_ms.ta
         data_processor = PickleHandler.load(
             os.path.dirname(data_processor_path), os.path.basename(data_processor_path)
         )
@@ -136,7 +127,36 @@ class BaseOptimizer(ABC):
             ],
             "s": [k.ktype for k in spark_conf.knob_list[-len(THETA_S) :]],
         }
+        self.bm = bm
+        self.ag_ms = AGServer.from_ckp_path(
+            model_sign,
+            graph_model_params_path,
+            graph_weights_path,
+            q_type,
+            ag_path,
+            clf_json_path,
+            clf_recall_xhold,
+        )
+        self.ta = self.ag_ms.ta
         self.verbose = verbose
+
+        if model_sign == "graph_raal":
+            embedder = self.ag_ms.ms.model.embedder
+            if not isinstance(embedder, GraphTransformer):
+                raise ValueError(f"Expected GraphTransformer, got {type(embedder)}")
+            template_plans = data_processor.feature_extractors[
+                "query_structure"
+            ].template_plans
+            non_siblings_map = get_non_siblings_map(
+                {k: query.graph for k, query in template_plans.items()}
+            )
+            for layer in embedder.layers:
+                layer.non_siblings_map = non_siblings_map
+                if not isinstance(layer.attention, RAALMultiHeadAttentionLayer):
+                    raise ValueError(
+                        f"Expected RAALMultiHeadAttentionLayer, got {type(layer)}"
+                    )
+                layer.attention.non_siblings_map = non_siblings_map
 
     def fast_extraction(
         self, df: pd.DataFrame, use_ag: bool
@@ -249,9 +269,6 @@ class BaseOptimizer(ABC):
         the normalized values of the non-decision variables
         """
 
-        if graph_choice not in ["gtn", "qf", "tlstm", "avg"]:
-            raise ValueError(f"Unknown graph_choice: {graph_choice}")
-
         t1 = time.perf_counter_ns()
 
         if df.index.name != "id":
@@ -264,7 +281,7 @@ class BaseOptimizer(ABC):
         if self.verbose:
             logger.info(f">>> preprocessed df in {(t2 - t1) / 1e6} ms")
 
-        if ercilla:
+        if ercilla and graph_choice != "raal":
             embedding_input, tabular_input = self.fast_extraction(df, use_ag)
         else:
             embedding_input, tabular_input = self.general_extraction(df)
