@@ -23,7 +23,7 @@ from ..data.extractors.query_structure_extractor import (
     extract_query_plan_features_from_serialized_json,
 )
 from ..model.model_server import AGServer
-from ..model.utils import add_dist_to_graph, get_non_siblings_map
+from ..model.utils import add_dist_to_graph, get_non_siblings, get_non_siblings_map
 from ..utils.constants import THETA_C, THETA_COMPILE, THETA_P, THETA_S
 from ..utils.logging import logger
 from ..utils.monitor import UdaoMonitor
@@ -289,6 +289,9 @@ class BaseOptimizer(ABC):
         # add dist to graph for QF
         if graph_choice == "qf":
             embedding_input = add_dist_to_graph(embedding_input)
+        elif graph_choice == "raal":
+            # add to simulate the computational cost
+            get_non_siblings(embedding_input)
 
         t3 = time.perf_counter_ns()
         if self.verbose:
