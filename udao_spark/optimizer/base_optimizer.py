@@ -21,6 +21,7 @@ from ..data.extractors.query_structure_extractor import (
     extract_query_plan_features_from_serialized_json,
 )
 from ..model.model_server import AGServer
+from ..model.utils import add_dist_to_graph
 from ..utils.constants import THETA_C, THETA_COMPILE, THETA_P, THETA_S
 from ..utils.logging import logger
 from ..utils.monitor import UdaoMonitor
@@ -237,7 +238,11 @@ class BaseOptimizer(ABC):
         return embedding_input, tabular_input
 
     def extract_non_decision_embeddings_from_df(
-        self, df: pd.DataFrame, use_ag: bool = True, ercilla: bool = True
+        self,
+        df: pd.DataFrame,
+        use_ag: bool = True,
+        ercilla: bool = True,
+        graph_choice: str = "gtn",
     ) -> Tuple[th.Tensor, th.Tensor, Dict[str, float]]:
         """
         compute the graph_embedding and
@@ -260,6 +265,13 @@ class BaseOptimizer(ABC):
             embedding_input, tabular_input = self.fast_extraction(df, use_ag)
         else:
             embedding_input, tabular_input = self.general_extraction(df)
+
+        # add dist to graph for QF
+        if graph_choice == "qf":
+            embedding_input = add_dist_to_graph(embedding_input)
+        elif graph_choice == "raal":
+            ...
+
         t3 = time.perf_counter_ns()
         if self.verbose:
             logger.info(f">>> fast_extraction in {(t3 - t2) / 1e6} ms")
