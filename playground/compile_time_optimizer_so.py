@@ -48,6 +48,8 @@ if __name__ == "__main__":
         raise ValueError(f"hp_choice {params.hp_choice} is not supported.")
     if params.ensemble and params.graph_choice != "gtn":
         raise ValueError(f"ensembled model only works with {params.graph_choice}.")
+    if params.graph_choice in ["qppnet", "raal"]:
+        raise ValueError(f"graph_choice {params.graph_choice} is not supported.")
 
     # theta includes 19 decision variables
     decision_variables = (

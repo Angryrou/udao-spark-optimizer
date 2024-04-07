@@ -249,6 +249,9 @@ class BaseOptimizer(ABC):
         the normalized values of the non-decision variables
         """
 
+        if graph_choice not in ["gtn", "qf", "tlstm", "avg"]:
+            raise ValueError(f"Unknown graph_choice: {graph_choice}")
+
         t1 = time.perf_counter_ns()
 
         if df.index.name != "id":
@@ -269,8 +272,6 @@ class BaseOptimizer(ABC):
         # add dist to graph for QF
         if graph_choice == "qf":
             embedding_input = add_dist_to_graph(embedding_input)
-        elif graph_choice == "raal":
-            ...
 
         t3 = time.perf_counter_ns()
         if self.verbose:

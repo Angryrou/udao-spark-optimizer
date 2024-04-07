@@ -505,20 +505,24 @@ def get_graph_ckp_info(weights_path: str) -> Tuple[str, str, str, str]:
     return ag_prefix, model_sign, model_params_path, data_processor_path
 
 
+def get_non_siblings(g: dgl.DGLGraph) -> Dict[int, List[int]]:
+    srcs, dsts, eids = g.edges(form="all", order="srcdst")
+    child_dep: Dict[int, List[int]] = defaultdict(list)
+    for src, dst in zip(srcs.numpy(), dsts.numpy()):
+        child_dep[dst].append(src)
+    total_nids = set(range(g.num_nodes()))
+    non_sibling = {}
+    for src, dst, eid in zip(srcs.numpy(), dsts.numpy(), eids.numpy()):
+        non_sibling[eid] = total_nids.difference(set(child_dep[dst]))
+    return {k: list(v) for k, v in non_sibling.items()}
+
+
 def get_non_siblings_map(
     dgl_dict: Dict[int, dgl.DGLGraph]
 ) -> Dict[int, Dict[int, List[int]]]:
     non_siblings_map = {}
     for i, g in dgl_dict.items():
-        srcs, dsts, eids = g.edges(form="all", order="srcdst")
-        child_dep: Dict[int, List[int]] = defaultdict(list)
-        for src, dst in zip(srcs.numpy(), dsts.numpy()):
-            child_dep[dst].append(src)
-        total_nids = set(range(g.num_nodes()))
-        non_sibling = {}
-        for src, dst, eid in zip(srcs.numpy(), dsts.numpy(), eids.numpy()):
-            non_sibling[eid] = total_nids.difference(set(child_dep[dst]))
-        non_siblings_map[i] = {k: list(v) for k, v in non_sibling.items()}
+        non_siblings_map[i] = get_non_siblings(g)
     return non_siblings_map
 
 
