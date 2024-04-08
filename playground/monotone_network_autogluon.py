@@ -332,10 +332,9 @@ def get_monotonicity_indicator(
 
 def apply_monotonicity_indicator_to_kernel(
         kernel: torch.Tensor,
-        monotonicity_indicator: ArrayLike,
+        monotonicity_indicator: torch.Tensor,
 ) -> torch.Tensor:
     # convert to tensor if needed and make it broadcastable to the kernel
-    monotonicity_indicator: torch.Tensor = torch.tensor(monotonicity_indicator)
 
     # Pytorch stores the weight matrix with the opposite convention from Keras.
     # absolute value of the kernel
@@ -398,7 +397,6 @@ class MonoDenseTorch(torch.nn.Linear):
             out_features: int,
             *,
             activation: Callable[[torch.Tensor], torch.Tensor] = None,
-            monotonicity_indicator: ArrayLike = 1,
             is_convex: bool = False,
             is_concave: bool = False,
             activation_weights: Tuple[float, float, float] = (7.0, 7.0, 2.0),
@@ -447,17 +445,11 @@ class MonoDenseTorch(torch.nn.Linear):
         self.out_features = out_features
         self.org_activation = activation
         self.activation_weights = activation_weights
-        self.monotonicity_indicator = monotonicity_indicator
         self.is_convex = is_convex
         self.is_concave = is_concave
         self.convex_activation = ConvexActivation(self.org_activation)
         self.concave_activation = ConcaveActivation(self.org_activation)
         self.saturated_activation = SaturatedActivation(self.org_activation)
-        self.monotonicity_indicator = get_monotonicity_indicator(
-            monotonicity_indicator=self.monotonicity_indicator,
-            in_features=self.in_features,  # Keras handles the creation of the layer differently
-            out_features=self.out_features,
-        )
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         """Call
@@ -470,9 +462,16 @@ class MonoDenseTorch(torch.nn.Linear):
 
         """
 
+        inputs, monotonicity_indicator = inputs
+        monotonicity_indicator = get_monotonicity_indicator(
+            monotonicity_indicator=monotonicity_indicator,
+            in_features=self.in_features,
+            out_features=self.out_features,
+        )
+
         # calculate W'*x+y after we replace the kernel according to monotonicity vector
         with replace_kernel_using_monotonicity_indicator(
-                self, monotonicity_indicator=self.monotonicity_indicator
+                self, monotonicity_indicator=monotonicity_indicator
         ):
             h = super().forward(inputs)
 
