@@ -8,10 +8,13 @@ import os
 import torch
 import torch.nn as nn
 import numpy as np
+import logging
 
 from autogluon.tabular.models.tabular_nn.torch.torch_network_modules import EmbedNet
 from autogluon.tabular.models.tabular_nn.utils.nn_architecture_utils import get_embed_sizes
 from numpy._typing import ArrayLike
+
+logger = logging.getLogger(__name__)
 
 
 class MonotoneTabularNeuralNetTorchModel(TabularNeuralNetTorchModel):
@@ -35,6 +38,10 @@ class MonotoneTabularNeuralNetTorchModel(TabularNeuralNetTorchModel):
         self.model = self.model.to(self.device)
         if not os.path.exists(self.path):
             os.makedirs(self.path)
+
+    def fit(self, **kwargs):
+        logger.log(30, f"keyword arguments: {kwargs}")
+        return super().fit(**kwargs)
 
 
 class MonotoneEmbedNet(EmbedNet):
