@@ -119,7 +119,7 @@ if __name__ == "__main__":
             pattern = (
                 f"{header}/trace_rt_enabled/*_{query_id}_{conf}_*"
                 if args.enable_runtime_optimizer
-                else f"{header}/trace/*{query_id}_{conf}*"
+                else f"{header}/trace/*_{query_id}_{conf}_*"
             )
             files = glob.glob(pattern)
             n_exits = len(files)
