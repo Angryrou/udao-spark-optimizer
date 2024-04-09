@@ -358,3 +358,17 @@ def get_lhs_confs(
         )
         return lhs_conf_norm
     return lhs_conf
+
+
+def wrap_to_df(data: Dict[str, Dict[str, List[float]]]) -> pd.DataFrame:
+    df_data = []
+    for key, values in data.items():
+        row = {}
+        for metric, stats in values.items():
+            row[f"{metric}_mu"] = stats[0]
+            row[f"{metric}_std"] = stats[1]
+        df_data.append(row)
+
+    # Create the DataFrame
+    df = pd.DataFrame(df_data, index=list(data.keys()))
+    return df

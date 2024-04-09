@@ -2,7 +2,7 @@ import os
 import time
 from argparse import ArgumentParser
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional
 
 import numpy as np
 import pandas as pd
@@ -11,7 +11,7 @@ import torch as th
 from udao_spark.data.extractors.injection_extractor import (
     get_non_decision_inputs_for_q_compile,
 )
-from udao_spark.data.utils import get_lhs_confs
+from udao_spark.data.utils import get_lhs_confs, wrap_to_df
 from udao_spark.optimizer.atomic_optimizer import AtomicOptimizer
 from udao_spark.optimizer.utils import get_ag_meta
 from udao_spark.utils.logging import logger
@@ -36,6 +36,7 @@ def get_params() -> ArgumentParser:
                         help="Enable verbose mode")
     parser.add_argument("--ensemble", action="store_true",
                         help="Enable verbose mode")
+    parser.add_argument("--default-rate", type=float, default=None)
     # fmt: on
     return parser
 
@@ -121,6 +122,14 @@ if __name__ == "__main__":
         atomic_optimizer.sc, n_samples, seed=seed, normalize=not use_ag
     ).values
 
+    default_rate = params.default_rate
+    df_default: Optional[pd.DataFrame] = None
+    if default_rate is not None:
+        d = JsonHandler.load_json(
+            str(base_dir / f"assets/default_evaluations/{bm}.json")
+        )
+        df_default = wrap_to_df(d["agg_stats"])
+
     for template, trace in zip(benchmark.templates, raw_traces):
         logger.info(f"Processing {trace}")
         query_id = f"{template}-1"
@@ -163,10 +172,26 @@ if __name__ == "__main__":
         time_dict["total_ms"] = (end - start) / 1e6
         time_dict["total_confs"] = n_samples
         total_monitor[query_id] = time_dict
+
+        if df_default is not None:
+            cost_constraints = df_default.loc[query_id, "cost_w_io_mu"] * default_rate
+            valid_inds = np.where(cost <= cost_constraints)[0]
+            lat = lat[valid_inds]
+            cost = cost[valid_inds]
+            filtered_theta = sampled_theta[valid_inds]
+            logger.info(f"got {len(valid_inds)}/{n_samples} samples after filtering")
+        else:
+            filtered_theta = sampled_theta
+
+        if len(lat) == 0:
+            todo_confs[query_id] = []  # type: ignore
+            logger.warning(f"Failed to solve {template} !!!!!")
+            continue
+
         ind = np.lexsort((cost, lat))[0]
         print(lat.sum())
         po_conf = atomic_optimizer.construct_po_confs(
-            sampled_theta[ind : ind + 1], use_ag
+            filtered_theta[ind : ind + 1], use_ag
         )
         todo_confs[query_id] = [",".join(p) for p in po_conf]  # type: ignore
 
@@ -188,8 +213,12 @@ if __name__ == "__main__":
         ag_model_short = "_".join(f"{k.split('_')[0]}:{v}" for k, v in ag_model.items())
         suffix = f"{n_samples}_{graph_choice}_em({ag_model_short})_{device}"
 
-    torun_file = f"compile_time_output/{bm}100/lhs-so/uco-run_confs_{suffix}.json"
-    runtime_file = f"compile_time_output/{bm}100/lhs-so/uco-runtime_{suffix}.json"
+    if df_default is None:
+        prefix = "uco"
+    else:
+        prefix = "co"
+    torun_file = f"compile_time_output/{bm}100/lhs-so/{prefix}-run_confs_{suffix}.json"
+    runtime_file = f"compile_time_output/{bm}100/lhs-so/{prefix}-runtime_{suffix}.json"
 
     os.makedirs(os.path.dirname(torun_file), exist_ok=True)
     JsonHandler.dump_to_file(todo_confs, torun_file, indent=2)
