@@ -51,9 +51,10 @@ class AtomicOptimizer(BaseOptimizer):
         pre_samples: Optional[np.ndarray] = None,
         moo_mode: str = "BF",
         monitor: UdaoMonitor = UdaoMonitor(),
+        ercilla: bool = True,
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         non_decision_dict = self.extract_data_and_compute_non_decision_features(
-            monitor, non_decision_input
+            monitor, non_decision_input, ercilla
         )
         non_decision_df = non_decision_dict["non_decision_df"]
         graph_embeddings = non_decision_dict["graph_embeddings"]

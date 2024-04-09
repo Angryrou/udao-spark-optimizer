@@ -68,6 +68,7 @@ if __name__ == "__main__":
     ag_meta = get_ag_meta(bm, hp_choice, graph_choice, q_type, ag_sign, il, bs, tl)
     ag_full_name = ag_meta["ag_full_name"]
     use_ag = params.ensemble
+    device = "gpu" if th.cuda.is_available() else "cpu"
 
     # prepare the traces
     spark_conf = SparkConf(str(base_dir / "assets/spark_configuration_aqe_on.json"))
@@ -142,6 +143,7 @@ if __name__ == "__main__":
             sample_mode="lhs",
             n_samples=n_samples,
             monitor=monitor,
+            ercilla=True if device == "gpu" else False,
         )
         total_monitor[query_id] = monitor.to_dict()
         if po_objs is None or po_confs is None:
@@ -161,7 +163,6 @@ if __name__ == "__main__":
         for query_id, confs_dict in target_confs.items()
     }
 
-    device = "gpu" if th.cuda.is_available() else "cpu"
     if not use_ag:
         suffix = f"{n_samples}_{graph_choice}_{device}"
     else:

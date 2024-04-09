@@ -326,7 +326,10 @@ class BaseOptimizer(ABC):
         ...
 
     def extract_data_and_compute_non_decision_features(
-        self, monitor: UdaoMonitor, non_decision_input: Dict[str, Any]
+        self,
+        monitor: UdaoMonitor,
+        non_decision_input: Dict[str, Any],
+        ercilla: bool = True,
     ) -> Dict[str, Any]:
         t1 = time.perf_counter_ns()
         non_decision_df = self.extract_non_decision_df(non_decision_input)
@@ -337,7 +340,9 @@ class BaseOptimizer(ABC):
             graph_embeddings,
             non_decision_tabular_features,
             time_dict,
-        ) = self.extract_non_decision_embeddings_from_df(non_decision_df)
+        ) = self.extract_non_decision_embeddings_from_df(
+            non_decision_df, ercilla=ercilla
+        )
         t3 = time.perf_counter_ns()
         # add time measurements to
         monitor.input_extraction_ms += (t2 - t1) / 1e6  # monitoring
