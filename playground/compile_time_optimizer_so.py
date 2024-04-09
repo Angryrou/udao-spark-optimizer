@@ -217,6 +217,7 @@ if __name__ == "__main__":
         prefix = "uco"
     else:
         prefix = "co"
+        suffix += f"_dr{default_rate}"
     torun_file = f"compile_time_output/{bm}100/lhs-so/{prefix}-run_confs_{suffix}.json"
     runtime_file = f"compile_time_output/{bm}100/lhs-so/{prefix}-runtime_{suffix}.json"
 
