@@ -117,7 +117,7 @@ if __name__ == "__main__":
                 for k, v in zip(spark_collector.spark_conf.knob_names, conf.split(","))
             }
             pattern = (
-                f"{header}/trace_rt_enabled/*{query_id}_{conf}*"
+                f"{header}/trace_rt_enabled/*_{query_id}_{conf}_*"
                 if args.enable_runtime_optimizer
                 else f"{header}/trace/*{query_id}_{conf}*"
             )
