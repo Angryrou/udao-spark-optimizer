@@ -2,7 +2,7 @@ import os
 import time
 from argparse import ArgumentParser
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -113,8 +113,9 @@ if __name__ == "__main__":
         verbose=False,
     )
 
-    todo_confs: Dict[str, Dict] = {}
-    target_confs: Dict[str, Dict] = {}
+    todo_confs: Dict[str, List] = {}
+    target_confs: Dict[str, List] = {}
+    target_objs: Dict[str, Dict] = {}
     total_monitor = {}
     n_samples = params.n_conf_samples
     seed = params.seed
@@ -184,7 +185,8 @@ if __name__ == "__main__":
             filtered_theta = sampled_theta
 
         if len(lat) == 0:
-            todo_confs[query_id] = []  # type: ignore
+            todo_confs[query_id] = []
+            target_objs[query_id] = {}
             logger.warning(f"Failed to solve {template} !!!!!")
             continue
 
@@ -193,7 +195,11 @@ if __name__ == "__main__":
         po_conf = atomic_optimizer.construct_po_confs(
             filtered_theta[ind : ind + 1], use_ag
         )
-        todo_confs[query_id] = [",".join(p) for p in po_conf]  # type: ignore
+        todo_confs[query_id] = [",".join(p) for p in po_conf]
+        target_objs[query_id] = {
+            "latency_s_hat": float(lat[ind]),
+            "cost_hat": float(cost[ind]),
+        }
 
     total_ms = sum([v["total_ms"] for v in total_monitor.values()])
     total_confs = sum([v["total_confs"] for v in total_monitor.values()])
@@ -220,7 +226,9 @@ if __name__ == "__main__":
         suffix += f"_dr{default_rate}"
     torun_file = f"compile_time_output/{bm}100/lhs-so/{prefix}-run_confs_{suffix}.json"
     runtime_file = f"compile_time_output/{bm}100/lhs-so/{prefix}-runtime_{suffix}.json"
+    target_objs_file = f"compile_time_output/{bm}100/lhs-so/{prefix}-objs_{suffix}.json"
 
     os.makedirs(os.path.dirname(torun_file), exist_ok=True)
     JsonHandler.dump_to_file(todo_confs, torun_file, indent=2)
     JsonHandler.dump_to_file(total_monitor, runtime_file, indent=2)
+    JsonHandler.dump_to_file(target_objs, target_objs_file, indent=2)
