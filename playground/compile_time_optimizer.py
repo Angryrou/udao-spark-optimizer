@@ -51,8 +51,8 @@ if __name__ == "__main__":
         raise ValueError(f"Diagnosing {params.q_type} is not our focus.")
     if params.hp_choice != "tuned-0215":
         raise ValueError(f"hp_choice {params.hp_choice} is not supported.")
-    if params.graph_choice != "gtn":
-        raise ValueError(f"graph_choice {params.graph_choice} is not supported.")
+    if params.ensemble and params.graph_choice != "gtn":
+        raise ValueError(f"ensembled model only works with {params.graph_choice}.")
 
     # theta includes 19 decision variables
     decision_variables = (
@@ -62,13 +62,7 @@ if __name__ == "__main__":
     )
     base_dir = Path(__file__).parent
     bm, q_type = params.benchmark, params.q_type
-    hp_choice, graph_choice = params.hp_choice, params.graph_choice
-    ag_sign = params.ag_sign
-    il, bs, tl = params.infer_limit, params.infer_limit_batch_size, params.ag_time_limit
-    ag_meta = get_ag_meta(bm, hp_choice, graph_choice, q_type, ag_sign, il, bs, tl)
-    ag_full_name = ag_meta["ag_full_name"]
     use_ag = params.ensemble
-    device = "gpu" if th.cuda.is_available() else "cpu"
 
     # prepare the traces
     spark_conf = SparkConf(str(base_dir / "assets/spark_configuration_aqe_on.json"))
@@ -96,6 +90,16 @@ if __name__ == "__main__":
         if not Path(trace).exists():
             print(f"{trace} does not exist")
             raise FileNotFoundError(f"{trace} does not exist")
+
+    hp_choice, graph_choice = params.hp_choice, params.graph_choice
+    ag_sign = params.ag_sign
+    il, bs, tl = params.infer_limit, params.infer_limit_batch_size, params.ag_time_limit
+    ag_meta = get_ag_meta(bm, hp_choice, graph_choice, q_type, ag_sign, il, bs, tl)
+    ag_model = {
+        "latency_s": params.ag_model_q_latency,
+        "io_mb": params.ag_model_q_io,
+    }
+    device = "gpu" if th.cuda.is_available() else "cpu"
 
     # use functions in HierarchicalOptimizer to extract the non-decision inputs
     atomic_optimizer = AtomicOptimizer(
@@ -125,10 +129,6 @@ if __name__ == "__main__":
     target_confs: Dict[str, Dict] = {}
     total_monitor = {}
     n_samples = params.n_conf_samples
-    ag_model = {
-        "latency_s": params.ag_model_q_latency,
-        "io_mb": params.ag_model_q_io,
-    }
     for template, trace in zip(benchmark.templates, raw_traces):
         logger.info(f"Processing {trace}")
         query_id = f"{template}-1"
@@ -144,6 +144,7 @@ if __name__ == "__main__":
             n_samples=n_samples,
             monitor=monitor,
             ercilla=True if device == "gpu" else False,
+            graph_choice=graph_choice,
         )
         total_monitor[query_id] = monitor.to_dict()
         if po_objs is None or po_confs is None:
@@ -169,9 +170,11 @@ if __name__ == "__main__":
         ag_model_short = "_".join(f"{k.split('_')[0]}:{v}" for k, v in ag_model.items())
         suffix = f"{n_samples}_{graph_choice}_em({ag_model_short})_{device}"
 
-    torun_file = f"compile_time_output/{bm}100/lhs/run_confs_{suffix}.json"
-    toanalyze_file = f"compile_time_output/{bm}100/lhs/full_confs_{suffix}.json"
-    runtime_file = f"compile_time_output/{bm}100/lhs/runtime_{suffix}.json"
+    torun_file = f"compile_time_output/{bm}100/lhs/moo-run_confs_{suffix}.json"
+    toanalyze_file = f"compile_time_output/{bm}100/lhs/moo-full_confs_{suffix}.json"
+    runtime_file = f"compile_time_output/{bm}100/lhs/moo-runtime_{suffix}.json"
+    target_objs_file = f"compile_time_output/{bm}100/lhs-so/moo-objs_{suffix}.json"
+
     os.makedirs(os.path.dirname(torun_file), exist_ok=True)
     JsonHandler.dump_to_file(target_confs, toanalyze_file, indent=2)
     JsonHandler.dump_to_file(todo_confs, torun_file, indent=2)

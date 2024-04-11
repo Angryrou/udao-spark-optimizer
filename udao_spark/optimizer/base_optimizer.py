@@ -329,7 +329,9 @@ class BaseOptimizer(ABC):
         self,
         monitor: UdaoMonitor,
         non_decision_input: Dict[str, Any],
+        use_ag: bool = True,
         ercilla: bool = True,
+        graph_choice: str = "gtn",
     ) -> Dict[str, Any]:
         t1 = time.perf_counter_ns()
         non_decision_df = self.extract_non_decision_df(non_decision_input)
@@ -341,7 +343,7 @@ class BaseOptimizer(ABC):
             non_decision_tabular_features,
             time_dict,
         ) = self.extract_non_decision_embeddings_from_df(
-            non_decision_df, ercilla=ercilla
+            non_decision_df, use_ag=use_ag, ercilla=ercilla, graph_choice=graph_choice
         )
         t3 = time.perf_counter_ns()
         # add time measurements to
