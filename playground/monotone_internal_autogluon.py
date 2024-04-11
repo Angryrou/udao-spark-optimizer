@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
-from typing import List
+from typing import List, Union
 
 from autogluon.common.utils.log_utils import set_logger_verbosity
 from autogluon.common.utils.system_info import get_ag_system_info
@@ -10,7 +11,7 @@ from autogluon.common.utils.utils import setup_outputdir
 from autogluon.core.constants import AUTO_WEIGHT, BALANCE_WEIGHT
 from autogluon.core.learner import AbstractLearner
 from autogluon.core.metrics import Scorer
-from autogluon.core.models import BaggedEnsembleModel
+from autogluon.core.models import BaggedEnsembleModel, AbstractModel
 from autogluon.core.trainer import AbstractTrainer
 from autogluon.core.utils import generate_train_test_split
 from autogluon.tabular import TabularPredictor
@@ -26,11 +27,23 @@ class MonotonePredictor(TabularPredictor):
                  eval_metric: str | Scorer = None, path: str = None, verbosity: int = 2, log_to_file: bool = False,
                  log_file_path: str = "auto", sample_weight: str = None, weight_evaluation: bool = False,
                  groups: str = None, **kwargs):
-        # if this fails, I can delete the super call and copy and paste the content of the method.
-        super().__init__(label, problem_type, eval_metric, path, verbosity, log_to_file, log_file_path, sample_weight,
-                         weight_evaluation, groups, **kwargs)
-
         self.monotone_constraints = monotone_constraints
+
+        self.verbosity = verbosity
+        set_logger_verbosity(self.verbosity)
+        if sample_weight == AUTO_WEIGHT:  # TODO: update auto_weight strategy and make it the default
+            sample_weight = None
+            logger.log(15, f"{AUTO_WEIGHT} currently does not use any sample weights.")
+        self.sample_weight = sample_weight
+        self.weight_evaluation = weight_evaluation  # TODO: sample_weight and weight_evaluation can both be properties that link to self._learner.sample_weight, self._learner.weight_evaluation
+        self._decision_threshold = None  # TODO: Each model should have its own decision threshold instead of one global threshold
+        if self.sample_weight in [AUTO_WEIGHT, BALANCE_WEIGHT] and self.weight_evaluation:
+            logger.warning(
+                f"We do not recommend specifying weight_evaluation when sample_weight='{self.sample_weight}', instead specify appropriate eval_metric."
+            )
+        self._validate_init_kwargs(kwargs)
+        path = setup_outputdir(path)
+        self._setup_log_to_file(path=path, log_to_file=log_to_file, log_file_path=log_file_path)
 
         learner_type = kwargs.pop("learner_type", MonotoneDefaultLearner)
         learner_kwargs = kwargs.pop("learner_kwargs", dict())
@@ -77,6 +90,7 @@ class MonotoneAutoTrainer(AutoTrainer):
             **kwargs,
     ):
         monotone_constraints = kwargs.pop("monotone_constraints", {})
+        self.monotone_constraints = monotone_constraints
         for key in kwargs:
             logger.warning(f"Warning: Unknown argument passed to `AutoTrainer.fit()`. Argument: {key}")
 
@@ -367,7 +381,7 @@ class MonotoneAutoTrainer(AutoTrainer):
         Returns a list of successfully trained and saved model names.
         Models trained from this method will be accessible in this Trainer.
         """
-        monotone_constraints = kwargs.pop("monotone_constraints", {})
+        monotone_constraints = self.monotone_constraints
         model_fit_kwargs = self._get_model_fit_kwargs(
             X=X, X_val=X_val, time_limit=time_limit, k_fold=k_fold, fit_kwargs=fit_kwargs,
             ens_sample_weight=kwargs.get("ens_sample_weight", None)
