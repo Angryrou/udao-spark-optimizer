@@ -111,6 +111,7 @@ if __name__ == "__main__":
             problem_types=["regression"] * len(objectives),
             eval_metrics=[wmape] * len(objectives),
             consider_labels_correlation=False,
+            monotone_constraints=monotone_constraints,
         )
         predictor.fit(
             train_data=train_data,
