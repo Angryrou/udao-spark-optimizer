@@ -1,11 +1,67 @@
 import os.path
 from pathlib import Path
 
+from autogluon.common.utils.utils import setup_outputdir
+
+from playground.monotone_internal_autogluon import MonotonePredictor
+from playground.monotone_network_autogluon import MonotoneTabularNeuralNetTorchModel, MonotoneXGBoostModel, \
+    MonotoneCatBoostModel
 from udao_spark.data.utils import get_ag_data
 from udao_spark.model.mulitlabel_predictor import MultilabelPredictor  # type: ignore
 from udao_spark.model.utils import wmape
 from udao_spark.optimizer.utils import get_ag_meta
 from udao_spark.utils.params import get_ag_parameters
+
+
+class MonotoneMultilabelPredictor(MultilabelPredictor):
+    def __init__(
+            self,
+            labels,
+            path=None,
+            problem_types=None,
+            eval_metrics=None,
+            consider_labels_correlation=True,
+            **kwargs,
+    ):
+        if len(labels) < 2:
+            raise ValueError(
+                "MultilabelPredictor is only intended for predicting MULTIPLE labels (columns), use TabularPredictor for predicting one label (column)."
+            )
+        if (problem_types is not None) and (len(problem_types) != len(labels)):
+            raise ValueError(
+                "If provided, `problem_types` must have same length as `labels`"
+            )
+        if (eval_metrics is not None) and (len(eval_metrics) != len(labels)):
+            raise ValueError(
+                "If provided, `eval_metrics` must have same length as `labels`"
+            )
+        self.path = setup_outputdir(path, warn_if_exist=False)
+        self.labels = labels
+        self.consider_labels_correlation = consider_labels_correlation
+        self.predictors = (
+            {}
+        )  # key = label, value = TabularPredictor or str path to the TabularPredictor for this label
+        if eval_metrics is None:
+            self.eval_metrics = {}
+        else:
+            self.eval_metrics = {labels[i]: eval_metrics[i] for i in range(len(labels))}
+        problem_type = None
+        eval_metric = None
+        for i in range(len(labels)):
+            label = labels[i]
+            path_i = self.path + "Predictor_" + label
+            if problem_types is not None:
+                problem_type = problem_types[i]
+            if eval_metrics is not None:
+                eval_metric = eval_metrics[i]
+            self.predictors[label] = MonotonePredictor(
+                label=label,
+                problem_type=problem_type,
+                eval_metric=eval_metric,
+                path=path_i,
+                **kwargs,
+            )
+
 
 if __name__ == "__main__":
     params = get_ag_parameters().parse_args()
@@ -27,7 +83,7 @@ if __name__ == "__main__":
         time_limit,
     )
     weights_path = ag_meta["graph_weights_path"]
-    ag_path = "monotonous_ag/" +  ag_meta["ag_path"] + "/"
+    ag_path = "monotonous_ag/" + ag_meta["ag_path"] + "/"
 
     ret = get_ag_data(base_dir, bm, q_type, debug, graph_choice, weights_path)
     train_data, val_data, test_data = ret["data"]
@@ -45,31 +101,11 @@ if __name__ == "__main__":
     else:
         print("not found, fitting")
 
-        # automatically create constraints for k1, k2 and k3
-        monotone_constraints = [0 for i in range(len(train_data.columns) - len(objectives))]
-        for idx, col in enumerate(train_data.columns):
-            if col in ["k1", "k2", "k3"]:
-                monotone_constraints[idx] = -1
-            if col in objectives:
-                continue
+        # create constraints for k1, k2 and k3. The appropriate format of the constraints
+        # will be created on the fly to match the different model APIs.
+        monotone_constraints = {"k1": -1, "k2": -1, "k3": -1}
 
-        # add monotonic constraints for models that support monotonicity
-        xgboost_options = {
-            'monotone_constraints': str(monotone_constraints).replace("[", "(").replace("]", ")"),
-        }
-        # TODO(glachaud): investigate why gbm is not working at intended
-        # gbm_options = {
-        #     'monotone_constraints': str(monotone_constraints).replace("[", "(").replace("]", ")"),
-        # }
-        monotorch_options = {
-            'monotone_constraints': monotone_constraints,
-        }
-        catboost_options = {
-            'monotone_constraints': str(monotone_constraints).replace("[", "(").replace("]", ")"),
-        }
-        from monotone_network_autogluon import MonotoneTabularNeuralNetTorchModel
-
-        predictor = MultilabelPredictor(
+        predictor = MonotoneMultilabelPredictor(
             path=ag_path,
             labels=objectives,
             problem_types=["regression"] * len(objectives),
@@ -81,10 +117,10 @@ if __name__ == "__main__":
             num_stack_levels=1,
             num_bag_folds=4,
             hyperparameters={
-                MonotoneTabularNeuralNetTorchModel: monotorch_options,
+                MonotoneTabularNeuralNetTorchModel: {},
+                MonotoneXGBoostModel: {},
+                MonotoneCatBoostModel: {},
                 # "GBM": {},
-                "CAT": catboost_options,
-                "XGB": xgboost_options,
                 # "FASTAI": {},
             },
             # excluded_model_types=["KNN"],
