@@ -3,7 +3,7 @@ from contextlib import contextmanager
 from typing import Tuple, Any
 
 from autogluon.core.constants import QUANTILE, REGRESSION, SOFTCLASS, BINARY, MULTICLASS
-from autogluon.tabular.models import TabularNeuralNetTorchModel
+from autogluon.tabular.models import TabularNeuralNetTorchModel, XGBoostModel, CatBoostModel
 import os
 import torch
 import torch.nn as nn
@@ -15,6 +15,35 @@ from autogluon.tabular.models.tabular_nn.utils.nn_architecture_utils import get_
 from numpy._typing import ArrayLike
 
 logger = logging.getLogger(__name__)
+
+
+class MonotoneXGBoostModel(XGBoostModel):
+
+    def _fit(self, X, y, X_val=None, y_val=None, time_limit=None, num_gpus=0, num_cpus=None, sample_weight=None,
+             sample_weight_val=None, verbosity=2, **kwargs):
+        monotone_constraints = kwargs.get("monotone_constraints", {})
+        monotone_constraints_list = [0 for _ in range(len(X.columns))]
+        for idx, col in enumerate(X.columns):
+            if col in monotone_constraints.keys():
+                monotone_constraints_list[idx] = monotone_constraints[col]
+        monotone_constraints_str = str(tuple(monotone_constraints_list))
+        self.params.update({"monotone_constraints": monotone_constraints_str})
+        super()._fit(X, y, X_val, y_val, time_limit, num_gpus, num_cpus, sample_weight, sample_weight_val, verbosity,
+                     **kwargs)
+
+
+class MonotoneCatBoostModel(CatBoostModel):
+    def _fit(self, X, y, X_val=None, y_val=None, time_limit=None, num_gpus=0, num_cpus=-1, sample_weight=None,
+             sample_weight_val=None, **kwargs):
+        monotone_constraints = kwargs.get("monotone_constraints", {})
+        monotone_constraints_list = [0 for _ in range(len(X.columns))]
+        for idx, col in enumerate(X.columns):
+            if col in monotone_constraints.keys():
+                monotone_constraints_list[idx] = monotone_constraints[col]
+        monotone_constraints_str = "({})".format(",".join([str(val) for val in monotone_constraints_list]))
+        self.params.update({"monotone_constraints": monotone_constraints_str})
+        return super()._fit(X, y, X_val, y_val, time_limit, num_gpus, num_cpus, sample_weight, sample_weight_val,
+                            **kwargs)
 
 
 class MonotoneTabularNeuralNetTorchModel(TabularNeuralNetTorchModel):
@@ -29,6 +58,7 @@ class MonotoneTabularNeuralNetTorchModel(TabularNeuralNetTorchModel):
         params = self._set_net_defaults(train_dataset, params)
         self.model = MonotoneEmbedNet(
             problem_type=self.problem_type,
+            monotone_constraints=self.monotone_constraints,
             num_net_outputs=self._get_num_net_outputs(),
             quantile_levels=self.quantile_levels,
             train_dataset=train_dataset,
@@ -40,14 +70,28 @@ class MonotoneTabularNeuralNetTorchModel(TabularNeuralNetTorchModel):
             os.makedirs(self.path)
 
     def fit(self, **kwargs):
-        logger.log(30, f"keyword arguments: {kwargs}")
+        self.monotone_constraints = kwargs.get('monotone_constraints', {})
         return super().fit(**kwargs)
+
+    def _fit(self, X, y, X_val=None, y_val=None, time_limit=None, sample_weight=None, num_cpus=1, num_gpus=0,
+             reporter=None, verbosity=2, **kwargs):
+        monotone_constraints = [0 for _ in range(len(X.columns))]
+        for idx, col in enumerate(X.columns):
+            if col in self.monotone_constraints.keys():
+                monotone_constraints[idx] = self.monotone_constraints[col]
+        self.monotone_constraints = monotone_constraints
+        return super()._fit(X, y, X_val, y_val, time_limit, sample_weight, num_cpus, num_gpus, reporter, verbosity,
+                            **kwargs)
 
 
 class MonotoneEmbedNet(EmbedNet):
-    def __init__(self, problem_type, num_net_outputs=None, quantile_levels=None,
+    def __init__(self, problem_type,
+                 monotone_constraints=None,
+                 num_net_outputs=None,
+                 quantile_levels=None,
                  train_dataset=None,
-                 architecture_desc=None, device=None, **kwargs):
+                 architecture_desc=None,
+                 device=None, **kwargs):
         if (architecture_desc is None) and (train_dataset is None):
             raise ValueError("train_dataset cannot = None if architecture_desc=None")
         # we don't want to initialize the class with the EmbedNet constructor, so we use the grandparent class.
@@ -57,7 +101,8 @@ class MonotoneEmbedNet(EmbedNet):
             self.register_buffer("quantile_levels", torch.Tensor(quantile_levels).float().reshape(1, -1))
         self.device = torch.device("cpu") if device is None else device
         if architecture_desc is None:
-            monotone_constraints = kwargs.pop("monotone_constraints", 0)
+            if monotone_constraints is None:
+                monotone_constraints = [0]
             params = self._set_params(**kwargs)
             # adaptively specify network architecture based on training dataset
             self.from_logits = False
@@ -402,6 +447,7 @@ class MonoDenseTorch(torch.nn.Linear):
             self,
             in_features: int,
             out_features: int,
+            monotonicity_indicator,
             *,
             activation: Callable[[torch.Tensor], torch.Tensor] = None,
             is_convex: bool = False,
@@ -430,6 +476,7 @@ class MonoDenseTorch(torch.nn.Linear):
                 - if both **is_concave** and **is_convex** are set to **True**, or
                 - if any component of activation_weights is negative or there is not exactly three components
         """
+        self.monotonicity_indicator = monotonicity_indicator
         if is_convex and is_concave:
             raise ValueError(
                 "The model cannot be set to be both convex and concave (only linear functions are both)."
@@ -468,10 +515,9 @@ class MonoDenseTorch(torch.nn.Linear):
             N-D tensor with shape: `(batch_size, ..., units)`.
 
         """
-
-        inputs, monotonicity_indicator = inputs
+        # inputs, monotonicity_indicator = inputs
         monotonicity_indicator = get_monotonicity_indicator(
-            monotonicity_indicator=monotonicity_indicator,
+            monotonicity_indicator=self.monotonicity_indicator,
             in_features=self.in_features,
             out_features=self.out_features,
         )
