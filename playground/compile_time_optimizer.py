@@ -128,6 +128,7 @@ if __name__ == "__main__":
     }
     target_confs: Dict[str, Dict] = {}
     total_monitor = {}
+    target_objs: Dict[str, Dict] = {}
     n_samples = params.n_conf_samples
     for template, trace in zip(benchmark.templates, raw_traces):
         logger.info(f"Processing {trace}")
@@ -151,6 +152,7 @@ if __name__ == "__main__":
             logger.warning(f"Failed to solve {template}")
             continue
         target_confs[query_id] = {}
+        target_objs[query_id] = {}
         for k, wun_weights in wun_weights_pairs.items():
             reco_obj, reco_conf = weighted_utopia_nearest(
                 pareto_objs=po_objs,
@@ -158,6 +160,10 @@ if __name__ == "__main__":
                 weights=np.array(wun_weights),
             )
             target_confs[query_id][k] = ",".join(reco_conf)
+            target_objs[query_id][k] = {
+                "latency_s_hat": float(reco_obj[0]),
+                "cost_hat": float(reco_obj[1]),
+            }
 
     todo_confs = {
         query_id: np.unique([c for c in confs_dict.values()]).tolist()
@@ -173,9 +179,10 @@ if __name__ == "__main__":
     torun_file = f"compile_time_output/{bm}100/lhs/moo-run_confs_{suffix}.json"
     toanalyze_file = f"compile_time_output/{bm}100/lhs/moo-full_confs_{suffix}.json"
     runtime_file = f"compile_time_output/{bm}100/lhs/moo-runtime_{suffix}.json"
-    target_objs_file = f"compile_time_output/{bm}100/lhs-so/moo-objs_{suffix}.json"
+    target_objs_file = f"compile_time_output/{bm}100/lhs/moo-objs_{suffix}.json"
 
     os.makedirs(os.path.dirname(torun_file), exist_ok=True)
     JsonHandler.dump_to_file(target_confs, toanalyze_file, indent=2)
     JsonHandler.dump_to_file(todo_confs, torun_file, indent=2)
     JsonHandler.dump_to_file(total_monitor, runtime_file, indent=2)
+    JsonHandler.dump_to_file(target_objs, target_objs_file, indent=2)
