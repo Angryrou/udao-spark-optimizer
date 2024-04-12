@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from udao_spark.utils.analyzer import get_non_decision_inputs
+from udao_spark.utils.evaluation import get_non_decision_inputs
 from udao_spark.utils.params import get_ag_parameters
 from udao_trace.configuration import SparkConf
 

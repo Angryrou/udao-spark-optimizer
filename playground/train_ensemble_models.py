@@ -1,10 +1,10 @@
 import os.path
 from pathlib import Path
 
-from udao_spark.data.utils import get_ag_data
 from udao_spark.model.mulitlabel_predictor import MultilabelPredictor  # type: ignore
 from udao_spark.model.utils import wmape
 from udao_spark.optimizer.utils import get_ag_meta
+from udao_spark.utils.evaluation import get_ag_data
 from udao_spark.utils.params import get_ag_parameters
 
 if __name__ == "__main__":
