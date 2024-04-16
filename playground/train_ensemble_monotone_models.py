@@ -6,10 +6,10 @@ from autogluon.common.utils.utils import setup_outputdir
 from playground.monotone_internal_autogluon import MonotonePredictor
 from playground.monotone_network_autogluon import MonotoneTabularNeuralNetTorchModel, MonotoneXGBoostModel, \
     MonotoneCatBoostModel
-from udao_spark.data.utils import get_ag_data
 from udao_spark.model.mulitlabel_predictor import MultilabelPredictor  # type: ignore
 from udao_spark.model.utils import wmape
 from udao_spark.optimizer.utils import get_ag_meta
+from udao_spark.utils.evaluation import get_ag_data
 from udao_spark.utils.params import get_ag_parameters
 
 
@@ -47,6 +47,7 @@ class MonotoneMultilabelPredictor(MultilabelPredictor):
             self.eval_metrics = {labels[i]: eval_metrics[i] for i in range(len(labels))}
         problem_type = None
         eval_metric = None
+        monotone_constraints = kwargs.pop("monotone_constraints")
         for i in range(len(labels)):
             label = labels[i]
             path_i = self.path + "Predictor_" + label
@@ -59,6 +60,7 @@ class MonotoneMultilabelPredictor(MultilabelPredictor):
                 problem_type=problem_type,
                 eval_metric=eval_metric,
                 path=path_i,
+                monotone_constraints=monotone_constraints[label],
                 **kwargs,
             )
 
@@ -83,7 +85,7 @@ if __name__ == "__main__":
         time_limit,
     )
     weights_path = ag_meta["graph_weights_path"]
-    ag_path = "monotonous_ag/" + ag_meta["ag_path"] + "/"
+    ag_path = "monotonous_ag_with_double_constraints/" + ag_meta["ag_path"] + "/"
 
     ret = get_ag_data(base_dir, bm, q_type, debug, graph_choice, weights_path)
     train_data, val_data, test_data = ret["data"]
@@ -103,7 +105,10 @@ if __name__ == "__main__":
 
         # create constraints for k1, k2 and k3. The appropriate format of the constraints
         # will be created on the fly to match the different model APIs.
-        monotone_constraints = {"k1": -1, "k2": -1, "k3": -1}
+        # the k1 constraint is dropped in the training of the IO model.
+        monotone_constraints = {}
+        monotone_constraints["latency_s"] = {"k1": -1, "k2": -1, "k3": -1}
+        monotone_constraints["io_mb"] = {"k2": -1, "k3": -1}
 
         predictor = MonotoneMultilabelPredictor(
             path=ag_path,
@@ -165,3 +170,4 @@ if __name__ == "__main__":
             f"ensemble models for {obj} including "
             f"{predictor.get_predictor(obj).model_names()}"
         )
+
