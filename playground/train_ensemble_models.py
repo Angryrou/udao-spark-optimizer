@@ -1,4 +1,6 @@
 import os.path
+import time
+from argparse import ArgumentParser
 from pathlib import Path
 
 from udao_spark.model.mulitlabel_predictor import MultilabelPredictor  # type: ignore
@@ -6,15 +8,27 @@ from udao_spark.model.utils import wmape
 from udao_spark.optimizer.utils import get_ag_meta
 from udao_spark.utils.evaluation import get_ag_data
 from udao_spark.utils.params import get_ag_parameters
+from udao_trace.utils import JsonHandler
+
+
+def get_params() -> ArgumentParser:
+    parser = get_ag_parameters()
+    # fmt: off
+    parser.add_argument("--recording", action="store_true",
+                        help="Record the time for evaluation")
+    # fmt: on
+    return parser
+
 
 if __name__ == "__main__":
-    params = get_ag_parameters().parse_args()
+    params = get_params().parse_args()
     bm, q_type, debug = params.benchmark, params.q_type, params.debug
     hp_choice, graph_choice = params.hp_choice, params.graph_choice
     num_gpus, ag_sign = params.num_gpus, params.ag_sign
     infer_limit = params.infer_limit
     infer_limit_batch_size = params.infer_limit_batch_size
     time_limit = params.ag_time_limit
+    recording = params.recording
     base_dir = Path(__file__).parent
     ag_meta = get_ag_meta(
         bm,
@@ -27,7 +41,10 @@ if __name__ == "__main__":
         time_limit,
     )
     weights_path = ag_meta["graph_weights_path"]
-    ag_path = ag_meta["ag_path"] + "/"
+    if not recording:
+        ag_path = ag_meta["ag_path"] + "/"
+    else:
+        ag_path = ag_meta["ag_path"] + "_recording/"
 
     ret = get_ag_data(base_dir, bm, q_type, debug, graph_choice, weights_path)
     train_data, val_data, test_data = ret["data"]
@@ -39,7 +56,10 @@ if __name__ == "__main__":
         test_data.drop(columns=["latency_s"], inplace=True)
     print("selected features:", train_data.columns)
 
+    start_time = time.perf_counter_ns()
     if os.path.exists(ag_path):
+        if recording:
+            raise Exception("recording path already exists")
         predictor = MultilabelPredictor.load(f"{ag_path}")
         print("loaded predictor from", ag_path)
     else:
@@ -95,6 +115,7 @@ if __name__ == "__main__":
             num_gpus=num_gpus,
             time_limit=time_limit,
         )
+    dt1 = time.perf_counter_ns() - start_time
 
     for obj in predictor.predictors.keys():
         models = predictor.get_predictor(obj).model_names(stack_name="core")
@@ -125,4 +146,13 @@ if __name__ == "__main__":
         print(
             f"ensemble models for {obj} including "
             f"{predictor.get_predictor(obj).model_names()}"
+        )
+
+    dt2 = time.perf_counter_ns() - start_time
+
+    print(f"dt1: {dt1 / 1e9} s, dt2: {dt2 / 1e9} s")
+    if recording:
+        print("saving runtime to", ag_path)
+        JsonHandler.dump_to_file(
+            {"dt1_s": dt1, "dt2_s": dt2}, f"{ag_path}/runtime.json"
         )
