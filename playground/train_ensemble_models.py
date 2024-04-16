@@ -154,5 +154,5 @@ if __name__ == "__main__":
     if recording:
         print("saving runtime to", ag_path)
         JsonHandler.dump_to_file(
-            {"dt1_s": dt1, "dt2_s": dt2}, f"{ag_path}/runtime.json"
+            {"dt1_s": dt1 / 1e9, "dt2_s": dt2 / 1e9}, f"{ag_path}/runtime.json"
         )
