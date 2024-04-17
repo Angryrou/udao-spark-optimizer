@@ -71,7 +71,7 @@ if __name__ == "__main__":
             eval_metrics=[wmape] * len(objectives),
             consider_labels_correlation=False,
         )
-        predictor.fit(
+        time_dict = predictor.fit(
             train_data=train_data,
             # num_stack_levels=1,
             # num_bag_folds=4,
@@ -153,6 +153,6 @@ if __name__ == "__main__":
     print(f"dt1: {dt1 / 1e9} s, dt2: {dt2 / 1e9} s")
     if recording:
         print("saving runtime to", ag_path)
-        JsonHandler.dump_to_file(
-            {"dt1_s": dt1 / 1e9, "dt2_s": dt2 / 1e9}, f"{ag_path}/runtime.json"
-        )
+        time_dict["dt1_s"] = dt1 / 1e9
+        time_dict["dt2_s"] = dt2 / 1e9
+        JsonHandler.dump_to_file(time_dict, f"{ag_path}/runtime.json")
