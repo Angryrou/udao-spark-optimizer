@@ -107,7 +107,7 @@ class DAGOpt:
         boundary_f_list = []
         boundary_conf_list = []
         for qs_id, qs_f, qs_conf in zip(stages, qs_f_all_list, qs_conf_all_list):
-            time.time()
+            # time.time()
             len_p_counts = np.unique(
                 qs_indices[np.where(qs_indices[:, 0] == qs_id)][:, 1],
                 return_counts=True,
@@ -349,7 +349,6 @@ class DAGOpt:
         # query_f_arr: shape (n_ws * n_theta_c, n_objs)
         # order: under each weight, following n_theta_c solutions, i.e. n_theta_c_ws_1 solutions, ..., n_theta_c_ws_i,...
         query_f_arr = np.vstack(np.split(query_values_all_ws, len(ws_pairs), axis=1))
-
         # query_confs_all_ws: a list with length of n_stages
         # each item in the list is an array with shape (n_ws * n_theta_c, n_theta)
         # order of each array: under each weight, following n_theta_c solutions
@@ -358,7 +357,7 @@ class DAGOpt:
         start_filter_global = time.time()
         po_query_ind = is_pareto_efficient(query_f_arr)
         po_query_objs = query_f_arr[po_query_ind]
-
+        # fixme: confs not the same
         po_query_confs = np.hstack([x[po_query_ind] for x in query_confs_all_ws])
         if self.verbose:
             print(
@@ -618,20 +617,11 @@ class DAGOpt:
         stages = np.unique(qs_indices[:, 0])
         c_ids = np.unique(qs_indices[:, 1]).astype(int)
         # print(f"the number of theta_c is: {c_ids.shape[0]}")
-        # if isinstance(f_th, np.ndarray):
-        #     qs_f_all = f_th[sorted_index]
-        #     qs_conf_all = conf_th[sorted_index]
-        # else:
-        #     assert isinstance(f_th, th.Tensor)
-        #     qs_f_all = f_th.numpy()[sorted_index]
-        #     qs_conf_all = conf_th.numpy()[sorted_index]
 
         if isinstance(conf_th, np.ndarray):
-            # qs_f_all = f_th[sorted_index]
             qs_conf_all = conf_th[sorted_index]
         else:
             assert isinstance(conf_th, th.Tensor)
-            # qs_f_all = f_th.numpy()[sorted_index]
             qs_conf_all = conf_th.numpy()[sorted_index]
         qs_f_all = f_th[sorted_index]
         uniq_theta_c = np.unique(qs_conf_all[:, :8], axis=0)

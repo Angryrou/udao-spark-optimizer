@@ -1,6 +1,7 @@
 import os
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
+import json
 import numpy as np
 import pandas as pd
 import torch as th
@@ -11,6 +12,9 @@ from ..model.utils import get_graph_ckp_info
 from ..utils.constants import EPS
 from ..utils.logging import logger
 from ..utils.params import QType
+
+from udao.optimization.concepts.utils import InputParameters, InputVariables
+
 
 UdaoNumeric = Union[float, pd.Series, np.ndarray, th.Tensor]
 
@@ -102,13 +106,19 @@ def save_results(path: str, results: np.ndarray, mode: str = "data") -> None:
     if not os.path.exists(file_path):
         os.makedirs(file_path, exist_ok=True)
 
-    if mode == "Theta":
+    if "Theta" in mode or "query_id" in mode:
         np.savetxt(
             f"{file_path}/{mode}.txt", results, delimiter=" ", newline="\n", fmt="%s"
         )
     else:
         np.savetxt(f"{file_path}/{mode}.txt", results)
 
+def save_json(save_json_path, data, mode="time_dict"):
+    if not os.path.exists(save_json_path):
+        os.makedirs(save_json_path, exist_ok=True)
+
+    with open(f'{save_json_path}/{mode}.json', 'w') as fp:
+        json.dump(data, fp, indent=4, separators=(',', ': '))
 
 # a quite efficient way to get the indexes of pareto points
 # https://stackoverflow.com/a/40239615
@@ -236,6 +246,7 @@ def weighted_utopia_nearest_impl(
     pareto_norm = (pareto_objs - min_objs) / (max_objs - min_objs)
     # fixme: internal weights
     weights = np.array([1, 1])
+    # weights = np.array([0.7, 0.3])
     pareto_weighted_norm = pareto_norm * weights
     # check the speed comparison: https://stackoverflow.com/a/37795190/5338690
     dists = np.sum((pareto_weighted_norm - utopia) ** 2, axis=1)
@@ -247,29 +258,150 @@ def weighted_utopia_nearest_impl(
     return picked_pareto, picked_confs
 
 
-def weighted_utopia_nearest(
-    pareto_objs: np.ndarray,
-    pareto_confs: np.ndarray,
-    weights: np.ndarray,
-) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    return the Pareto point that is closest to the utopia point
-    in a weighted distance function
-    """
-    n_pareto = pareto_objs.shape[0]
-    assert n_pareto > 0
-    if n_pareto == 1:
-        # (2,), (n, 2)
-        return pareto_objs[0], pareto_confs[0]
+class Model:
+    def __init__(self,
+                 n_stages: int,
+                 len_theta_c: int,
+                 len_theta_p: int,
+                 len_theta_s: int,
+                 graph_embeddings: th.Tensor,
+                 non_decision_tabular_features: Union[th.Tensor, pd.DataFrame],
+                 obj_model: Callable[[Any, Any, Any, Any], Any],
+                 use_ag: bool,
+                 ag_model: str,
+                 is_query_control: bool,
+                 ):
+        self.n_stages = n_stages
+        self.len_theta_c = len_theta_c
+        self.len_theta_p = len_theta_p
+        self.len_theta_s = len_theta_s
+        self.graph_embeddings = graph_embeddings
+        self.non_decision_tabular_features = non_decision_tabular_features
+        self.obj_model = obj_model
+        self.use_ag = use_ag
+        self.ag_model = ag_model
+        self.is_query_control = is_query_control
 
-    utopia = np.zeros_like(pareto_objs[0])
-    min_objs, max_objs = pareto_objs.min(0), pareto_objs.max(0)
-    pareto_norm = (pareto_objs - min_objs) / (max_objs - min_objs)
-    pareto_weighted_norm = pareto_norm * weights
-    dists = np.sum((pareto_weighted_norm - utopia) ** 2, axis=1)
-    wun_id = np.argmin(dists)
+    def Obj1(self, input_variables: InputVariables, input_parameters: InputParameters = None) -> th.Tensor:
+        theta = th.vstack(list(input_variables.values())).T
+        n_repeat = theta.shape[0]
+        mesh_theta_c: Union[np.ndarray, th.Tensor]
+        theta_p_s: Union[np.ndarray, th.Tensor]
+        mesh_tabular_features: Union[th.Tensor, pd.DataFrame]
 
-    picked_pareto = pareto_objs[wun_id]
-    picked_confs = pareto_confs[wun_id]
+        theta = th.vstack(list(input_variables.values())).T
+        # shape: (n_samples/grids * n_objs)
+        mesh_theta_c = theta[:, : self.len_theta_c].repeat(
+            self.n_stages, 1
+        )
+        len_theta_p_s = self.len_theta_p + self.len_theta_s
 
-    return picked_pareto, picked_confs
+        if self.is_query_control:
+            assert theta.shape[1] == (self.len_theta_c + self.len_theta_p + self.len_theta_s)
+            theta_p_s = theta[:, self.len_theta_c: ].repeat(
+            self.n_stages, 1
+        )
+        else:
+            assert theta.shape[1] == (self.len_theta_c + self.n_stages * len_theta_p_s)
+            theta_p_s = theta[:, self.len_theta_c:].reshape(
+                self.n_stages * n_repeat, len_theta_p_s
+            )
+        theta_all = th.cat([mesh_theta_c, theta_p_s], dim=1)
+        mesh_graph_embeddings = self.graph_embeddings.repeat_interleave(
+            n_repeat, dim=0
+        )
+
+        if self.use_ag:
+            assert isinstance(self.non_decision_tabular_features, pd.DataFrame)
+            mesh_tabular_features = self.non_decision_tabular_features.loc[
+                np.repeat(self.non_decision_tabular_features.index, n_repeat)
+            ].reset_index(drop=True)
+            objs = self.obj_model(
+                mesh_graph_embeddings.cpu().numpy(),
+                mesh_tabular_features,
+                theta_all.cpu().numpy(),
+                self.ag_model,
+            )
+        else:
+            assert isinstance(self.non_decision_tabular_features, th.Tensor)
+            mesh_tabular_features = (
+                self.non_decision_tabular_features.repeat_interleave(
+                    n_repeat, dim=0
+                )
+            )
+            objs = self.obj_model(
+                mesh_graph_embeddings,
+                mesh_tabular_features,
+                theta_all.type(th.float32),
+                "",
+            )
+        # shape (n_samples, n_stages)
+        latency = np.vstack(np.split(objs[:, 0], self.n_stages)).T
+        cost = np.vstack(np.split(objs[:, 1], self.n_stages)).T
+
+        query_latency = np.sum(latency, axis=1)
+        query_cost = np.sum(cost, axis=1)
+        query_objs = np.vstack((query_latency, query_cost)).T
+        y = query_objs[:, 0]
+        return th.reshape(th.tensor(y, dtype=th.float32), (-1, 1))
+
+    def Obj2(self, input_variables: InputVariables, input_parameters: InputParameters = None) -> th.Tensor:
+        theta = th.vstack(list(input_variables.values())).T
+        n_repeat = theta.shape[0]
+        mesh_theta_c: Union[np.ndarray, th.Tensor]
+        theta_p_s: Union[np.ndarray, th.Tensor]
+        mesh_tabular_features: Union[th.Tensor, pd.DataFrame]
+
+        theta = th.vstack(list(input_variables.values())).T
+        # shape: (n_samples/grids * n_objs)
+        mesh_theta_c = theta[:, : self.len_theta_c].repeat(
+            self.n_stages, 1
+        )
+        len_theta_p_s = self.len_theta_p + self.len_theta_s
+        if self.is_query_control:
+            theta_p_s = theta[:, self.len_theta_c:].repeat(
+                self.n_stages, 1
+            )
+        else:
+            theta_p_s = theta[:, self.len_theta_c:].reshape(
+                self.n_stages * n_repeat, len_theta_p_s
+            )
+        theta_all = th.cat([mesh_theta_c, theta_p_s], dim=1)
+        mesh_graph_embeddings = self.graph_embeddings.repeat_interleave(
+            n_repeat, dim=0
+        )
+
+        if self.use_ag:
+            assert isinstance(self.non_decision_tabular_features, pd.DataFrame)
+            mesh_tabular_features = self.non_decision_tabular_features.loc[
+                np.repeat(self.non_decision_tabular_features.index, n_repeat)
+            ].reset_index(drop=True)
+            objs = self.obj_model(
+                mesh_graph_embeddings.cpu().numpy(),
+                mesh_tabular_features,
+                theta_all.cpu().numpy(),
+                self.ag_model,
+            )
+        else:
+            assert isinstance(self.non_decision_tabular_features, th.Tensor)
+            mesh_tabular_features = (
+                self.non_decision_tabular_features.repeat_interleave(
+                    n_repeat, dim=0
+                )
+            )
+            objs = self.obj_model(
+                mesh_graph_embeddings,
+                mesh_tabular_features,
+                theta_all.type(th.float32),
+                "",
+            )
+        # shape (n_samples, n_stages)
+        latency = np.vstack(np.split(objs[:, 0], self.n_stages)).T
+        cost = np.vstack(np.split(objs[:, 1], self.n_stages)).T
+
+        query_latency = np.sum(latency, axis=1)
+        query_cost = np.sum(cost, axis=1)
+        query_objs = np.vstack((query_latency, query_cost)).T
+        y = query_objs[:, 1]
+        return th.reshape(th.tensor(y, dtype=th.float32), (-1, 1))
+
