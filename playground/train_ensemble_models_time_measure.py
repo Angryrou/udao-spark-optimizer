@@ -146,6 +146,7 @@ if __name__ == "__main__":
             infer_limit_batch_size=infer_limit_batch_size,
             num_gpus=num_gpus,
             time_limit=None if time_limit is None else time_limit // len(objectives),
+            ds_args={"memory_safe_fits": False},
         )
         dt = (time.perf_counter_ns() - start_time) / 1e9
         print(f"saving runtime {dt:.0f}s to", ag_path)
