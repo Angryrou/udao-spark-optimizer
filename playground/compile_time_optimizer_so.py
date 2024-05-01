@@ -12,7 +12,7 @@ from udao_spark.data.extractors.injection_extractor import (
     get_non_decision_inputs_for_q_compile,
 )
 from udao_spark.data.utils import get_lhs_confs, wrap_to_df
-from udao_spark.optimizer.utils import q_compile_setup
+from udao_spark.optimizer.setup import q_compile_setup
 from udao_spark.utils.logging import logger
 from udao_spark.utils.params import get_ag_parameters
 from udao_trace.utils import JsonHandler

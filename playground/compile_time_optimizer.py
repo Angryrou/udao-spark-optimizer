@@ -9,7 +9,8 @@ import torch as th
 from udao_spark.data.extractors.injection_extractor import (
     get_non_decision_inputs_for_q_compile,
 )
-from udao_spark.optimizer.utils import q_compile_setup, weighted_utopia_nearest
+from udao_spark.optimizer.setup import q_compile_setup
+from udao_spark.optimizer.utils import weighted_utopia_nearest
 from udao_spark.utils.logging import logger
 from udao_spark.utils.monitor import UdaoMonitor
 from udao_spark.utils.params import get_ag_parameters
