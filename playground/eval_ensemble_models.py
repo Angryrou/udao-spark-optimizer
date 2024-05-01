@@ -48,9 +48,8 @@ if __name__ == "__main__":
     )
     weights_path = ag_meta["graph_weights_path"]
     if params.new_recording:
-        ag_path = ag_meta["ag_path"] + "new_recording/"
-    else:
-        ag_path = ag_meta["ag_path"] + "/"
+        ag_meta["ag_path"] = ag_meta["ag_path"] + "new_recording"
+    ag_path = ag_meta["ag_path"] + "/"
 
     ret = get_ag_data(base_dir, bm, q_type, debug, graph_choice, weights_path)
     train_data, val_data, test_data = ret["data"]
