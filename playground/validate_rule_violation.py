@@ -85,10 +85,10 @@ def cross_product_two_numpy(a1: np.ndarray, a2: np.ndarray) -> np.ndarray:
 
 
 def get_lhs_confs_with_res_perm(
-    spark_conf: SparkConf, n_samples: int, seed: int
+    spark_conf: SparkConf, n_samples: int, seed: int, normalize: bool
 ) -> pd.DataFrame:
     # get configurations via LHS
-    lhs_sampled_confs = get_lhs_confs(spark_conf, n_samples, seed=seed)
+    lhs_sampled_confs = get_lhs_confs(spark_conf, n_samples, seed, normalize)
     if len(lhs_sampled_confs) < n_samples:
         logger.warning(
             f"lost {n_samples - len(lhs_sampled_confs)} "
@@ -156,7 +156,7 @@ if __name__ == "__main__":
         # try different seeds for templates or queries to hit more coverage in real runs
         seed = 0
         lhs_confs_with_res_perm = get_lhs_confs_with_res_perm(
-            spark_conf, n_conf_samples, seed=seed
+            spark_conf, n_conf_samples, seed=seed, normalize=False  # using AG
         )
         # prepare data for prediction towards one query with ~(260 * 10) configurations
         target_df = pd.DataFrame(

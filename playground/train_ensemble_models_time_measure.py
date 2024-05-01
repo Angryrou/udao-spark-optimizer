@@ -14,8 +14,7 @@ from udao_trace.utils import JsonHandler
 def get_params() -> ArgumentParser:
     parser = get_ag_parameters()
     # fmt: off
-    parser.add_argument("--recording", action="store_true",
-                        help="Record the time for evaluation")
+    parser.add_argument("--additional-training", action="store_true",)
     # fmt: on
     return parser
 
@@ -28,7 +27,6 @@ if __name__ == "__main__":
     infer_limit = params.infer_limit
     infer_limit_batch_size = params.infer_limit_batch_size
     time_limit = params.ag_time_limit
-    recording = params.recording
     base_dir = Path(__file__).parent
     ag_meta = get_ag_meta(
         bm,
@@ -41,10 +39,7 @@ if __name__ == "__main__":
         time_limit,
     )
     weights_path = ag_meta["graph_weights_path"]
-    if not recording:
-        ag_path = ag_meta["ag_path"] + "/"
-    else:
-        ag_path = ag_meta["ag_path"] + "_recording/"
+    ag_path = ag_meta["ag_path"] + "new_recording/"
 
     ret = get_ag_data(base_dir, bm, q_type, debug, graph_choice, weights_path)
     train_data, val_data, test_data = ret["data"]
@@ -57,13 +52,50 @@ if __name__ == "__main__":
     print("selected features:", train_data.columns)
 
     start_time = time.perf_counter_ns()
-    if os.path.exists(ag_path):
-        if recording:
-            raise Exception("recording path already exists")
+    if params.additional_training:
+        print("additional training")
+        if not os.path.exists(ag_path):
+            raise Exception("ag_path not found")
+
         predictor = MultilabelPredictor.load(f"{ag_path}")
         print("loaded predictor from", ag_path)
+        for obj in predictor.predictors.keys():
+            models = predictor.get_predictor(obj).model_names(stack_name="core")
+            return_models_po = predictor.get_predictor(obj).fit_weighted_ensemble(
+                expand_pareto_frontier=True,
+                name_suffix="PO",
+            )
+            predictor.get_predictor(obj).fit_weighted_ensemble(
+                base_models=[
+                    m
+                    for m in models
+                    if "Large" not in m and "XT" not in m and "ExtraTree" not in m
+                ],
+                name_suffix="Fast",
+            )
+            return_models_fast_po = predictor.get_predictor(obj).fit_weighted_ensemble(
+                base_models=[
+                    m
+                    for m in models
+                    if "Large" not in m and "XT" not in m and "ExtraTree" not in m
+                ],
+                expand_pareto_frontier=True,
+                name_suffix="FastPO",
+            )
+
+            print(f"get po-models from {obj}: {return_models_po}")
+            print(f"get fast-po-models from {obj}: {return_models_fast_po}")
+            print(
+                f"ensemble models for {obj} including "
+                f"{predictor.get_predictor(obj).model_names()}"
+            )
+            dt = (time.perf_counter_ns() - start_time) / 1e9
+            print(f"saving runtime {dt:.0f}s to", ag_path)
+            JsonHandler.dump_to_file({"dt_s": dt}, f"{ag_path}/train_additional.json")
     else:
-        print("not found, fitting")
+        if os.path.exists(ag_path):
+            raise Exception("recording path already exists")
+        print("start fitting")
         predictor = MultilabelPredictor(
             path=ag_path,
             labels=objectives,
@@ -108,51 +140,15 @@ if __name__ == "__main__":
             excluded_model_types=["KNN"],
             tuning_data=val_data,
             presets_lat=ag_sign.split(","),
-            presets_io=None,
+            presets_io=ag_sign.split(","),
             use_bag_holdout=True,
             infer_limit=infer_limit,
             infer_limit_batch_size=infer_limit_batch_size,
             num_gpus=num_gpus,
-            time_limit=time_limit,
+            time_limit=None if time_limit is None else time_limit // len(objectives),
+            ds_args={"memory_safe_fits": False},
         )
-    dt1 = time.perf_counter_ns() - start_time
-
-    for obj in predictor.predictors.keys():
-        models = predictor.get_predictor(obj).model_names(stack_name="core")
-        return_models_po = predictor.get_predictor(obj).fit_weighted_ensemble(
-            expand_pareto_frontier=True,
-            name_suffix="PO",
-        )
-        predictor.get_predictor(obj).fit_weighted_ensemble(
-            base_models=[
-                m
-                for m in models
-                if "Large" not in m and "XT" not in m and "ExtraTree" not in m
-            ],
-            name_suffix="Fast",
-        )
-        return_models_fast_po = predictor.get_predictor(obj).fit_weighted_ensemble(
-            base_models=[
-                m
-                for m in models
-                if "Large" not in m and "XT" not in m and "ExtraTree" not in m
-            ],
-            expand_pareto_frontier=True,
-            name_suffix="FastPO",
-        )
-
-        print(f"get po-models from {obj}: {return_models_po}")
-        print(f"get fast-po-models from {obj}: {return_models_fast_po}")
-        print(
-            f"ensemble models for {obj} including "
-            f"{predictor.get_predictor(obj).model_names()}"
-        )
-
-    dt2 = time.perf_counter_ns() - start_time
-
-    print(f"dt1: {dt1 / 1e9} s, dt2: {dt2 / 1e9} s")
-    if recording:
-        print("saving runtime to", ag_path)
-        time_dict["dt1_s"] = dt1 / 1e9
-        time_dict["dt2_s"] = dt2 / 1e9
-        JsonHandler.dump_to_file(time_dict, f"{ag_path}/runtime.json")
+        dt = (time.perf_counter_ns() - start_time) / 1e9
+        print(f"saving runtime {dt:.0f}s to", ag_path)
+        time_dict["total_dt_s"] = dt
+        JsonHandler.dump_to_file(time_dict, f"{ag_path}/train_basic.json")

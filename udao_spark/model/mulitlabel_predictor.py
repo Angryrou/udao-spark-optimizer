@@ -3,6 +3,7 @@
 
 import logging
 import os.path
+import time
 
 from autogluon.common.utils.utils import setup_outputdir
 from autogluon.core.utils.loaders import load_pkl
@@ -113,6 +114,7 @@ class MultilabelPredictor(object):
         else:
             tuning_data_og = None
         save_metrics = len(self.eval_metrics) == 0
+        time_dict = {}
         for i in range(len(self.labels)):
             label = self.labels[i]
             predictor = self.get_predictor(label)
@@ -127,16 +129,20 @@ class MultilabelPredictor(object):
             if tuning_data is not None:
                 tuning_data = tuning_data_og.drop(labels_to_drop, axis=1)
             print(f"Fitting TabularPredictor for label: {label} ...")
+
+            start_time = time.perf_counter_ns()
             if "io" in label:
                 predictor.fit(train_data=train_data, tuning_data=tuning_data,
                               presets=presets_io, **kwargs)
             else:
                 predictor.fit(train_data=train_data, tuning_data=tuning_data,
                               presets=presets_lat, **kwargs)
+            time_dict[label] = (time.perf_counter_ns() - start_time) / 1e9
             self.predictors[label] = predictor.path
             if save_metrics:
                 self.eval_metrics[label] = predictor.eval_metric
         self.save()
+        return time_dict
 
     def predict(self, data, **kwargs):
         """Returns DataFrame with label columns containing predictions for each label.

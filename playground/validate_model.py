@@ -27,6 +27,7 @@ if __name__ == "__main__":
         base_dir=base_dir,
         params=params,
         decision_vars=decision_variables,
+        cache_file="non_decision_df_03-07.parquet",
     )
     ag_server = optimizer.ag_ms
     # example of setting different theta for TPCH q1-1

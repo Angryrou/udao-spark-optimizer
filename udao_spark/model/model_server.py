@@ -20,9 +20,11 @@ from ..utils.params import QType
 from .utils import (
     GraphAverageMLPParams,
     GraphTransformerMLPParams,
+    TreeLSTMParams,
     calibrate_negative_predictions,
     get_graph_avg_mlp,
     get_graph_transformer_mlp,
+    get_tree_lstm_mlp,
 )
 
 
@@ -39,13 +41,22 @@ class ModelServer:
             model = get_graph_avg_mlp(graph_avg_ml_params)
             logger.info("GRAPH MODEL DETAILS:\n")
             logger.info(model)
-        elif model_sign == "graph_gtn":
-            graph_gtn_ml_params = GraphTransformerMLPParams.from_dict(
-                JsonHandler.load_json(model_params_path)
-            )
+        elif model_sign in ["graph_gtn", "graph_qf", "graph_raal"]:
+            param_dict = JsonHandler.load_json(model_params_path)
+            if model_sign == "graph_raal":
+                param_dict["non_siblings_map"] = {}
+            graph_gtn_ml_params = GraphTransformerMLPParams.from_dict(param_dict)
             objectives = graph_gtn_ml_params.iterator_shape.output_names
             model = get_graph_transformer_mlp(graph_gtn_ml_params)
             logger.info("GRAPH MODEL DETAILS:\n")
+            logger.info(model)
+        elif model_sign.startswith("tree"):
+            tree_lstm_ml_params = TreeLSTMParams.from_dict(
+                JsonHandler.load_json(model_params_path)
+            )
+            objectives = tree_lstm_ml_params.iterator_shape.output_names
+            model = get_tree_lstm_mlp(tree_lstm_ml_params)
+            logger.info("Tree MODEL DETAILS:\n")
             logger.info(model)
         else:
             raise ValueError(f"Unknown model sign: {model_sign}")
@@ -93,10 +104,14 @@ class AGServer:
             model_sign, graph_model_params_path, graph_weights_path
         )
         ta = TypeAdvisor(q_type=q_type)
-        predictors = {
-            obj: TabularPredictor.load(f"{ag_path}/Predictor_{obj}")
-            for obj in ta.get_ag_objectives()
-        }
+        try:
+            predictors = {
+                obj: TabularPredictor.load(f"{ag_path}/Predictor_{obj}")
+                for obj in ta.get_ag_objectives()
+            }
+        except FileNotFoundError:
+            logger.warning(f"Failed to load predictors at {ag_path}/Predictor_*")
+            predictors = {}
 
         if clf_json_path is None:
             failure_clfs = {}

@@ -17,6 +17,8 @@ def get_parser() -> ArgumentParser:
                         help="specific model name for AG for Q_R IO")
     parser.add_argument("--force", action="store_true",
                         help="Enable forcing running results")
+    parser.add_argument("--new_recording", action="store_true",
+                        help="Recording the breakdown training times")
     # fmt: on
     return parser
 
@@ -45,6 +47,8 @@ if __name__ == "__main__":
         time_limit,
     )
     weights_path = ag_meta["graph_weights_path"]
+    if params.new_recording:
+        ag_meta["ag_path"] = ag_meta["ag_path"] + "new_recording"
     ag_path = ag_meta["ag_path"] + "/"
 
     ret = get_ag_data(base_dir, bm, q_type, debug, graph_choice, weights_path)

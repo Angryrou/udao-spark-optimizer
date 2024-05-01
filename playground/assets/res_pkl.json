@@ -7,7 +7,7 @@
         "avg": "cache_and_ckp/tpch_22x2273/q_compile/ea0378f56dcf/graph_avg_ecfa2baa5a5e/learning_49d80a1a5e09/obj_df_test_with_test_latency_s_WeightedMeanAbsolutePercentageError=0.185_test_io_mb_WeightedMeanAbsolutePercentageError=0.316_cpu.pkl",
         "gtn": "cache_and_ckp/tpch_22x2273/q_compile/ea0378f56dcf/graph_gtn_fccc00d9f160/learning_49d80a1a5e09/obj_df_test_with_test_latency_s_WeightedMeanAbsolutePercentageError=0.141_test_io_mb_WeightedMeanAbsolutePercentageError=0.107_cpu.pkl",
         "em(fast)": "cache_and_ckp/tpch_22x2273/q_compile/ea0378f56dcf/graph_gtn_fccc00d9f160/learning_49d80a1a5e09/test_medium_tuned-0215_latency:WeightedEnsemble_L2PO_Pareto4_io:CatBoost_objs_and_metrics_cpu.pkl",
-        "em(best)": "cache_and_ckp/tpch_22x2273/q_compile/ea0378f56dcf/graph_gtn_fccc00d9f160/learning_49d80a1a5e09/test_high_tuned-0215_infer_limit_1e-05_batch_size_10000_time_limit_21600s_latency:WeightedEnsemble_L3FastPO_Pareto127_io:CatBoost_objs_and_metrics_cpu.pkl"
+        "em(best)": "cache_and_ckp/tpch_22x2273/q_compile/ea0378f56dcf/graph_gtn_fccc00d9f160/learning_49d80a1a5e09/test_high_tuned-0215_time_limit_21600s_latency:WeightedEnsemble_L3_io:CatBoost_objs_and_metrics_cpu.pkl"
     },
     "tpcds": {
         "qppnet": "cache_and_ckp/tpcds_102x490/q_compile/ea0378f56dcf/qppnet_33850b538366/learning_49d80a1a5e09/obj_df_test_with_test_latency_s_WeightedMeanAbsolutePercentageError=0.364_test_io_mb_WeightedMeanAbsolutePercentageError=0.996_cpu.pkl",
@@ -17,6 +17,6 @@
         "avg": "cache_and_ckp/tpcds_102x490/q_compile/ea0378f56dcf/graph_avg_0aa20ee85b5c/learning_49d80a1a5e09/obj_df_test_with_test_latency_s_WeightedMeanAbsolutePercentageError=0.323_test_io_mb_WeightedMeanAbsolutePercentageError=0.542_cpu.pkl",
         "gtn": "cache_and_ckp/tpcds_102x490/q_compile/ea0378f56dcf/graph_gtn_f6f9fc8c4308/learning_49d80a1a5e09/obj_df_test_with_test_latency_s_WeightedMeanAbsolutePercentageError=0.220_test_io_mb_WeightedMeanAbsolutePercentageError=0.320_cpu.pkl",
         "em(fast)": "cache_and_ckp/tpcds_102x490/q_compile/ea0378f56dcf/graph_gtn_f6f9fc8c4308/learning_49d80a1a5e09/test_medium_tuned-0215_latency:WeightedEnsemble_L2PO_Pareto4_io:CatBoost_objs_and_metrics_cpu.pkl",
-        "em(best)": "cache_and_ckp/tpcds_102x490/q_compile/ea0378f56dcf/graph_gtn_f6f9fc8c4308/learning_49d80a1a5e09/test_high_tuned-0215_infer_limit_1e-05_batch_size_10000_time_limit_21600s_latency:WeightedEnsemble_L2PO_Pareto46_io:CatBoost_objs_and_metrics_cpu.pkl"
+        "em(best)": "cache_and_ckp/tpcds_102x490/q_compile/ea0378f56dcf/graph_gtn_f6f9fc8c4308/learning_49d80a1a5e09/test_high_tuned-0215_time_limit_21600s_latency:WeightedEnsemble_L2Fast_io:CatBoost_objs_and_metrics_cpu.pkl"
     }
 }
