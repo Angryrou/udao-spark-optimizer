@@ -22,8 +22,7 @@ import time
 import torch as th
 from sklearn.cluster import KMeans
 
-# from udao_spark.optimizer.refactored.moo_algos.dag_optimization import DAGOpt
-from udao_spark.optimizer.moo_algos.dag_opt import DAGOpt
+from udao_spark.optimizer.moo_algos.dag_optimization import DAGOpt
 from udao_spark.optimizer.utils import is_pareto_efficient
 
 def timeis(f):
@@ -1171,7 +1170,7 @@ class Hierarchical_MOO_with_Constraints:
         if theta_sample_mode == "grid-search":
             new_theta_c_list, tc_random_sample_new_theta_c = self.random_samples_new_theta_c(union_opt_theta_c_list, use_ag)
         elif theta_sample_mode == "random":
-            new_theta_c_list, tc_crossover = self.crossover(cross_location, union_opt_theta_c_list, theta_c_samples)
+            new_theta_c_list, tc_crossover = self.crossover(cross_location, union_opt_theta_c_list, theta_c_samples, )
         else:
             raise Exception(f"Theta sampling mode {theta_sample_mode} is not supported!")
 
@@ -1183,7 +1182,6 @@ class Hierarchical_MOO_with_Constraints:
             cross_location: int,
             union_opt_theta_c_list: list,
             theta_c_samples: np.ndarray,
-            len_theta_c: int,
     ) -> List[List[Any]]:
         '''
         crossover to generate new \theta_c
@@ -1194,13 +1192,14 @@ class Hierarchical_MOO_with_Constraints:
                 ###############|##########################
         :param union_opt_theta_c_list: the optimal theta_c from all subQs
         :param theta_c_samples: theta_c_samples
-        :param len_theta_c: the length of theta_c, i.e. 8
         :return: the newly generated theta_c, e.g.
         ###############|##########################            ###############|##########################
         # k1 # k2 # k3 |# k4 # k5 # k6 # k7 # k8 #  --->      # k1 # k2 # k3 |# k4'# k5'# k6'# k7'# k8'#
         # k1'# k2'# k3'|# k4'# k5'# k6'# k7'# k8'#  --->      # k1'# k2'# k3'|# k4 # k5 # k6 # k7 # k8 #
         ###############|##########################            ###############|##########################
         '''
+        # the length of theta_c, i.e. 8
+        len_theta_c = theta_c_samples.shape[1]
         uniq_res_c = np.unique(np.array(union_opt_theta_c_list)[:, :cross_location], axis=0)
         uniq_non_res_c = np.unique(
             np.array(union_opt_theta_c_list)[:, cross_location: len_theta_c], axis=0

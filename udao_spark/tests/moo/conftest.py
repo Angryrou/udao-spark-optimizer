@@ -1,13 +1,9 @@
-from pathlib import Path
-
 import pytest
 
 import numpy as np
-import pandas as pd
-import torch as th
 
-from udao_spark.optimizer.refactored.moo_algos.hierarchical_moo_with_constraints import Hierarchical_MOO_with_Constraints
-from udao_spark.optimizer.refactored.moo_algos.dag_optimization import DAGOpt
+from udao_spark.optimizer.moo_algos.hierarchical_moo_with_constraints import Hierarchical_MOO_with_Constraints
+from udao_spark.optimizer.moo_algos.dag_optimization import DAGOpt
 
 n_subQs = 3
 seed = 0

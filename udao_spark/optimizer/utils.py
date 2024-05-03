@@ -113,7 +113,7 @@ def save_results(path: str, results: np.ndarray, mode: str = "data") -> None:
     else:
         np.savetxt(f"{file_path}/{mode}.txt", results)
 
-def save_json(save_json_path, data, mode="time_dict"):
+def save_json(save_json_path: str, data: dict, mode: str ="time_dict") -> None:
     if not os.path.exists(save_json_path):
         os.makedirs(save_json_path, exist_ok=True)
 

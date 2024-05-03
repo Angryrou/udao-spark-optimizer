@@ -15,7 +15,6 @@ from typing import Any, List, Tuple, Union
 
 import itertools
 
-import numba
 import numpy as np
 import sys
 import time
@@ -35,58 +34,6 @@ def timeis(f):
         return result, time_cost
         # return result
     return wrap
-
-# @timeis
-# # @th.jit.script
-# def enumeration(
-#         all_indices_choices: th.Tensor,
-#         subQ1_obj_values: th.Tensor,
-#         subQ2_obj_values: th.Tensor,
-# ) -> th.Tensor:
-#     ''' fixme: to double-check
-#     enumerate all combination of solutions in two subQs and compute the merged values.
-#     e.g. under theta_c1, subQ1 has [[latency1, cost1], [latency2, cost2]], subQ2 has [[latency1', cost1']]
-#     - merged values of subQ1 and subQ2, e.g. latency1+latency1', cost1+cost1'
-#     - all combinations: [[latency1+latency1', cost1+cost1'], [latency2+latency1', cost2+cost1']]
-#     :param all_indices_choices: the indices choices of two subQs
-#             e.g. under theta_c1, subQ1 has [[latency1, cost1], [latency2, cost2]], subQ2 has [[latency1', cost1']]
-#             combination choices of subQ1 and subQ2 is [(0, 0), (1, 0)],
-#             where (1, 0) indicates subQ1 chooses the second solution (i.e. [latency2, cost2]),
-#             and subQ2 chooses the first solution (i.e. [latency1', cost1'])
-#     :param subQ1_obj_values: objective values of all theta_c in subQ1, follows the order of theta_c indices,
-#             each element is an array of one specific theta_c with shape (n_optimal_theta_p, n_objs)
-#     :param subQ2_obj_values: objective values of all theta_c in subQ2, follows the order of theta_c indices,
-#             each element is an array of one specific theta_c with shape (n_optimal_theta_p, n_objs)
-#     :return: merged objective values: follows the order of the theta_c indices, each element is a set of
-#             merged objective values, e.g. [latency1+latency1', cost1+cost1']
-#     '''
-#     # obj_values_list = []
-#     obj_values_list = th.zeros((len(all_indices_choices), 2))
-#     subQ1_obj_values = subQ1_obj_values[all_indices_choices[:, 0]]
-#     subQ2_obj_values = subQ2_obj_values[all_indices_choices[:, 1]]
-#     obj_values_list[:, 0] = subQ1_obj_values[:, 0] + subQ2_obj_values[:, 0]
-#     obj_values_list[:, 1] = subQ1_obj_values[:, 1] + subQ2_obj_values[:, 1]
-#     # for idx, subQ_choices in enumerate(all_indices_choices):
-#     #     subQ1_choice = subQ_choices[0]
-#     #     subQ2_choice = subQ_choices[1]
-#     #     # total_subQ_latency = 0.
-#     #     # total_subQ_cost = 0.
-#     #     for subQ1, subQ2 in zip([subQ1_obj_values[subQ1_choice]],
-#     #                               [subQ2_obj_values[subQ2_choice]]):
-#     #         obj_values_list[idx, 0] += subQ1[0]
-#     #         obj_values_list[idx, 1] += subQ1[1]
-#     #         obj_values_list[idx, 0] += subQ2[0]
-#     #         obj_values_list[idx, 1] += subQ2[1]
-#         # total_subQ_obj_values = np.concatenate((subQ1_obj_values[subQ1_choice],
-#         #                         subQ2_obj_values[subQ2_choice]), axis=0)
-#         # print(total_subQ_obj_values)
-#         # latency, cost = np.sum(total_subQ_obj_values, axis=-1, keepdims=True)
-#         # latency, cost = np.sum([subQ1_obj_values[subQ1_choice],
-#         #                         subQ2_obj_values[subQ2_choice]], axis=0, dtype=np.float64)
-#         # subQ1_latency = subQ1_obj_values[subQ1_choice][0]
-#         # obj_values_list.append([total_subQ_latency, total_subQ_cost])
-#     return obj_values_list
-
 
 class DAGOpt:
     def __init__(

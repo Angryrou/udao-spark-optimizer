@@ -230,16 +230,10 @@ def get_compile_time_optimizer_parameters() -> ArgumentParser:
                         help="Enable to save data")
     parser.add_argument("--save_data_header", type=str, default="./output",
                         help="the head of data save path")
-    # parser.add_argument("--moo_algo", type=str, default="div_and_conq_moo%B",
-    #                     choices=["div_and_conq_moo%B", "div_and_conq_moo%GD",
-    #                              "div_and_conq_moo%WS&11",
-    #                         "evo", "ws", "ppf", "analyze_model_accuracy", "test"],
-    #                     help="Algorithm for the compile-time optimization",)
     parser.add_argument("--moo_algo", type=str, default="hmooc%B",
                         choices=["hmooc%B", "hmooc%GD",
                                  "hmooc%WS&11",
-                                 "evo", "ws", "ppf",
-                                 "div_and_conq_moo%GD"],
+                                 "evo", "ws", "ppf"],
                         help="Algorithm for the compile-time optimization", )
     parser.add_argument("--n_c_samples", type=int, default=100,
                         help="the number of random samples of theta_c")
@@ -248,7 +242,7 @@ def get_compile_time_optimizer_parameters() -> ArgumentParser:
 
     parser.add_argument("--sample_mode", type=str, default="grid-search",
                         choices=["grid", "grid-search", "random"],
-                        help="Sample type for div_and_conq_moo")
+                        help="Sample type for HMOOC")
     parser.add_argument("--pop_size", type=int, default=100,
                         help="Population size in EVO")
     parser.add_argument("--nfe", type=int, default=1000,

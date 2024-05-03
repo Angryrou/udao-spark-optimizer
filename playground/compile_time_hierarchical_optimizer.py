@@ -3,8 +3,8 @@ from pathlib import Path
 from udao_spark.data.extractors.injection_extractor import (
     get_non_decision_inputs_for_qs_compile_dict,
 )
-# from udao_spark.optimizer.refactored.hierarchical_optimizer import HierarchicalOptimizer
 from udao_spark.optimizer.hierarchical_optimizer import HierarchicalOptimizer
+# from udao_spark.optimizer.hierarchical_optimizer import HierarchicalOptimizer
 from udao_spark.optimizer.utils import get_ag_meta
 from udao_spark.utils.params import QType, get_compile_time_optimizer_parameters
 from udao_trace.configuration import SparkConf
@@ -13,9 +13,6 @@ from udao_trace.utils.logging import logger
 from udao_trace.workload import Benchmark
 
 logger.setLevel("INFO")
-
-import numpy as np
-from udao_spark.optimizer.utils import save_results
 
 if __name__ == "__main__":
     # Initialize InjectionExtractor

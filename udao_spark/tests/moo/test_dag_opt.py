@@ -10,13 +10,10 @@
 #
 # Created at 24/04/2024
 
-import itertools
-import time
-
 import numpy as np
-import torch
+import itertools
 
-from udao_spark.optimizer.refactored.moo_algos.dag_optimization import DAGOpt
+from udao_spark.optimizer.moo_algos.dag_optimization import DAGOpt
 
 sorted_indices_all_subQs = np.array(
     [[0, 1, 0],
@@ -28,22 +25,15 @@ sorted_indices_all_subQs = np.array(
     [2, 1, 1],
     [2, 8, 0],
 ])
-# sorted_obj_values_all_subQs = [
-#     [np.array([[25, 20], [23, 23]]),
-#      np.array([[23, 25]])],
-#     [np.array([[22, 24]]),
-#      np.array([[21, 26]])],
-#     [np.array([[27, 27], [28, 21]]),
-#      np.array([[25, 29]])],
-# ]
 sorted_obj_values_all_subQs = [
-    [np.repeat(np.array([[25, 20], [23, 23]]), [1000, 1], axis=0),
-     np.repeat(np.array([[23, 25]]), 5000, axis=0)],
-    [np.repeat(np.array([[22, 24]]), 1000, axis=0),
-     np.repeat(np.array([[21, 26]]), 1000, axis=0)],
+    [np.array([[25, 20], [23, 23]]),
+     np.array([[23, 25]])],
+    [np.array([[22, 24]]),
+     np.array([[21, 26]])],
     [np.array([[27, 27], [28, 21]]),
      np.array([[25, 29]])],
 ]
+
 sorted_configs_all_subQs = [
     [np.array([[9, 4, 26, 27, 34, 1, 2], [9, 4, 37, 25, 33, 1, 2]]),
      np.array([[12, 16, 37, 25, 33, 1, 2]])],
@@ -231,23 +221,20 @@ class TestDAGOpt:
 
     ######  sub-functions in General Divide-and-Conquer method
     def test_enumeration(self, dag_opt: DAGOpt) -> None:
-        for _ in range(3):
-            subQ1_id = 0
-            subQ2_id = 1
-            theta_c_id = 0
-            subQ1_obj_values_theta_c1 = sorted_obj_values_all_subQs[subQ1_id][theta_c_id]
-            subQ2_obj_values_theta_c1 = sorted_obj_values_all_subQs[subQ2_id][theta_c_id]
-            subQ1_range = torch.arange(subQ1_obj_values_theta_c1.shape[0])
-            subQ2_range = torch.arange(subQ2_obj_values_theta_c1.shape[0])
-            all_indices_choices = torch.cartesian_prod(subQ1_range, subQ2_range)
-            # all_indices_choices = list(itertools.product(*[list(range(subQ1_obj_values_theta_c1.shape[0])),
-            #                                                list(range(subQ2_obj_values_theta_c1.shape[0]))]))
-            obj_values_list, _ = dag_opt.enumeration(all_indices_choices,
-                                                  torch.Tensor(subQ1_obj_values_theta_c1),
-                                                  torch.Tensor(subQ2_obj_values_theta_c1))
-            expect_obj_values_list = [[47.0, 44.0], [45.0, 47.0]]
-            # assert np.all(np.array(obj_values_list) == np.array(expect_obj_values_list))
-        assert True
+
+        subQ1_id = 0
+        subQ2_id = 1
+        theta_c_id = 0
+        subQ1_obj_values_theta_c1 = sorted_obj_values_all_subQs[subQ1_id][theta_c_id]
+        subQ2_obj_values_theta_c1 = sorted_obj_values_all_subQs[subQ2_id][theta_c_id]
+        all_indices_choices = list(itertools.product(*[list(range(subQ1_obj_values_theta_c1.shape[0])),
+                                                       list(range(subQ2_obj_values_theta_c1.shape[0]))]))
+        obj_values_list, _ = dag_opt.enumeration(all_indices_choices,
+                                              np.array(subQ1_obj_values_theta_c1),
+                                              np.array(subQ2_obj_values_theta_c1))
+        expect_obj_values_list = [[47.0, 44.0], [45.0, 47.0]]
+        assert np.all(np.array(obj_values_list) == np.array(expect_obj_values_list))
+
 
     def test_compute_merged_values(self, dag_opt: DAGOpt) -> None:
         subQ1_id = 0
@@ -325,11 +312,10 @@ class TestDAGOpt:
         expect_pareto_merged_configs = [np.array([[9, 4, 26, 27, 34, 1, 2, 9, 4, 26, 27, 34, 1, 2],
                                                   [9, 4, 37, 25, 33, 1, 2, 9, 4, 26, 27, 34, 1, 2]]),
                                         np.array([[12, 16, 37, 25, 33, 1, 2, 12, 16, 37, 25, 33, 1, 2]])]
-        assert True
-        # assert all([np.all(result == expect) for result, expect in zip(pareto_merged_obj_values,
-        #                                                                expect_pareto_merged_obj_values)])
-        # assert all([np.all(result == expect) for result, expect in zip(pareto_merged_configs,
-        #                                                                expect_pareto_merged_configs)])
+        assert all([np.all(result == expect) for result, expect in zip(pareto_merged_obj_values,
+                                                                       expect_pareto_merged_obj_values)])
+        assert all([np.all(result == expect) for result, expect in zip(pareto_merged_configs,
+                                                                       expect_pareto_merged_configs)])
 
     def test_solve_more_than_two_subQs(self, dag_opt: DAGOpt) -> None:
         subQs_str = [f"subQ{subQ_id}" for subQ_id in subQs]

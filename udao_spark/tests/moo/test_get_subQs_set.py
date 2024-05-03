@@ -13,7 +13,7 @@
 import numpy as np
 import pandas as pd
 import torch as th
-from udao_spark.optimizer.refactored.moo_algos.hierarchical_moo_with_constraints import Hierarchical_MOO_with_Constraints
+from udao_spark.optimizer.moo_algos.hierarchical_moo_with_constraints import Hierarchical_MOO_with_Constraints
 
 
 np.random.seed(0)
@@ -21,7 +21,7 @@ n_subQs = 3
 graph_embeddings = th.tensor(np.random.randint(10, 15, (n_subQs, 2)), dtype=th.float32)
 non_decision_tabular_features = pd.DataFrame(np.random.randint(10, 15, (n_subQs, 2)))
 use_ag = True
-cluster_representation = np.array([1, 8])
+cluster_representation = np.array([1, 7])
 cluster_members = [np.array([1, 4, 5, 9]), np.array([0, 2, 3, 6, 7, 8])]
 
 optimal_obj_values_all_subQs = np.array(
@@ -423,10 +423,12 @@ class TestGetSubQsSet:
                  [6, 7, 8, 9, 10],
                  ]
         cross_location = 3
-        theta_c_samples = hmooc.theta_c_samples
-        len_theta_c = len(union_list[0])
+        theta_c_samples = np.array([
+            [11, 23, 13, 45, 75],
+            [62, 17, 82, 19, 12],
+                 ])
 
-        result_crossover, _ = hmooc.crossover(cross_location, union_list, theta_c_samples, len_theta_c)
+        result_crossover, _ = hmooc.crossover(cross_location, union_list, theta_c_samples)
 
         expect_crossover = [[1, 2, 3, 9, 10],
                             [6, 7, 8, 4, 5]]
