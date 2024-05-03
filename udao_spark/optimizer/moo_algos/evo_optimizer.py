@@ -12,6 +12,7 @@
 
 import random
 import signal
+import time
 from dataclasses import dataclass
 from types import FrameType
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
@@ -52,7 +53,7 @@ class Constant(Type):
 
 global_var_range: np.ndarray
 enum_inds: List[Any]
-
+model_infer_info: List[Any]
 
 class EvoOptimizer:
     @dataclass
@@ -83,6 +84,7 @@ class EvoOptimizer:
         params: Params,
         use_ag: bool,
         ag_model: Dict[str, str],
+        is_query_control: bool,
     ) -> None:
         self.query_id = query_id
         self.n_stages = n_stages
@@ -113,8 +115,9 @@ class EvoOptimizer:
             raise Exception(f"Algorithm {params.inner_algo} is not supported!")
 
         self.time_limit = params.time_limit
+        self.is_query_control = is_query_control
 
-    def solve(self) -> Tuple[np.ndarray, np.ndarray]:
+    def solve(self) -> Tuple[np.ndarray, np.ndarray, List[Any]]:
         if self.time_limit > 0:
 
             def signal_handler(signum: int, frame: Optional[FrameType]) -> None:
@@ -124,7 +127,7 @@ class EvoOptimizer:
             signal.alarm(self.time_limit)
 
             try:
-                F, Theta = self.evo_solve()
+                F, Theta, model_infer_info = self.evo_solve()
                 signal.alarm(
                     0
                 )  ##cancel the timer if the function returned before timeout
@@ -133,11 +136,11 @@ class EvoOptimizer:
                 F, Theta = np.array([-1]), np.array([-1])
                 print(f"Timed out for query {self.query_id}")
         else:
-            F, Theta = self.evo_solve()
+            F, Theta, model_infer_info = self.evo_solve()
 
-        return F, Theta
+        return F, Theta, model_infer_info
 
-    def evo_solve(self) -> Tuple[np.ndarray, np.ndarray]:
+    def evo_solve(self) -> Tuple[np.ndarray, np.ndarray, List[Any]]:
         """
         solve MOO with NSGA-II algorithm
         :param wl_id: str, workload id, e.g. '1-7'
@@ -156,10 +159,30 @@ class EvoOptimizer:
         # force to use normalized theta
         # vars_range = {k: np.array([]).T for k in self.theta_minmax.keys()}
         global global_var_range
-        global_var_range = np.array(
-            vars_range["c"].tolist()
-            + (vars_range["p"].tolist() + vars_range["s"].tolist()) * self.n_stages
-        )
+        global model_infer_info
+
+        model_infer_info = []
+        # create a new problem
+        theta_c_ktypes = self.theta_ktype["c"]
+        theta_p_ktypes = self.theta_ktype["p"]
+        theta_s_ktypes = self.theta_ktype["s"]
+
+        if self.is_query_control:
+            global_var_range = np.array(
+                vars_range["c"].tolist()
+                + (vars_range["p"].tolist() + vars_range["s"].tolist())
+            )
+            # here theta_s is constant
+            vars_types = theta_c_ktypes + (theta_p_ktypes + theta_s_ktypes)
+            n_vars = len(vars_types)
+        else:
+            global_var_range = np.array(
+                vars_range["c"].tolist()
+                + (vars_range["p"].tolist() + vars_range["s"].tolist()) * self.n_stages
+            )
+            # here theta_s is constant
+            vars_types = theta_c_ktypes + self.n_stages * (theta_p_ktypes + theta_s_ktypes)
+            n_vars = len(vars_types)
 
         # class to add all solutions during evolutionary iterations
         class LoggingArchive(Archive):
@@ -173,14 +196,6 @@ class EvoOptimizer:
 
         log_archive = LoggingArchive()
 
-        # create a new problem
-        theta_c_ktypes = self.theta_ktype["c"]
-        theta_p_ktypes = self.theta_ktype["p"]
-        theta_s_ktypes = self.theta_ktype["s"]
-
-        # here theta_s is constant
-        vars_types = theta_c_ktypes + self.n_stages * (theta_p_ktypes + theta_s_ktypes)
-        n_vars = len(vars_types)
         n_objs = self.n_objs
         n_consts = self.n_consts
         self.problem = Problem(n_vars, n_objs, n_consts)
@@ -270,7 +285,7 @@ class EvoOptimizer:
                 po_vars_list.append(po_vars)
             po_objs_arr = np.array(po_objs_list)
             po_confs_arr = np.array(po_vars_list)
-            return po_objs_arr, po_confs_arr
+            return po_objs_arr, po_confs_arr, model_infer_info
 
     def set_var_types(self, vars_ktype: list) -> bool:
         """
@@ -373,16 +388,28 @@ class EvoOptimizer:
                 vars_decoded[:, : self.len_theta_c], (self.n_stages, 1)
             )
             len_theta_p_s = self.len_theta_p + self.len_theta_s
-            theta_p_s = vars_decoded[:, self.len_theta_c :].reshape(
-                self.n_stages, len_theta_p_s
+
+            if self.is_query_control:
+                assert vars_decoded.shape[1] == (self.len_theta_c + self.len_theta_p + self.len_theta_s)
+                theta_p_s = np.tile(vars_decoded[:, self.len_theta_c: ],
+                                    (self.n_stages, 1)
             )
+            else:
+                assert vars_decoded.shape[1] == (self.len_theta_c + (self.len_theta_p + self.len_theta_s) * self.n_stages)
+                theta_p_s = vars_decoded[:, self.len_theta_c :].reshape(
+                    self.n_stages, len_theta_p_s
+                )
             theta = np.concatenate([mesh_theta_c, theta_p_s], axis=1)
+            start_pred = time.time()
             objs = self.obj_model(
                 self.graph_embeddings.cpu().numpy(),
                 self.non_decision_tabular_features,
                 theta,
                 self.ag_model,
             )
+            n_evals = theta.shape[0]
+            tc_pred = time.time() - start_pred
+            model_infer_info.append([n_evals, tc_pred])
 
         else:
             # the formats of f_list(and g_list) is required as list[value1, value2, ...]
@@ -391,7 +418,10 @@ class EvoOptimizer:
                 self.n_stages, 1
             )
             len_theta_p_s = self.len_theta_p + self.len_theta_s
-            theta_p_s = th.tensor(vars_decoded[:, self.len_theta_c :]).reshape(
+            if self.is_query_control:
+                theta_p_s = th.tensor(vars_decoded[:, self.len_theta_c:]).repeat(self.n_stages, 1)
+            else:
+                theta_p_s = th.tensor(vars_decoded[:, self.len_theta_c :]).reshape(
                 self.n_stages, len_theta_p_s
             )
             theta = th.cat([mesh_theta_c, theta_p_s], dim=1)
