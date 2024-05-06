@@ -97,24 +97,6 @@ if __name__ == "__main__":
     is_oracle = q_type == "qs_lqp_runtime"
     use_ag = not params.use_mlp
 
-    ## to save query info
-    # stage_list = []
-    # query_id_list = []
-    # for trace in raw_traces:
-    #     logger.info(f"Processing {trace}")
-    #     non_decision_input = get_non_decision_inputs_for_qs_compile_dict(
-    #         trace, is_oracle=is_oracle
-    #     )
-    #     query_id = trace.split(f"{bm}100_")[1].split("_")[0]  # e.g. 2-1
-    #     print(f"query_id is {query_id}")
-    #
-    #     n_stages = len(non_decision_input)
-    #     query_id_list.append(query_id)
-    #     stage_list.append(n_stages)
-    # save_path = f"{params.save_data_header}/query_info/"
-    # save_results(save_path, results=np.array(stage_list), mode="n_stages_list")
-    # save_results(save_path, results=np.array(query_id_list), mode="query_id_list")
-
     for template, trace in zip(benchmark.templates, raw_traces):
         logger.info(f"Processing {trace}")
 
