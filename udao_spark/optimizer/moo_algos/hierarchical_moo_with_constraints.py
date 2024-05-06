@@ -12,7 +12,6 @@
 
 import random
 import signal
-from dataclasses import dataclass
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
@@ -35,7 +34,6 @@ def timeis(f):
         # print('func:%r took: %.5f sec' % \
         #   (f.__name__, time_cost))
         return result, time_cost
-        # return result
     return wrap
 
 class Hierarchical_MOO_with_Constraints:
@@ -72,6 +70,11 @@ class Hierarchical_MOO_with_Constraints:
         )
         self.n_objs = 2
         self.seed = seed
+
+        all_function_names = [method for method in Hierarchical_MOO_with_Constraints.__dict__
+                              if callable(getattr(Hierarchical_MOO_with_Constraints, method))
+                              and not method.startswith("__")]
+        self.global_time_cost = {k: [] for k in all_function_names}
 
     def model_setup(
             self,
@@ -146,7 +149,7 @@ class Hierarchical_MOO_with_Constraints:
         self.time_limit = time_limit
         self.verbose = verbose
 
-    def solve(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def solve(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray, dict]:
         ''' fixme: to double-check whether runnable
         The entry of the Hierarchical Mulit-Objective Optimization with Constraints (HMOOC) approach.
         It returns the query-level Pareto optimal objective values, the corresponding configurations (i.e. theta)
@@ -166,7 +169,7 @@ class Hierarchical_MOO_with_Constraints:
             signal.alarm(self.time_limit)
 
             try:
-                query_obj_values, query_configurations, model_inference_info = self._hmooc()
+                query_obj_values, query_configurations, model_inference_info, dag_opt_global_time_cost = self._hmooc()
                 signal.alarm(
                     0
                 )  ##cancel the timer if the function returned before timeout
@@ -175,13 +178,18 @@ class Hierarchical_MOO_with_Constraints:
                 query_obj_values = -1 * np.ones((1, self.n_objs))
                 query_configurations = np.array([[-1], [-1]])
                 model_inference_info = np.array([-1])
+                dag_opt_global_time_cost = {}
                 print("Timed out for query")
         else:
-            query_obj_values, query_configurations, model_inference_info = self._hmooc()
+            query_obj_values, query_configurations, model_inference_info, dag_opt_global_time_cost = self._hmooc()
 
-        return query_obj_values, query_configurations, model_inference_info
+        total_time_profile = {
+            "hmooc": self.global_time_cost,
+            "dag_opt": dag_opt_global_time_cost,
+        }
+        return query_obj_values, query_configurations, model_inference_info, total_time_profile
 
-    def _hmooc(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def _hmooc(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray, dict]:
         ''' fixme: to double-check whether runnable
         The entry of the Hierarchical Mulit-Objective Optimization with Constraints (HMOOC) approach.
         It returns the query-level Pareto optimal objective values, the corresponding configurations (i.e. theta)
@@ -193,16 +201,20 @@ class Hierarchical_MOO_with_Constraints:
                                       e.g. when 100 * len_one_theta is fed in the model, n_evaluations = 100
         '''
 
-        subQ_obj_values, subQ_configurations, indices_all_subQs, model_inference_info = self._get_subQ_sets()
+        (subQ_obj_values, subQ_configurations, indices_all_subQs, model_inference_info), \
+        tc_get_subQs_sets = self._get_subQ_sets()
+        self.global_time_cost[self._get_subQ_sets.__name__].append(tc_get_subQs_sets)
 
-        query_obj_values, query_configurations = self._dag_opt(
+        (query_obj_values, query_configurations, dag_opt_global_time_cost), tc_dag_opt = self._dag_opt(
             subQ_obj_values,
             subQ_configurations,
             indices_all_subQs,
         )
+        self.global_time_cost[self._dag_opt.__name__].append(tc_dag_opt)
 
-        return query_obj_values, query_configurations, model_inference_info
+        return query_obj_values, query_configurations, model_inference_info, dag_opt_global_time_cost
 
+    @timeis
     def _get_subQ_sets(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         ''' fixme: to double-check whether runnable
         It searches for the optimal subQ-level solutions under the constraint that theta_c is identical among all subQs.
@@ -229,10 +241,13 @@ class Hierarchical_MOO_with_Constraints:
         (clusters_labels, cluster_model), tc_cluster = self.clustering_method(
             self.n_clusters, theta_c_samples, cluster_algo=self.cluster_algo
         )
+        self.global_time_cost[self.clustering_method.__name__].append(tc_cluster)
+
         (
             representative_theta_c,
             cluster_members
         ), tc_cluster_representation = self.cluster_representation(clusters_labels)
+        self.global_time_cost[self.cluster_representation.__name__].append(tc_cluster_representation)
 
         # 2.2. optimize theta_p and theta_s of the representative theta_c samples from clusters for all subQs
         (obj_values_all_subQs_rep_theta_c, configs_all_subQs_rep_theta_c, indices_all_subQs_rep_theta_c,
@@ -244,6 +259,8 @@ class Hierarchical_MOO_with_Constraints:
             self.n_subQs,
             self.use_ag,
         )
+        self.global_time_cost[self._optimize_theta_p_and_s.__name__].append(tc_optimize_theta_p_s)
+
         # 2.3. estimate optimal theta_p and theta_s for all theta_c samples
         # i.e. assign the optimal theta_p and theta_s of the representative theta_c to all memebers within the same cluster
         (
@@ -264,6 +281,7 @@ class Hierarchical_MOO_with_Constraints:
             non_decision_tabular_features=self.non_decision_tabular_features,
             mode="assign_initial"
         )
+        self.global_time_cost[self.estimate_opt_theta_p_s.__name__].append(tc_estimate_init_opt_theta_p_s)
 
         # 3. theoretical result 2: get local optimal theta_c of each subQ and union them all
         union_opt_theta_c_list, tc_union_optimal_theta_c = self.union_opt_theta_c(
@@ -273,15 +291,18 @@ class Hierarchical_MOO_with_Constraints:
             config_all_subQs_init_theta_c,
             indices_all_subQs_init_theta_c,
         )
+        self.global_time_cost[self.union_opt_theta_c.__name__].append(tc_union_optimal_theta_c)
 
         # 4. extend new theta_c samples
-        new_theta_c_list = self.extend_c(
+        new_theta_c_list, tc_extend_c = self.extend_c(
             self.cross_location,
             union_opt_theta_c_list.copy(),
             self.use_ag,
             self.theta_sample_mode,
             self.theta_c_samples,
         )
+        self.global_time_cost[self.extend_c.__name__].append(tc_extend_c)
+
         if self.verbose:
             print(
                 f"the number of new generated theta_c candidates "
@@ -297,13 +318,14 @@ class Hierarchical_MOO_with_Constraints:
             representative_theta_c,
             cluster_model,
         )
+        self.global_time_cost[self.assign_new_theta_c_to_clusters.__name__].append(tc_assign_new_theta_c_to_clusters)
 
         (
             obj_values_all_subQs_new_theta_c,
             config_all_subQs_new_theta_c,
             indices_all_subQs_new_theta_c,
             model_inference_info_assign_new_theta_c,
-        ), tc_new_opt_theta_p_s = self.estimate_opt_theta_p_s(
+        ), tc_estimate_new_opt_theta_p_s = self.estimate_opt_theta_p_s(
             representative_theta_c=new_representative_theta_c,
             init_n_c_samples=theta_c_samples.shape[0],
             cluster_members=new_cluster_members,
@@ -316,6 +338,7 @@ class Hierarchical_MOO_with_Constraints:
             non_decision_tabular_features=self.non_decision_tabular_features,
             mode="assign_new",
         )
+        self.global_time_cost[self.estimate_opt_theta_p_s.__name__].append(tc_estimate_new_opt_theta_p_s)
 
         # 6. union all solutions
         (obj_values_all_subQs, config_all_subQs, indices_all_subQs, final_model_inference_info), \
@@ -330,14 +353,17 @@ class Hierarchical_MOO_with_Constraints:
             model_inference_info_assign_init_theta_c,
             model_inference_info_assign_new_theta_c
         )
+        self.global_time_cost[self.union_initial_and_new_solution_sets.__name__].append(tc_union_all_solutions)
+
         return obj_values_all_subQs, config_all_subQs, indices_all_subQs, final_model_inference_info
 
+    @timeis
     def _dag_opt(
             self,
             obj_values_all_subQs: np.ndarray,
             config_all_subQs: Union[th.Tensor, np.ndarray],
             indices_all_subQs: np.ndarray,
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> Tuple[np.ndarray, np.ndarray, dict]:
         '''
         Intialize the DAGOpt class and call the solve function to return the query-level Pareto optimal solutions
         recovered from the subQ-level Pareto optimal solutions with identical theta_c constraints.
@@ -354,8 +380,8 @@ class Hierarchical_MOO_with_Constraints:
         '''
         dag_opt = DAGOpt(obj_values_all_subQs, config_all_subQs, indices_all_subQs, self.dag_opt_algo, self.runmode)
 
-        query_obj_values, query_configurations = dag_opt.solve()
-        return query_obj_values, query_configurations
+        query_obj_values, query_configurations, dag_opt_global_time_cost = dag_opt.solve()
+        return query_obj_values, query_configurations, dag_opt_global_time_cost
 
 
     ############## Sub-functions used in the function _get_subQ_sets ################
@@ -626,6 +652,7 @@ class Hierarchical_MOO_with_Constraints:
                                                          len(representative_theta_c),
                                                          n_theta_p_samples,
                                                          )
+        self.global_time_cost[self._split_solutions.__name__].append(tc_split_theta)
 
         optimal_obj_values_per_subQ_theta_c = []
         optimal_indices_subQ_theta_c_p = []
@@ -638,6 +665,7 @@ class Hierarchical_MOO_with_Constraints:
             (opt_obj_values, opt_configurations, opt_indices), tc_keep_opt_theta_p = self.keep_opt_theta_p_per_theta_c(
                 i, representative_theta_c, sub_obj_values, sub_config
             )
+            self.global_time_cost[self.keep_opt_theta_p_per_theta_c.__name__].append(tc_keep_opt_theta_p)
 
             optimal_obj_values_per_subQ_theta_c.append(opt_obj_values)
             optimal_configurations_per_subQ_theta_c.append(opt_configurations)
@@ -796,10 +824,13 @@ class Hierarchical_MOO_with_Constraints:
                                                  self.graph_embeddings,
                                                  self.non_decision_tabular_features,
                                                  )
+        self.global_time_cost[self.construct_model_input_for_opt_p.__name__].append(tc_construct_model_input_for_opt_p)
+
         y_hat, model_inference_time = self.get_obj_values(n_evals,
                                     mesh_theta,
                                     mesh_graph_embeddings,
                                     mesh_non_decision_tabular_features)
+        self.global_time_cost[self.get_obj_values.__name__].append(model_inference_time)
         model_inference_arr = np.array([n_evals, model_inference_time])
 
         (optimal_obj_values_all_subQs, optimal_configurations_all_subQs, indices_all_subQs_theta_c_p), \
@@ -811,6 +842,7 @@ class Hierarchical_MOO_with_Constraints:
             y_hat,
             use_ag=use_ag,
         )
+        self.global_time_cost[self.filter_dominated_theta_p_s.__name__].append(tc_filter_dominated_theta_p)
 
         return optimal_obj_values_all_subQs, optimal_configurations_all_subQs, indices_all_subQs_theta_c_p, model_inference_arr
 
@@ -1098,6 +1130,7 @@ class Hierarchical_MOO_with_Constraints:
             non_decision_tabular_features,
             mode=mode,
         )
+        self.global_time_cost[self.assign_optimal_theta_p_s.__name__].append(tc_assign)
 
         n_eval = mesh_theta.shape[0]
         obj_values_all_subQs, tc_model_inference = self.get_obj_values(
@@ -1106,6 +1139,7 @@ class Hierarchical_MOO_with_Constraints:
             mesh_graph_embedding,
             mesh_non_decision_tabular_features,
         )
+        self.global_time_cost[self.get_obj_values.__name__].append(tc_model_inference)
         model_inference_arr = np.array([n_eval, tc_model_inference])
 
         return obj_values_all_subQs, mesh_theta, updated_indices_all_subQs, model_inference_arr
@@ -1146,6 +1180,7 @@ class Hierarchical_MOO_with_Constraints:
         uniq_union_opt_theta_c_list = np.unique(union_opt_theta_c_list, axis=0).tolist()
         return uniq_union_opt_theta_c_list
 
+    @timeis
     def extend_c(
             self,
             cross_location: int,
@@ -1258,12 +1293,12 @@ class Hierarchical_MOO_with_Constraints:
             union_opt_theta_c_list: list,
             use_ag: bool,
     ) -> List[List[Any]]:
-        '''
+        """
         Randomly generate new theta_c
         :param union_opt_theta_c_list: the optimal theta_c from all subQs
         :param use_ag: flag to indicate whether using AutoGluon in models
         :return: newly generated theta_c
-        '''
+        """
         n_new_samples = len(union_opt_theta_c_list)
         if use_ag:
             new_theta_c_list = self.theta_sample_funcs(

@@ -32,7 +32,6 @@ def timeis(f):
         # print('func:%r took: %.5f sec' % \
         #   (f.__name__, time_cost))
         return result, time_cost
-        # return result
     return wrap
 
 class DAGOpt:
@@ -69,7 +68,12 @@ class DAGOpt:
         self.n_objs = obj_values_all_subQs.shape[1]
         self.verbose = False
 
-    def solve(self) -> Tuple[np.ndarray, np.ndarray]:
+        all_function_names = [method for method in DAGOpt.__dict__
+                              if callable(getattr(DAGOpt, method))
+                              and not method.startswith("__")]
+        self.global_time_cost = {k: [] for k in all_function_names}
+
+    def solve(self) -> Tuple[np.ndarray, np.ndarray, dict]:
         '''
         THe entry of the DAG Optimization methods, which returns query-level Pareto optimal solutions recovered from
         the subQ-level Pareto optimal solutions.
@@ -84,29 +88,32 @@ class DAGOpt:
             w2 = 1 - w1
             ws_pairs = [[w1, w2] for w1, w2 in zip(w1, w2)]
 
-            query_obj_values, query_configurations = self._ws_based(
+            (query_obj_values, query_configurations), tc_ws_based = self._ws_based(
                 self.obj_values_all_subQs,
                 self.config_all_subQs,
                 self.indices_all_subQs,
                 ws_pairs,
                 )
+            self.global_time_cost[self._ws_based.__name__].append(tc_ws_based)
         elif self.algorithm == "GD":
-            query_obj_values, query_configurations = self._general_div_and_conq(
+            (query_obj_values, query_configurations), tc_general_div_and_conq = self._general_div_and_conq(
                 self.obj_values_all_subQs,
                 self.config_all_subQs,
                 self.indices_all_subQs,
             )
+            self.global_time_cost[self._general_div_and_conq.__name__].append(tc_general_div_and_conq)
         elif self.algorithm == "B":
-            query_obj_values, query_configurations = self._boundary_based(
+            (query_obj_values, query_configurations), tc_boundary_based = self._boundary_based(
                 self.obj_values_all_subQs,
                 self.config_all_subQs,
                 self.indices_all_subQs)
+            self.global_time_cost[self._boundary_based.__name__].append(tc_boundary_based)
         else:
             raise Exception(f"mode {self.algorithm} is not supported in {classmethod}!")
 
-        return query_obj_values, query_configurations
+        return query_obj_values, query_configurations, self.global_time_cost
 
-
+    @timeis
     def _boundary_based(
             self,
             obj_values_all_subQs: np.ndarray,
@@ -134,6 +141,8 @@ class DAGOpt:
             config_all_subQs,
             indices_all_subQs,
         )
+        self.global_time_cost[self.get_solutions_with_sorted_subQ_ids.__name__].append(
+            tc_get_solutions_with_sorted_subQ_ids)
 
         n_subQs = len(sorted_obj_values_with_split_subQs)
         subQs = list(range(n_subQs))
@@ -145,22 +154,26 @@ class DAGOpt:
             sorted_configs_with_split_subQs,
             sorted_subQ_indices,
         )
+        self.global_time_cost[self.get_boundary_all_subQs.__name__].append(tc_compute_boundary_all_subQs)
 
         (boundary_query_objs, boundary_configs_all_subQs_arr), \
-        _ = self.compute_query_solutions(
+        tc_compute_query_solutions = self.compute_query_solutions(
             n_subQs,
             boundary_obj_values_all_subQs,
             boundary_configs_all_subQs,
         )
+        self.global_time_cost[self.compute_query_solutions.__name__].append(tc_compute_query_solutions)
 
         (pareto_query_obj_values, pareto_query_configs), \
-        _ = self.filter_dominated_boundary_based(
+        tc_filter_dominated_boundary_based = self.filter_dominated_boundary_based(
             boundary_query_objs,
             boundary_configs_all_subQs_arr,
         )
+        self.global_time_cost[self.filter_dominated_boundary_based.__name__].append(tc_filter_dominated_boundary_based)
 
         return pareto_query_obj_values, pareto_query_configs
 
+    @timeis
     def _ws_based(
             self,
             obj_values_all_subQs: np.ndarray,
@@ -186,6 +199,7 @@ class DAGOpt:
         # fixme: to double-check
         (sorted_obj_values_all_subQs, sorted_configs_all_subQs, sorted_indices), \
         tc_sort_input = self.process_input(obj_values_all_subQs, configs_all_subQs, indices_all_subQs)
+        self.global_time_cost[self.process_input.__name__].append(tc_sort_input)
 
         n_subQs = len(sorted_obj_values_all_subQs)
         subQs = list(range(n_subQs))
@@ -195,13 +209,17 @@ class DAGOpt:
             sorted_configs_all_subQs,
             ws_pairs,
         )
-        (pareto_query_obj_values, pareto_query_configs), tc_filter_dominated_ws_based = self.filter_dominated_ws_based(
+        self.global_time_cost[self.ws_all_subQs.__name__].append(tc_ws_all_subQs)
+        (pareto_query_obj_values, pareto_query_configs), \
+        tc_filter_dominated_ws_based = self.filter_dominated_ws_based(
             query_obj_values,
             query_configs
         )
+        self.global_time_cost[self.filter_dominated_ws_based.__name__].append(tc_filter_dominated_ws_based)
 
         return pareto_query_obj_values, pareto_query_configs
 
+    @timeis
     def _general_div_and_conq(
             self,
             obj_values_all_subQs: np.ndarray,
@@ -225,9 +243,11 @@ class DAGOpt:
         '''
         # fixme: to double-check
         (sorted_obj_values_all_subQs, sorted_configs_all_subQs, sorted_indices), \
-        _ = self.process_input(obj_values_all_subQs,
-                               configs_all_subQs,
-                               indices_all_subQs)
+        tc_process_input = self.process_input(obj_values_all_subQs,
+                                              configs_all_subQs,
+                                              indices_all_subQs)
+        self.global_time_cost[self.process_input.__name__].append(tc_process_input)
+
         n_subQs = len(sorted_obj_values_all_subQs)
         subQs = list(range(n_subQs))
         (query_obj_values_list, query_configs_list), tc_traverse_all_subQs = self.traverse_all_subQs_non_recur(
@@ -236,11 +256,15 @@ class DAGOpt:
             sorted_configs_all_subQs
 
         )
+        self.global_time_cost[self.traverse_all_subQs_non_recur.__name__].append(tc_traverse_all_subQs)
+
         (pareto_query_obj_values, pareto_query_configs), \
         tc_filter_dominated_general_div_and_conq = self.filter_query_dominated_general_div_and_conq(
             query_obj_values_list,
             query_configs_list,
         )
+        self.global_time_cost[self.filter_query_dominated_general_div_and_conq.__name__].append(
+            tc_filter_dominated_general_div_and_conq)
 
         return pareto_query_obj_values, pareto_query_configs
 
@@ -281,12 +305,15 @@ class DAGOpt:
             configs_all_subQs,
             indices_all_subQs,
         )
+        self.global_time_cost[self.get_solutions_with_sorted_subQ_ids.__name__].append(
+            tc_get_solutions_with_sorted_subQ_ids)
 
         (sorted_obj_values_all_subQs_all_theta_c, sorted_configs_all_subQs_all_theta_c), \
         tc_split_subQs_set_with_theta_c = self.split_subQs_set_with_theta_c(
             sorted_obj_values_with_split_subQs,
             sorted_configs_with_split_subQs,
             sorted_subQs_indices)
+        self.global_time_cost[self.split_subQs_set_with_theta_c.__name__].append(tc_split_subQs_set_with_theta_c)
 
         return sorted_obj_values_all_subQs_all_theta_c, sorted_configs_all_subQs_all_theta_c, sorted_subQs_indices
 
@@ -450,6 +477,7 @@ class DAGOpt:
                     stack_configs,
                     sub_problem_index=0,
                 )
+                self.global_time_cost[self.merge_two_subQs.__name__].append(tc_merged_two_subQs)
 
                 subQs_str.append(f"{subQ1_id}+{subQ2_id}")
                 subQs_str.remove(subQ1_id)
@@ -457,22 +485,28 @@ class DAGOpt:
                 assert len(subQs_str) == 1
 
                 merged_subQs_indices_order, tc_get_merged_subQs_order = self.get_merged_subQs_order(subQ1_id, subQ2_id)
+                self.global_time_cost[self.get_merged_subQs_order.__name__].append(tc_get_merged_subQs_order)
 
-                pareto_query_configs, tc_reorder_query_config = self.reorder_subQs_for_configs(merged_subQs_indices_order,
-                                                                       pareto_merged_configs)
+                pareto_query_configs, tc_reorder_query_config = self.reorder_subQs_for_configs(
+                    merged_subQs_indices_order,
+                    pareto_merged_configs)
+                self.global_time_cost[self.reorder_subQs_for_configs.__name__].append(tc_reorder_query_config)
 
                 assert len(pareto_query_obj_values) == len(pareto_query_configs)
                 assert all([x.shape[0] == y.shape[0] for x, y in zip(pareto_query_obj_values,
                                                                      pareto_query_configs)])
-                assert all([x.shape[1] == len(merged_subQs_indices_order) * self.len_theta for x in pareto_query_configs])
+                assert all(
+                    [x.shape[1] == len(merged_subQs_indices_order) * self.len_theta for x in pareto_query_configs])
                 break
 
             else:
-                (updated_stack_obj_values, updated_stack_configs), tc_merge_more_than_two_subQs = self.solve_more_than_two_subQs(
+                (updated_stack_obj_values,
+                 updated_stack_configs), tc_merge_more_than_two_subQs = self.solve_more_than_two_subQs(
                     subQs_str,
                     stack_obj_values,
                     stack_configs,
                 )
+                self.global_time_cost[self.solve_more_than_two_subQs.__name__].append(tc_merge_more_than_two_subQs)
                 stack_obj_values = updated_stack_obj_values.copy()
                 stack_configs = updated_stack_configs.copy()
                 assert len(stack_obj_values) == len(stack_configs)
@@ -484,7 +518,7 @@ class DAGOpt:
             self,
             subQ1: Tuple[List[np.ndarray], List[np.ndarray]],
             subQ2: Tuple[List[np.ndarray], List[np.ndarray]],
-    ) -> Tuple[List[List[Any]], List[List[Tuple[Any,...]]]]:
+    ) -> Tuple[List[List[Any]], List[List[Tuple[Any, ...]]]]:
         ''' fixme: to double-check
         Merge the two subQs into one, and compute the merged "subQ-level" values.
         e.g. Merged latency/cost of two subQs is the sum of the latency/cost of the two subQs.
@@ -513,9 +547,10 @@ class DAGOpt:
         for i, (subQ1_obj_values_theta_ci, subQ2_obj_values_theta_ci) in enumerate(zip(subQ1[0], subQ2[0])):
             all_indices_choices = list(itertools.product(*[list(range(subQ1_obj_values_theta_ci.shape[0])),
                                                  list(range(subQ2_obj_values_theta_ci.shape[0]))]))
-            obj_values_list, _ = self.enumeration(all_indices_choices,
+            obj_values_list, tc_enumeration = self.enumeration(all_indices_choices,
                                                subQ1_obj_values_theta_ci,
                                                subQ2_obj_values_theta_ci)
+            self.global_time_cost[self.enumeration.__name__].append(tc_enumeration)
             merged_obj_values_all_theta_c.append(obj_values_list)
             merged_configs_all_theta_c.append(all_indices_choices)
         return merged_obj_values_all_theta_c, merged_configs_all_theta_c
@@ -616,18 +651,21 @@ class DAGOpt:
 
         (merged_obj_values_all_theta_c, merged_configs_indices_all_theta_c),\
         tc_compute_merged_values = self.compute_merged_values(subQ1, subQ2)
+        self.global_time_cost[self.compute_merged_values.__name__].append(tc_compute_merged_values)
 
         (pareto_merged_obj_values, pareto_merged_configs_indices), \
         tc_filter_dominated_merged_values = self.filter_dominated_merged_values(
             merged_obj_values_all_theta_c,
             merged_configs_indices_all_theta_c,
         )
+        self.global_time_cost[self.filter_dominated_merged_values.__name__].append(tc_filter_dominated_merged_values)
 
         pareto_merged_configs, tc_update_merged_configs = self.update_merged_configs_with_indices_choices(
             pareto_merged_configs_indices,
             subQ1[1],
             subQ2[1],
         )
+        self.global_time_cost[self.update_merged_configs_with_indices_choices.__name__].append(tc_update_merged_configs)
 
         return pareto_merged_obj_values, pareto_merged_configs
 
@@ -715,6 +753,7 @@ class DAGOpt:
                     stack_configs,
                     sub_problem_index=i,
                 )
+                self.global_time_cost[self.merge_two_subQs.__name__].append(tc_merge_two_subQs)
 
                 new_stack_obj_values.append(pareto_merged_obj_values)
                 new_stack_configs.append(pareto_merged_configs)
@@ -859,6 +898,8 @@ class DAGOpt:
             obj_values_one_subQ,
             configs_one_subQ,
         )
+        self.global_time_cost[self.pad_solutions_one_subQ.__name__].append(tc_pad)
+
         obj_values_one_subQ_pad_arr = np.array(obj_values_one_subQ_pad_list)
         configs_one_subQ_pad_arr = np.array(configs_one_subQ_pad_list)
         # double-check whether the paded objective values and configurations have the same #rows
@@ -978,6 +1019,8 @@ class DAGOpt:
             tc_ws_per_subQ = self.ws_per_subQ(ws_pairs,
                                               obj_values_one_subQ,
                                               configs_one_subQ)
+            self.global_time_cost[self.ws_per_subQ.__name__].append(tc_ws_per_subQ)
+
             select_obj_values_list.append(select_obj_values_one_subQ)
             select_configs_list.append(select_configs_one_subQ)
         # sum all nodes: shape (n_theta_c, n_ws * n_objs),

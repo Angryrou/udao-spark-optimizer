@@ -114,6 +114,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         is_oracle: bool = False,
         save_data_header: str = "./output",
         is_query_control: bool = False,
+        benchmark: str = "tpch",
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         self.current_target_template = template
 
@@ -179,7 +180,8 @@ class HierarchicalOptimizer(BaseOptimizer):
                 param1,
                 param2,
                 is_oracle,
-                save_data_header
+                save_data_header,
+                benchmark=benchmark,
             )
 
         elif algo == "evo":
@@ -274,12 +276,12 @@ class HierarchicalOptimizer(BaseOptimizer):
             # algo = div_and_conq_moo%GD
             dag_opt_algo = algo.split("%")[1]
             data_path = (
-                f"{save_data_header}/query_control_{is_query_control}/latest_model_{self.device.type}/{model_name}/oracle_{is_oracle}/{algo}/{algo_setting}/time_{time_limit}/"
+                f"{save_data_header}/{benchmark}/query_control_{is_query_control}/latest_model_{self.device.type}/{model_name}/oracle_{is_oracle}/{algo}/{algo_setting}/time_{time_limit}/"
                 f"query_{query_id}_n_{n_subQs}/{sample_mode}/{dag_opt_algo}"
             )
         else:
             data_path = (
-                f"{save_data_header}/query_control_{is_query_control}/latest_model_{self.device.type}/{model_name}/oracle_{is_oracle}/{algo}/{algo_setting}/time_{time_limit}/"
+                f"{save_data_header}/{benchmark}/query_control_{is_query_control}/latest_model_{self.device.type}/{model_name}/oracle_{is_oracle}/{algo}/{algo_setting}/time_{time_limit}/"
                 f"query_{query_id}_n_{n_subQs}"
             )
         save_json(data_path, time_cost_dict, mode="end_to_end")
@@ -309,7 +311,8 @@ class HierarchicalOptimizer(BaseOptimizer):
         n_c_samples: int,
         n_p_samples: int,
         is_oracle: bool,
-        save_data_header: str
+        save_data_header: str,
+        benchmark: str,
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         start = time.time()
         theta_c: Union[th.Tensor, np.ndarray]
@@ -367,7 +370,7 @@ class HierarchicalOptimizer(BaseOptimizer):
             dag_opt_algo=dag_opt_algo,
         )
 
-        po_objs, po_conf, model_infer_info = hmooc.solve()
+        po_objs, po_conf, model_infer_info, total_time_profile = hmooc.solve()
         time_cost_moo_algo = time.time() - start
         print(f"query id is {query_id}")
         print(f"FUNCTION: time cost of div_and_conq_moo is: {time_cost_moo_algo}")
@@ -375,6 +378,11 @@ class HierarchicalOptimizer(BaseOptimizer):
             f"The number of Pareto solutions in the DAG opt method"
             f" {dag_opt_algo} is: "
             f"{np.unique(po_objs, axis=0).shape[0]}"
+        )
+        print(
+            f"The Pareto solutions in the DAG opt method"
+            f" {dag_opt_algo} is: "
+            f"{np.unique(po_objs, axis=0)}"
         )
 
         start_rec = time.time()
@@ -389,12 +397,12 @@ class HierarchicalOptimizer(BaseOptimizer):
             )
             if n_c_samples == 1:
                 data_path = (
-                    f"{save_data_header}/query_control_False/latest_model_{self.device.type}/ag/oracle_{is_oracle}/{algo}/{n_c_samples}_{n_p_samples}/time_-1/"
+                    f"{save_data_header}/{benchmark}/query_control_False/latest_model_{self.device.type}/ag/oracle_{is_oracle}/{algo}/{n_c_samples}_{n_p_samples}/time_-1/"
                     f"query_{query_id}_n_{n_subQs}/{sample_mode}/{dag_opt_algo}/c_{conf_raw_all[0, 0]}_{conf_raw_all[0, 1]}_{conf_raw_all[0, 2]}"
                 )
             else:
                 data_path = (
-                    f"{save_data_header}/query_control_False/latest_model_{self.device.type}/ag/oracle_{is_oracle}/{algo}/{n_c_samples}_{n_p_samples}/time_-1/"
+                    f"{save_data_header}/{benchmark}/query_control_False/latest_model_{self.device.type}/ag/oracle_{is_oracle}/{algo}/{n_c_samples}_{n_p_samples}/time_-1/"
                     f"query_{query_id}_n_{n_subQs}/{sample_mode}/{dag_opt_algo}"
                 )
         else:
@@ -406,12 +414,12 @@ class HierarchicalOptimizer(BaseOptimizer):
             )
             if n_c_samples == 1:
                 data_path = (
-                    f"{save_data_header}/query_control_False/latest_model_{self.device.type}/mlp/oracle_{is_oracle}/{algo}/{n_c_samples}_{n_p_samples}/time_-1/"
+                    f"{save_data_header}/{benchmark}/query_control_False/latest_model_{self.device.type}/mlp/oracle_{is_oracle}/{algo}/{n_c_samples}_{n_p_samples}/time_-1/"
                     f"query_{query_id}_n_{n_subQs}/{sample_mode}/{dag_opt_algo}/c_{conf_raw_all[0, 0]}_{conf_raw_all[0, 1]}_{conf_raw_all[0, 2]}"
                 )
             else:
                 data_path = (
-                    f"{save_data_header}/query_control_False/latest_model_{self.device.type}/mlp/oracle_{is_oracle}/{algo}/{n_c_samples}_{n_p_samples}/time_-1/"
+                    f"{save_data_header}/{benchmark}/query_control_False/latest_model_{self.device.type}/mlp/oracle_{is_oracle}/{algo}/{n_c_samples}_{n_p_samples}/time_-1/"
                     f"query_{query_id}_n_{n_subQs}/{sample_mode}/{dag_opt_algo}"
                 )
 
@@ -429,9 +437,10 @@ class HierarchicalOptimizer(BaseOptimizer):
             save_results(data_path, po_objs, mode="F")
             save_results(data_path, conf_raw, mode="Theta")
             save_results(data_path, conf_raw_all, mode="Theta_all")
-            # save_results(data_path, np.array([time_cost]), mode="time")
+
             save_results(data_path, model_infer_info, mode="model_infer_info")
             save_json(data_path, time_cost_dict, mode="time_cost_json")
+            save_json(data_path, total_time_profile, mode="time_profile")
 
         return conf, objs
 
