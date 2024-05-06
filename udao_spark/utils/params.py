@@ -241,7 +241,7 @@ def get_compile_time_optimizer_parameters() -> ArgumentParser:
                         help="the number of random samples of theta_p")
 
     parser.add_argument("--sample_mode", type=str, default="grid-search",
-                        choices=["grid", "grid-search", "random"],
+                        choices=["grid-search", "random"],
                         help="Sample type for HMOOC")
     parser.add_argument("--pop_size", type=int, default=100,
                         help="Population size in EVO")
