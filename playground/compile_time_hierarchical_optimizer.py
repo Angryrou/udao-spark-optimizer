@@ -13,7 +13,6 @@ from udao_trace.workload import Benchmark
 
 logger.setLevel("INFO")
 
-
 if __name__ == "__main__":
     # Initialize InjectionExtractor
     params = get_compile_time_optimizer_parameters().parse_args()
@@ -97,23 +96,39 @@ if __name__ == "__main__":
     # Compile time QS logical plans from CBO estimation (a list of LQP-sub)
     is_oracle = q_type == "qs_lqp_runtime"
     use_ag = not params.use_mlp
+
     for template, trace in zip(benchmark.templates, raw_traces):
         logger.info(f"Processing {trace}")
+
+        query_id = trace.split(f"{bm}100_")[1].split("_")[0]  # e.g. 2-1
+        print(f"query_id is {query_id}")
+
+        # if query_id not in ["2-1"]:
+        #     continue
         non_decision_input = get_non_decision_inputs_for_qs_compile_dict(
             trace, is_oracle=is_oracle
         )
-        query_id = trace.split(f"{bm}100_")[1].split("_")[0]  # e.g. 2-1
-        print(f"query_id is {query_id}")
 
         if params.moo_algo == "evo":
             param1 = params.pop_size
             param2 = params.nfe
+            param3 = -1
         elif params.moo_algo == "ws":
             param1 = params.n_samples
             param2 = params.n_ws
-        elif "div_and_conq_moo" in params.moo_algo:
+            param3 = -1
+        elif "hmooc" or "div_and_conq_moo" in params.moo_algo:
             param1 = params.n_c_samples
             param2 = params.n_p_samples
+            param3 = -1
+        elif params.moo_algo == "ppf":
+            param1 = params.n_process
+            param2 = params.n_grids
+            param3 = params.n_max_iters
+        elif params.moo_algo == "analyze_model_accuracy" or params.moo_algo == "test":
+            param1 = -1
+            param2 = -1
+            param3 = -1
         else:
             raise Exception(f"algo {params.moo_algo} is not supported!")
 
@@ -135,7 +150,10 @@ if __name__ == "__main__":
             sample_mode=params.sample_mode,
             param1=param1,
             param2=param2,
+            param3=param3,
             time_limit=params.time_limit,
             is_oracle=is_oracle,
             save_data_header=params.save_data_header,
+            is_query_control=params.set_query_control,
+            benchmark=bm,
         )
