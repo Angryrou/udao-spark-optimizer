@@ -55,6 +55,7 @@ global_var_range: np.ndarray
 enum_inds: List[Any]
 model_infer_info: List[Any]
 
+
 class EvoOptimizer:
     @dataclass
     class Params:
@@ -134,6 +135,7 @@ class EvoOptimizer:
 
             except Exception:
                 F, Theta = np.array([-1]), np.array([-1])
+                model_infer_info = [-1]
                 print(f"Timed out for query {self.query_id}")
         else:
             F, Theta, model_infer_info = self.evo_solve()
@@ -181,7 +183,9 @@ class EvoOptimizer:
                 + (vars_range["p"].tolist() + vars_range["s"].tolist()) * self.n_stages
             )
             # here theta_s is constant
-            vars_types = theta_c_ktypes + self.n_stages * (theta_p_ktypes + theta_s_ktypes)
+            vars_types = theta_c_ktypes + self.n_stages * (
+                theta_p_ktypes + theta_s_ktypes
+            )
             n_vars = len(vars_types)
 
         # class to add all solutions during evolutionary iterations
@@ -250,7 +254,8 @@ class EvoOptimizer:
         if feasible_solutions == []:
             print(f"Evo({self.inner_algo}) cannot find feasible solutions!")
             po_objs_arr, po_confs_arr = np.array([-1]), np.array([-1])
-            return po_objs_arr, po_confs_arr
+            model_infer_info = [-1]
+            return po_objs_arr, po_confs_arr, model_infer_info
         else:
             # find non-dominated solutions
             non_dominated = nondominated(feasible_solutions)
@@ -390,12 +395,17 @@ class EvoOptimizer:
             len_theta_p_s = self.len_theta_p + self.len_theta_s
 
             if self.is_query_control:
-                assert vars_decoded.shape[1] == (self.len_theta_c + self.len_theta_p + self.len_theta_s)
-                theta_p_s = np.tile(vars_decoded[:, self.len_theta_c: ],
-                                    (self.n_stages, 1)
-            )
+                assert vars_decoded.shape[1] == (
+                    self.len_theta_c + self.len_theta_p + self.len_theta_s
+                )
+                theta_p_s = np.tile(
+                    vars_decoded[:, self.len_theta_c :], (self.n_stages, 1)
+                )
             else:
-                assert vars_decoded.shape[1] == (self.len_theta_c + (self.len_theta_p + self.len_theta_s) * self.n_stages)
+                assert vars_decoded.shape[1] == (
+                    self.len_theta_c
+                    + (self.len_theta_p + self.len_theta_s) * self.n_stages
+                )
                 theta_p_s = vars_decoded[:, self.len_theta_c :].reshape(
                     self.n_stages, len_theta_p_s
                 )
@@ -419,11 +429,13 @@ class EvoOptimizer:
             )
             len_theta_p_s = self.len_theta_p + self.len_theta_s
             if self.is_query_control:
-                theta_p_s = th.tensor(vars_decoded[:, self.len_theta_c:]).repeat(self.n_stages, 1)
+                theta_p_s = th.tensor(vars_decoded[:, self.len_theta_c :]).repeat(
+                    self.n_stages, 1
+                )
             else:
                 theta_p_s = th.tensor(vars_decoded[:, self.len_theta_c :]).reshape(
-                self.n_stages, len_theta_p_s
-            )
+                    self.n_stages, len_theta_p_s
+                )
             theta = th.cat([mesh_theta_c, theta_p_s], dim=1)
             objs = self.obj_model(
                 self.graph_embeddings,

@@ -56,7 +56,6 @@ class WSOptimizer:
         self.graph_embeddings = graph_embeddings
         self.non_decision_tabular_features = non_decision_tabular_features
         self.obj_model = obj_model
-        self.vars = vars
 
         self.n_samples = params.n_samples_per_param
         self.ws_pairs = params.ws_pairs
@@ -115,12 +114,19 @@ class WSOptimizer:
             assert isinstance(theta, np.ndarray)
 
             if self.is_query_control:
-                assert theta.shape[1] == (self.len_theta_c + self.len_theta_p + self.len_theta_s)
+                assert theta.shape[1] == (
+                    self.len_theta_c + self.len_theta_p + self.len_theta_s
+                )
                 mesh_theta_c = np.tile(theta[:, : self.len_theta_c], (self.n_stages, 1))
-                mesh_theta_p_s = np.tile(theta[:, self.len_theta_c: ], (self.n_stages, 1))
+                mesh_theta_p_s = np.tile(
+                    theta[:, self.len_theta_c :], (self.n_stages, 1)
+                )
                 theta_all = np.concatenate([mesh_theta_c, mesh_theta_p_s], axis=1)
             else:
-                assert theta.shape[1] == (self.len_theta_c + self.n_stages * (self.len_theta_p + self.len_theta_s))
+                assert theta.shape[1] == (
+                    self.len_theta_c
+                    + self.n_stages * (self.len_theta_p + self.len_theta_s)
+                )
                 mesh_theta_c = np.tile(theta[:, : self.len_theta_c], (self.n_stages, 1))
                 len_theta_p_s = self.len_theta_p + self.len_theta_s
                 theta_p_s = theta[:, self.len_theta_c :].reshape(
@@ -155,7 +161,7 @@ class WSOptimizer:
             )
             len_theta_p_s = self.len_theta_p + self.len_theta_s
             if self.is_query_control:
-                theta_p_s = th.tensor(theta[:, self.len_theta_c:]).repeat(
+                theta_p_s = th.tensor(theta[:, self.len_theta_c :]).repeat(
                     self.n_stages, 1
                 )
             else:

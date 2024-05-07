@@ -1,28 +1,40 @@
 import copy
 import itertools
+import signal
 import time
-from typing import Any, Callable, Dict, Optional, Tuple, Union
 from types import FrameType
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
-import signal
 import torch as th
-
-from udao_trace.utils.interface import VarTypes
-
-from udao_spark.utils.logging import logger
-from udao_spark.utils.monitor import DivAndConqMonitor, UdaoMonitor
-from udao_spark.optimizer.base_optimizer import BaseOptimizer
-from udao_spark.optimizer.moo_algos.hierarchical_moo_with_constraints import Hierarchical_MOO_with_Constraints
-from udao_spark.optimizer.moo_algos.evo_optimizer import EvoOptimizer
-from udao_spark.optimizer.moo_algos.ws_optimizer import WSOptimizer
-from udao_spark.optimizer.utils import even_weights, save_json, save_results, weighted_utopia_nearest_impl, Model
-
-from udao.optimization.concepts import BoolVariable, FloatVariable, IntegerVariable, Objective, Variable
+from udao.optimization.concepts import (
+    BoolVariable,
+    FloatVariable,
+    IntegerVariable,
+    Objective,
+    Variable,
+)
 from udao.optimization.concepts.problem import MOProblem
 from udao.optimization.moo.progressive_frontier import ParallelProgressiveFrontier
 from udao.optimization.soo.random_sampler_solver import RandomSamplerSolver
+
+from udao_spark.optimizer.base_optimizer import BaseOptimizer
+from udao_spark.optimizer.moo_algos.evo_optimizer import EvoOptimizer
+from udao_spark.optimizer.moo_algos.hierarchical_moo_with_constraints import (
+    Hierarchical_MOO_with_Constraints,
+)
+from udao_spark.optimizer.moo_algos.ws_optimizer import WSOptimizer
+from udao_spark.optimizer.utils import (
+    Model,
+    even_weights,
+    save_json,
+    save_results,
+    weighted_utopia_nearest_impl,
+)
+from udao_spark.utils.logging import logger
+from udao_spark.utils.monitor import DivAndConqMonitor, UdaoMonitor
+from udao_trace.utils.interface import VarTypes
 
 
 class HierarchicalOptimizer(BaseOptimizer):
@@ -106,7 +118,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         algo: str = "ws",
         save_data: bool = False,
         query_id: Optional[str] = None,
-        sample_mode: Optional[str] = None,
+        sample_mode: str = "",
         param1: int = -1,
         param2: int = -1,
         param3: int = -1,
@@ -131,8 +143,8 @@ class HierarchicalOptimizer(BaseOptimizer):
         ]
         # checking the monitor is working:
         if (
-                monitor.input_extraction_ms <= 0
-                or monitor.graph_embedding_computation_ms <= 0
+            monitor.input_extraction_ms <= 0
+            or monitor.graph_embedding_computation_ms <= 0
         ):
             raise Exception("Monitor is not working properly!")
         logger.info(
@@ -140,7 +152,6 @@ class HierarchicalOptimizer(BaseOptimizer):
                 monitor.input_extraction_ms, monitor.graph_embedding_computation_ms
             )
         )
-
 
         # non_decision_df = self.extract_non_decision_df(non_decision_input)
         # (
@@ -259,9 +270,11 @@ class HierarchicalOptimizer(BaseOptimizer):
 
         tc_moo_compile_time_opt = time.time() - start_moo_compile_time_opt
         tc_end_to_end = time.time() - start_compute_non_decision
-        time_cost_dict = {"compute_non_decision": tc_compute_non_decision,
-                          f"{algo}_compile_time_opt": tc_moo_compile_time_opt,
-                          "end_to_end": tc_end_to_end}
+        time_cost_dict = {
+            "compute_non_decision": tc_compute_non_decision,
+            f"{algo}_compile_time_opt": tc_moo_compile_time_opt,
+            "end_to_end": tc_end_to_end,
+        }
 
         if algo == "ppf":
             algo_setting = f"{param1}_{param2}_{param3}"
@@ -307,7 +320,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         algo: str,
         query_id: Optional[str],
         save_data: bool,
-        sample_mode: Optional[str],
+        sample_mode: str,
         n_c_samples: int,
         n_p_samples: int,
         is_oracle: bool,
@@ -329,7 +342,6 @@ class HierarchicalOptimizer(BaseOptimizer):
             save_data_header=save_data_header,
             seed=seed,
         )
-
 
         # len_theta_per_qs = theta_c.shape[1] + theta_p.shape[1] + theta_s.shape[1]
         n_clusters = 10 if theta_c.shape[0] > 10 else theta_c.shape[0]
@@ -397,8 +409,10 @@ class HierarchicalOptimizer(BaseOptimizer):
             )
             if n_c_samples == 1:
                 data_path = (
-                    f"{save_data_header}/{benchmark}/query_control_False/latest_model_{self.device.type}/ag/oracle_{is_oracle}/{algo}/{n_c_samples}_{n_p_samples}/time_-1/"
-                    f"query_{query_id}_n_{n_subQs}/{sample_mode}/{dag_opt_algo}/c_{conf_raw_all[0, 0]}_{conf_raw_all[0, 1]}_{conf_raw_all[0, 2]}"
+                    f"{save_data_header}/{benchmark}/query_control_False/latest_model_{self.device.type}/"
+                    f"ag/oracle_{is_oracle}/{algo}/{n_c_samples}_{n_p_samples}/time_-1/"
+                    f"query_{query_id}_n_{n_subQs}/{sample_mode}/{dag_opt_algo}/"
+                    f"c_{conf_raw_all[0, 0]}_{conf_raw_all[0, 1]}_{conf_raw_all[0, 2]}"
                 )
             else:
                 data_path = (
@@ -409,13 +423,15 @@ class HierarchicalOptimizer(BaseOptimizer):
             conf_raw = self.sc.construct_configuration_from_norm(conf_qs0).reshape(
                 -1, len_theta_per_subQ
             )
-            conf_raw_all = self.sc.construct_configuration_from_norm(conf_all_qs).reshape(
-                -1, len_theta_per_subQ
-            )
+            conf_raw_all = self.sc.construct_configuration_from_norm(
+                conf_all_qs
+            ).reshape(-1, len_theta_per_subQ)
             if n_c_samples == 1:
                 data_path = (
-                    f"{save_data_header}/{benchmark}/query_control_False/latest_model_{self.device.type}/mlp/oracle_{is_oracle}/{algo}/{n_c_samples}_{n_p_samples}/time_-1/"
-                    f"query_{query_id}_n_{n_subQs}/{sample_mode}/{dag_opt_algo}/c_{conf_raw_all[0, 0]}_{conf_raw_all[0, 1]}_{conf_raw_all[0, 2]}"
+                    f"{save_data_header}/{benchmark}/query_control_False/latest_model_{self.device.type}/"
+                    f"mlp/oracle_{is_oracle}/{algo}/{n_c_samples}_{n_p_samples}/time_-1/"
+                    f"query_{query_id}_n_{n_subQs}/{sample_mode}/{dag_opt_algo}/"
+                    f"c_{conf_raw_all[0, 0]}_{conf_raw_all[0, 1]}_{conf_raw_all[0, 2]}"
                 )
             else:
                 data_path = (
@@ -428,11 +444,12 @@ class HierarchicalOptimizer(BaseOptimizer):
         tc_po_rec = time.time() - start_rec
         print(f"FUNCTION: time cost of {algo} with WUN " f"is: {tc_po_rec}")
 
-
         time_cost_moo_total = time.time() - start
-        time_cost_dict = {f"{algo}": time_cost_moo_algo,
-                          "wun": tc_po_rec,
-                          "moo_with_rec": time_cost_moo_total}
+        time_cost_dict = {
+            f"{algo}": time_cost_moo_algo,
+            "wun": tc_po_rec,
+            "moo_with_rec": time_cost_moo_total,
+        }
         if save_data:
             save_results(data_path, po_objs, mode="F")
             save_results(data_path, conf_raw, mode="Theta")
@@ -553,17 +570,17 @@ class HierarchicalOptimizer(BaseOptimizer):
                 conf2 = self.sc.construct_configuration(conf_qs0.astype(float)).reshape(
                     -1, len_theta_per_qs
                 )
-                conf_raw_all = self.sc.construct_configuration(conf_all_qs.astype(float)).reshape(
-                    -1, len_theta_per_qs
-                )
+                conf_raw_all = self.sc.construct_configuration(
+                    conf_all_qs.astype(float)
+                ).reshape(-1, len_theta_per_qs)
 
             else:
                 conf2 = self.sc.construct_configuration_from_norm(conf_qs0).reshape(
                     -1, len_theta_per_qs
                 )
-                conf_raw_all = self.sc.construct_configuration_from_norm(conf_all_qs).reshape(
-                    -1, len_theta_per_qs
-                )
+                conf_raw_all = self.sc.construct_configuration_from_norm(
+                    conf_all_qs
+                ).reshape(-1, len_theta_per_qs)
 
         if use_ag:
             data_path = (
@@ -582,9 +599,11 @@ class HierarchicalOptimizer(BaseOptimizer):
         print(f"FUNCTION: time cost of {algo} with WUN " f"is: {tc_po_rec}")
 
         time_cost_moo_total = time.time() - start
-        time_cost_dict = {f"{algo}": time_cost_moo_algo,
-                          "wun": tc_po_rec,
-                          "moo_with_rec": time_cost_moo_total}
+        time_cost_dict = {
+            f"{algo}": time_cost_moo_algo,
+            "wun": tc_po_rec,
+            "moo_with_rec": time_cost_moo_total,
+        }
 
         if save_data:
             save_results(data_path, po_objs, mode="F")
@@ -718,17 +737,17 @@ class HierarchicalOptimizer(BaseOptimizer):
                 conf2 = self.sc.construct_configuration(conf_qs0.astype(float)).reshape(
                     -1, len_theta_per_qs
                 )
-                conf_raw_all = self.sc.construct_configuration(conf_all_qs.astype(float)).reshape(
-                    -1, len_theta_per_qs
-                )
+                conf_raw_all = self.sc.construct_configuration(
+                    conf_all_qs.astype(float)
+                ).reshape(-1, len_theta_per_qs)
 
             else:
                 conf2 = self.sc.construct_configuration_from_norm(conf_qs0).reshape(
                     -1, len_theta_per_qs
                 )
-                conf_raw_all = self.sc.construct_configuration_from_norm(conf_all_qs).reshape(
-                    -1, len_theta_per_qs
-                )
+                conf_raw_all = self.sc.construct_configuration_from_norm(
+                    conf_all_qs
+                ).reshape(-1, len_theta_per_qs)
 
         if use_ag:
             data_path = (
@@ -747,39 +766,41 @@ class HierarchicalOptimizer(BaseOptimizer):
         print(f"FUNCTION: time cost of {algo} with WUN " f"is: {tc_po_rec}")
 
         time_cost_moo_total = time.time() - start
-        time_cost_dict = {f"{algo}": time_cost_moo_algo,
-                          "wun": tc_po_rec,
-                          "moo_with_rec": time_cost_moo_total}
+        time_cost_dict = {
+            f"{algo}": time_cost_moo_algo,
+            "wun": tc_po_rec,
+            "moo_with_rec": time_cost_moo_total,
+        }
 
         if save_data:
             save_results(data_path, po_objs, mode="F")
             save_results(data_path, conf2, mode="Theta")
             save_results(data_path, conf_raw_all, mode="Theta_all")
-            # save_results(data_path, np.array([time_cost]), mode="time")
-            save_results(data_path, model_infer_info, mode="model_infer_info")
+            save_results(data_path, np.array(model_infer_info), mode="model_infer_info")
             save_json(data_path, time_cost_dict, mode="time_cost_json")
 
         return objs, conf
 
-    def _ppf(self,
-             len_theta_per_qs: int,
-             graph_embeddings: th.Tensor,
-             non_decision_df: pd.DataFrame,
-             non_decision_tabular_features: th.Tensor,
-             n_stages: int,
-             seed: Optional[int],
-             use_ag: bool,
-             ag_model: Dict[str, str],
-             algo: str,
-             query_id: Optional[str],
-             save_data: bool,
-             n_process: int,
-             n_grids: int,
-             n_max_iters: int,
-             time_limit: int,
-             is_query_control: bool,
-             save_data_header: str,
-             is_oracle: bool,
+    def _ppf(
+        self,
+        len_theta_per_qs: int,
+        graph_embeddings: th.Tensor,
+        non_decision_df: pd.DataFrame,
+        non_decision_tabular_features: th.Tensor,
+        n_stages: int,
+        seed: Optional[int],
+        use_ag: bool,
+        ag_model: Dict[str, str],
+        algo: str,
+        query_id: Optional[str],
+        save_data: bool,
+        n_process: int,
+        n_grids: int,
+        n_max_iters: int,
+        time_limit: int,
+        is_query_control: bool,
+        save_data_header: str,
+        is_oracle: bool,
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         start = time.time()
         if use_ag:
@@ -820,24 +841,25 @@ class HierarchicalOptimizer(BaseOptimizer):
             p_vars = [FloatVariable(0, 1)] * len(self.theta_ktype["p"])
             s_vars = [FloatVariable(x, x) for x in theta_s[0].numpy().tolist()]
 
-
         p_s_vars = p_vars + s_vars
-        c_vars_dict: Dict[str, Variable] = {f"k{i + 1}": var for i, var in enumerate(c_vars)}
-
+        c_vars_dict: Dict[str, Variable] = {
+            f"k{i + 1}": var for i, var in enumerate(c_vars)
+        }
+        p_s_vars_dict: Dict[str, Variable]
         if is_query_control:
-            p_s_vars_dict: Dict[str, Variable] = {f"s{i + 1}": var
-                                                  for i, var in enumerate(p_s_vars)}
-            variables: Dict[str, Variable] = {**c_vars_dict, **p_s_vars_dict}
+            p_s_vars_dict = {f"s{i + 1}": var for i, var in enumerate(p_s_vars)}
+            variables = {**c_vars_dict, **p_s_vars_dict}
             assert len(variables) == (len(c_vars) + len(p_s_vars))
         else:
-            p_s_vars_dict: Dict[str, Variable] = {f"qs{qs_id}_s{i + 1}": var for qs_id in range(n_stages)
-                                                  for i, var in enumerate(p_s_vars)}
-            variables: Dict[str, Variable] = {**c_vars_dict, **p_s_vars_dict}
+            p_s_vars_dict = {
+                f"qs{qs_id}_s{i + 1}": var
+                for qs_id in range(n_stages)
+                for i, var in enumerate(p_s_vars)
+            }
+            variables = {**c_vars_dict, **p_s_vars_dict}
             assert len(variables) == (len(c_vars) + n_stages * len(p_s_vars))
 
-
         so = RandomSamplerSolver(RandomSamplerSolver.Params(n_samples_per_param=10000))
-        # so = GridSearchSolver(GridSearchSolver.Params(n_grids_per_var=[3] * len(variables)))
 
         non_decision_features: Union[th.Tensor, pd.DataFrame]
         obj_model: Union[
@@ -853,21 +875,23 @@ class HierarchicalOptimizer(BaseOptimizer):
             obj_model = self.get_objective_values_mlp_arr
             non_decision_features = non_decision_tabular_features
 
-        model = Model(n_stages=n_stages,
-                      len_theta_c=len(c_vars),
-                      len_theta_p=len(p_vars),
-                      len_theta_s=len(s_vars),
-                      graph_embeddings=graph_embeddings,
-                      non_decision_tabular_features=non_decision_features,
-                      obj_model=obj_model,
-                      use_ag=use_ag,
-                      ag_model=ag_model,
-                      is_query_control=is_query_control)
+        model = Model(
+            n_stages=n_stages,
+            len_theta_c=len(c_vars),
+            len_theta_p=len(p_vars),
+            len_theta_s=len(s_vars),
+            graph_embeddings=graph_embeddings,
+            non_decision_tabular_features=non_decision_features,
+            obj_model=obj_model,
+            use_ag=use_ag,
+            ag_model=ag_model,
+            is_query_control=is_query_control,
+        )
         objectives = [
             Objective("latency", minimize=True, function=model.Obj1),
             Objective("cost", minimize=True, function=model.Obj2),
         ]
-        constraints = []
+        constraints: List[Any] = []
         problem = MOProblem(
             objectives=objectives,
             variables=variables,
@@ -885,6 +909,7 @@ class HierarchicalOptimizer(BaseOptimizer):
             solver=so,
         )
         if time_limit > 0:
+
             def signal_handler(signum: int, frame: Optional[FrameType]) -> None:
                 raise Exception("Timed out!")
 
@@ -892,16 +917,22 @@ class HierarchicalOptimizer(BaseOptimizer):
             signal.alarm(time_limit)
 
             try:
-                po_objs, po_vars = ppf.solve(problem=problem,
-                                                         seed=0, )
-                signal.alarm(0)  ##cancel the timer if the function returned before timeout
+                po_objs, po_vars = ppf.solve(
+                    problem=problem,
+                    seed=0,
+                )
+                signal.alarm(
+                    0
+                )  ##cancel the timer if the function returned before timeout
 
             except Exception:
                 po_objs, po_vars = np.array([-1]), np.array([-1])
                 print(f"Timed out for query {query_id}")
         else:
-            po_objs, po_vars = ppf.solve(problem=problem,
-                                                     seed=0, )
+            po_objs, po_vars = ppf.solve(
+                problem=problem,
+                seed=0,
+            )
 
         po_conf = np.array([list(x.values()) for x in po_vars])
         time_cost_moo_algo = time.time() - start
@@ -929,17 +960,17 @@ class HierarchicalOptimizer(BaseOptimizer):
                 conf2 = self.sc.construct_configuration(conf_qs0.astype(float)).reshape(
                     -1, len_theta_per_qs
                 )
-                conf_raw_all = self.sc.construct_configuration(conf_all_qs.astype(float)).reshape(
-                    -1, len_theta_per_qs
-                )
+                conf_raw_all = self.sc.construct_configuration(
+                    conf_all_qs.astype(float)
+                ).reshape(-1, len_theta_per_qs)
 
             else:
                 conf2 = self.sc.construct_configuration_from_norm(conf_qs0).reshape(
                     -1, len_theta_per_qs
                 )
-                conf_raw_all = self.sc.construct_configuration_from_norm(conf_all_qs).reshape(
-                    -1, len_theta_per_qs
-                )
+                conf_raw_all = self.sc.construct_configuration_from_norm(
+                    conf_all_qs
+                ).reshape(-1, len_theta_per_qs)
 
         if use_ag:
             data_path = (
@@ -958,9 +989,11 @@ class HierarchicalOptimizer(BaseOptimizer):
         print(f"FUNCTION: time cost of {algo} with WUN " f"is: {tc_po_rec}")
 
         time_cost_moo_total = time.time() - start
-        time_cost_dict = {f"{algo}": time_cost_moo_algo,
-                          "wun": tc_po_rec,
-                          "moo_with_rec": time_cost_moo_total}
+        time_cost_dict = {
+            f"{algo}": time_cost_moo_algo,
+            "wun": tc_po_rec,
+            "moo_with_rec": time_cost_moo_total,
+        }
 
         if save_data:
             save_results(data_path, po_objs, mode="F")
@@ -972,21 +1005,26 @@ class HierarchicalOptimizer(BaseOptimizer):
         return objs, conf
 
     def get_initial_theta_c_p_s_samples(
-            self,
-            use_ag: bool,
-            n_c_samples: int,
-            n_p_samples: int,
-            sample_mode: str,
-            save_data_header: str,
-            seed: int,
-    ):
+        self,
+        use_ag: bool,
+        n_c_samples: int,
+        n_p_samples: int,
+        sample_mode: str,
+        save_data_header: str,
+        seed: Optional[int],
+    ) -> Tuple[
+        Union[np.ndarray, th.Tensor],
+        Union[np.ndarray, th.Tensor],
+        Union[np.ndarray, th.Tensor],
+    ]:
         if use_ag:
             normalize = False
         else:
             normalize = True
-        # theta_s_samples = self.sample_theta_x(
-        #     1, "s", seed + 2 if seed is not None else None, normalize=normalize
-        # )
+
+        theta_c: Union[np.ndarray, th.Tensor]
+        theta_p: Union[np.ndarray, th.Tensor]
+        theta_s: Union[np.ndarray, th.Tensor]
         theta_s_samples = np.array([[20, 2]])
         if use_ag:
             theta_s = theta_s_samples
@@ -1121,14 +1159,14 @@ class HierarchicalOptimizer(BaseOptimizer):
                 ]
             elif n_c_samples == 1:
                 c_grids = [
-                    [1], #r1: 1, r2: 3, r3: 5, r4: 1
-                    [1], #r1: 1, r2: 1, r3: 4, r4: 4
-                    [16],#r1: 4, r2: 16, r3: 16, r4: 4
+                    [1],  # r1: 1, r2: 3, r3: 5, r4: 1
+                    [1],  # r1: 1, r2: 1, r3: 4, r4: 4
+                    [16],  # r1: 4, r2: 16, r3: 16, r4: 4
                     [1],
                     [5],
                     [0],
                     [1],
-                    [75], ##1,1,16
+                    [75],  ##1,1,16
                 ]
             else:
                 raise Exception(f"n_c_samples {n_c_samples} is not supported!")
@@ -1180,7 +1218,7 @@ class HierarchicalOptimizer(BaseOptimizer):
                     [2],
                     [50],  # default
                     [1, 2, 3],
-                    [1, 2]  # default
+                    [1, 2],  # default
                 ]
             elif n_p_samples == 128:
                 p_grids = [
@@ -1241,7 +1279,7 @@ class HierarchicalOptimizer(BaseOptimizer):
                     [2],
                     [50],  # default
                     [1, 2, 3],
-                    [2]  # default
+                    [2],  # default
                 ]
             elif n_p_samples == 16:
                 p_grids = [
@@ -1276,9 +1314,6 @@ class HierarchicalOptimizer(BaseOptimizer):
                     self.theta_minmax["p"][1] - self.theta_minmax["p"][0]
                 )
                 theta_p = th.tensor(p_samples_norm, dtype=th.float32)
-
-            n_c_samples = theta_c.shape[0]
-            n_p_samples = theta_p.shape[0]
 
         else:
             raise Exception(
