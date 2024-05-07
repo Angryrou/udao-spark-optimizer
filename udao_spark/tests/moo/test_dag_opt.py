@@ -470,25 +470,21 @@ class TestDAGOpt:
         ]
         expect_merged_configs_indices_all_theta_c = [[(0, 0), (1, 0)], [(0, 0)]]
 
-        assert all(
+        assert np.all(
             [
-                np.all(
-                    np.array(result) == np.array(expect)
-                    for result, expect in zip(
-                        merged_obj_values_all_theta_c,
-                        expect_merged_obj_values_all_theta_c,
-                    )
+                np.all(np.array(result) == np.array(expect))
+                for result, expect in zip(
+                    merged_obj_values_all_theta_c,
+                    expect_merged_obj_values_all_theta_c,
                 )
             ]
         )
-        assert all(
+        assert np.all(
             [
-                np.all(
-                    np.array(result) == np.array(expect)
-                    for result, expect in zip(
-                        merged_configs_indices_all_theta_c,
-                        expect_merged_configs_indices_all_theta_c,
-                    )
+                np.all(np.array(result) == np.array(expect))
+                for result, expect in zip(
+                    merged_configs_indices_all_theta_c,
+                    expect_merged_configs_indices_all_theta_c,
                 )
             ]
         )

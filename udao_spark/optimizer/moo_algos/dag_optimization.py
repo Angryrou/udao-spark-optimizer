@@ -12,28 +12,12 @@
 
 import itertools
 import sys
-import time
-from functools import wraps
 from typing import Any, List, Tuple, Union
 
 import numpy as np
 import torch as th
 
-from udao_spark.optimizer.utils import is_pareto_efficient
-
-
-def timeis(f):
-    @wraps(f)
-    def wrap(*args, **kw):
-        ts = time.time()
-        result = f(*args, **kw)
-        te = time.time()
-        time_cost = te - ts
-        # print('func:%r took: %.5f sec' % \
-        #   (f.__name__, time_cost))
-        return result, time_cost
-
-    return wrap
+from udao_spark.optimizer.utils import is_pareto_efficient, timeis
 
 
 class DAGOpt:

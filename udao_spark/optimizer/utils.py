@@ -1,5 +1,7 @@
 import json
 import os
+import time
+from functools import wraps
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -423,3 +425,15 @@ class Model:
         query_objs = np.vstack((query_latency, query_cost)).T
         y = query_objs[:, 1]
         return th.reshape(th.tensor(y, dtype=th.float32), (-1, 1))
+
+
+def timeis(f: Callable[..., Any]) -> Callable[..., Tuple[Any, float]]:
+    @wraps(f)
+    def wrap(*args: Any, **kw: Any) -> Tuple[Any, float]:
+        ts = time.time()
+        result = f(*args, **kw)
+        te = time.time()
+        time_cost = te - ts
+        return result, time_cost
+
+    return wrap

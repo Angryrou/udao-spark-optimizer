@@ -12,8 +12,6 @@
 
 import random
 import signal
-import time
-from functools import wraps
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
@@ -22,21 +20,7 @@ import torch as th
 from sklearn.cluster import KMeans
 
 from udao_spark.optimizer.moo_algos.dag_optimization import DAGOpt
-from udao_spark.optimizer.utils import is_pareto_efficient
-
-
-def timeis(f):
-    @wraps(f)
-    def wrap(*args, **kw):
-        ts = time.time()
-        result = f(*args, **kw)
-        te = time.time()
-        time_cost = te - ts
-        # print('func:%r took: %.5f sec' % \
-        #   (f.__name__, time_cost))
-        return result, time_cost
-
-    return wrap
+from udao_spark.optimizer.utils import is_pareto_efficient, timeis
 
 
 class Hierarchical_MOO_with_Constraints:
@@ -1660,7 +1644,7 @@ class Hierarchical_MOO_with_Constraints:
         obj_values_all_subQs_init_theta_c: np.ndarray,
         obj_values_all_subQs_new_theta_c: np.ndarray,
         config_all_subQs_init_theta_c: Union[th.Tensor, np.ndarray],
-        config_all_subQs_new_theta_c: np.ndarray,
+        config_all_subQs_new_theta_c: Union[th.Tensor, np.ndarray],
         indices_all_subQs_init_theta_c: np.ndarray,
         indices_all_subQs_new_theta_c: np.ndarray,
         model_inference_info_optimize_theta_p: np.ndarray,
@@ -1709,15 +1693,21 @@ class Hierarchical_MOO_with_Constraints:
                         n_evaluations = 100
         """
         config_all_subQs: Union[th.Tensor, np.ndarray]
-        if isinstance(config_all_subQs_init_theta_c, np.ndarray):
+        if isinstance(config_all_subQs_init_theta_c, np.ndarray) and isinstance(
+            config_all_subQs_new_theta_c, np.ndarray
+        ):
             config_all_subQs = np.concatenate(
                 [config_all_subQs_init_theta_c, config_all_subQs_new_theta_c]
             )
-        else:
-            assert isinstance(config_all_subQs_init_theta_c, th.Tensor)
+        elif isinstance(config_all_subQs_init_theta_c, th.Tensor) and isinstance(
+            config_all_subQs_new_theta_c, th.Tensor
+        ):
             config_all_subQs = th.concatenate(
                 [config_all_subQs_init_theta_c, config_all_subQs_new_theta_c]
             )
+        else:
+            raise TypeError(config_all_subQs_init_theta_c, config_all_subQs_new_theta_c)
+
         obj_values_all_subQs = np.concatenate(
             [obj_values_all_subQs_init_theta_c, obj_values_all_subQs_new_theta_c]
         )
