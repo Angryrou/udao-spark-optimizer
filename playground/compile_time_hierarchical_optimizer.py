@@ -155,4 +155,5 @@ if __name__ == "__main__":
             is_oracle=is_oracle,
             save_data_header=params.save_data_header,
             is_query_control=params.set_query_control,
+            benchmark=bm,
         )
