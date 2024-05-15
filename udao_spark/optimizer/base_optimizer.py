@@ -555,20 +555,32 @@ class BaseOptimizer(ABC):
             return samples
 
     def foo_samples(
-        self, n_stages: int, seed: Optional[int], normalize: bool
+        self, n_stages: int, seed: Optional[int], normalize: bool, mode: str = "random"
     ) -> np.ndarray:
         # a naive way to sample
         theta_c = np.tile(
             self.sample_theta_x(
-                1, "c", seed if seed is not None else None, normalize=normalize
+                1,
+                "c",
+                seed if seed is not None else None,
+                normalize=normalize,
+                mode=mode,
             ),
             (n_stages, 1),
         )
         theta_p = self.sample_theta_x(
-            n_stages, "p", seed + 1 if seed is not None else None, normalize=normalize
+            n_stages,
+            "p",
+            seed + 1 if seed is not None else None,
+            normalize=normalize,
+            mode=mode,
         )
         theta_s = self.sample_theta_x(
-            n_stages, "s", seed + 2 if seed is not None else None, normalize=normalize
+            n_stages,
+            "s",
+            seed + 2 if seed is not None else None,
+            normalize=normalize,
+            mode=mode,
         )
         theta = np.concatenate([theta_c, theta_p, theta_s], axis=1)
         return theta
