@@ -1471,7 +1471,7 @@ class Hierarchical_MOO_with_Constraints:
                 new_theta_c_list,
                 tc_random_sample_new_theta_c,
             ) = self.random_samples_new_theta_c(union_opt_theta_c_list, use_ag)
-        elif theta_sample_mode == "random":
+        elif theta_sample_mode in ["random", "lhs"]:
             new_theta_c_list, tc_crossover = self.crossover(
                 cross_location,
                 union_opt_theta_c_list,
