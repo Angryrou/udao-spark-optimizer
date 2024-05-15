@@ -99,7 +99,7 @@ class Hierarchical_MOO_with_Constraints:
     def hmooc_setup(
         self,
         theta_sample_mode: str,
-        theta_sample_funcs: Callable[[Any, Any, Any, Any], Any],
+        theta_sample_funcs: Callable[..., Any],
         n_clusters: int,
         cross_location: int,
         dag_opt_algo: str,
@@ -121,6 +121,7 @@ class Hierarchical_MOO_with_Constraints:
                     and "s"),
                 3) seed (int),
                 4) whether to normalize (bool),
+                5) sampling mode: by defaul, random sampling, can also be set to "lhs"
                 and it returns an np.ndarray with shape (#samples, len_theta_c/p/s).
                 If using AutoGulon,  normalize = False, otherwise (i.e. using MLP),
                 normalize = True
@@ -1588,6 +1589,7 @@ class Hierarchical_MOO_with_Constraints:
                 "c",
                 self.seed + n_new_samples if self.seed is not None else None,
                 False,
+                mode="random",
             ).tolist()
         else:
             new_theta_c_list = self.theta_sample_funcs(
@@ -1595,6 +1597,7 @@ class Hierarchical_MOO_with_Constraints:
                 "c",
                 self.seed + n_new_samples if self.seed is not None else None,
                 True,
+                mode="random",
             ).tolist()
 
         return new_theta_c_list

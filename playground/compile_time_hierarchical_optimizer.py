@@ -103,8 +103,6 @@ if __name__ == "__main__":
         query_id = trace.split(f"{bm}100_")[1].split("_")[0]  # e.g. 2-1
         print(f"query_id is {query_id}")
 
-        # if query_id not in ["2-1"]:
-        #     continue
         non_decision_input = get_non_decision_inputs_for_qs_compile_dict(
             trace, is_oracle=is_oracle
         )

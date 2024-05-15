@@ -1017,18 +1017,20 @@ class HierarchicalOptimizer(BaseOptimizer):
         else:
             theta_s = th.tensor(theta_s_samples, dtype=th.float32)
 
-        if sample_mode == "random":
+        if sample_mode in ["random", "lhs"]:
             theta_c_samples = self.sample_theta_x(
                 n_c_samples,
                 "c",
                 seed if seed is not None else None,
                 normalize=normalize,
+                mode=sample_mode,
             )
             theta_p_samples = self.sample_theta_x(
                 n_p_samples,
                 "p",
                 seed + 1 if seed is not None else None,
                 normalize=normalize,
+                mode=sample_mode,
             )
             if use_ag:
                 theta_c = theta_c_samples

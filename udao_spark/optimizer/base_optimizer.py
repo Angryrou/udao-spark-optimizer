@@ -8,6 +8,7 @@ import dgl
 import numpy as np
 import pandas as pd
 import torch as th
+from scipy.stats import qmc
 from udao.data.handler.data_processor import DataProcessor
 from udao.data.iterators.query_plan_iterator import QueryPlanInput
 from udao.data.predicate_embedders.utils import prepare_operation
@@ -523,14 +524,28 @@ class BaseOptimizer(ABC):
         theta_type: ThetaType,
         seed: Optional[int],
         normalize: bool = True,
+        mode: str = "random",
     ) -> np.ndarray:
         if seed is not None:
             np.random.seed(seed)
-        samples = np.random.randint(
-            low=self.theta_minmax[theta_type][0],
-            high=self.theta_minmax[theta_type][1],
-            size=(n_samples, len(self.theta_minmax[theta_type][0])),
-        )
+        if mode == "random":
+            samples = np.random.randint(
+                low=self.theta_minmax[theta_type][0],
+                high=self.theta_minmax[theta_type][1],
+                size=(n_samples, len(self.theta_minmax[theta_type][0])),
+            )
+        elif mode == "lhs":
+            # a trivial implementation of Latin Hypercube Sampling when
+            # all parameters(knobs) are integers
+            sampler = qmc.LatinHypercube(
+                d=len(self.theta_minmax[theta_type][0]), seed=seed
+            )
+            samples_normed = sampler.random(n_samples)
+            low = self.theta_minmax[theta_type][0]
+            high = self.theta_minmax[theta_type][1] + 1
+            samples = np.floor(samples_normed * (high - low) + low).astype(int)
+        else:
+            raise ValueError(f"mode {mode} is not supported")
         if normalize:
             samples_normalized = (samples - self.theta_minmax[theta_type][0]) / (
                 self.theta_minmax[theta_type][1] - self.theta_minmax[theta_type][0]
