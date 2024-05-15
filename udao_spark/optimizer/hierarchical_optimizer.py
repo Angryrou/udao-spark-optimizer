@@ -119,9 +119,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         save_data: bool = False,
         query_id: Optional[str] = None,
         sample_mode: str = "",
-        param1: int = -1,
-        param2: int = -1,
-        param3: int = -1,
+        param_meta: Dict[str, int] = dict(),
         time_limit: int = -1,
         is_oracle: bool = False,
         save_data_header: str = "./output",
@@ -173,8 +171,6 @@ class HierarchicalOptimizer(BaseOptimizer):
         len_theta_per_subQ = len_theta_c + len_theta_p + len_theta_s
 
         if "hmooc" in algo:
-            # n_c_samples: param1
-            # n_p_samples: param2
             objs, conf = self._hmooc(
                 len_theta_per_subQ,
                 graph_embeddings,
@@ -188,16 +184,14 @@ class HierarchicalOptimizer(BaseOptimizer):
                 query_id,
                 save_data,
                 sample_mode,
-                param1,
-                param2,
+                param_meta["n_c_samples"],
+                param_meta["n_p_samples"],
                 is_oracle,
                 save_data_header,
                 benchmark=benchmark,
             )
 
         elif algo == "evo":
-            # pop_size = param1
-            # nfe = param2
             objs, conf = self._evo(
                 len_theta_per_subQ,
                 graph_embeddings,
@@ -210,8 +204,8 @@ class HierarchicalOptimizer(BaseOptimizer):
                 algo,
                 query_id,
                 save_data,
-                param1,
-                param2,
+                param_meta["pop_size"],
+                param_meta["nfe"],
                 time_limit,
                 save_data_header=save_data_header,
                 is_query_control=is_query_control,
@@ -219,8 +213,6 @@ class HierarchicalOptimizer(BaseOptimizer):
             )
 
         elif algo == "ws":
-            # n_samples_per_param = param1
-            # n_ws = param2
             objs, conf = self._ws(
                 len_theta_per_subQ,
                 graph_embeddings,
@@ -233,8 +225,8 @@ class HierarchicalOptimizer(BaseOptimizer):
                 algo,
                 query_id,
                 save_data,
-                param1,
-                param2,
+                param_meta["n_samples"],  # n_samples_per_param
+                param_meta["n_ws"],
                 time_limit,
                 save_data_header=save_data_header,
                 is_query_control=is_query_control,
@@ -242,9 +234,6 @@ class HierarchicalOptimizer(BaseOptimizer):
             )
 
         elif algo == "ppf":
-            # n_process: param1,
-            # n_grids: param2,
-            # n_max_iters: param3,
             objs, conf = self._ppf(
                 len_theta_per_subQ,
                 graph_embeddings,
@@ -257,9 +246,9 @@ class HierarchicalOptimizer(BaseOptimizer):
                 algo,
                 query_id,
                 save_data,
-                param1,
-                param2,
-                param3,
+                param_meta["n_process"],
+                param_meta["n_grids"],
+                param_meta["n_max_iters"],
                 time_limit,
                 is_query_control=is_query_control,
                 save_data_header=save_data_header,
@@ -276,10 +265,7 @@ class HierarchicalOptimizer(BaseOptimizer):
             "end_to_end": tc_end_to_end,
         }
 
-        if algo == "ppf":
-            algo_setting = f"{param1}_{param2}_{param3}"
-        else:
-            algo_setting = f"{param1}_{param2}"
+        algo_setting = "_".join(str(v) for k, v in param_meta.items())
 
         if use_ag:
             model_name = "ag"
@@ -1031,18 +1017,20 @@ class HierarchicalOptimizer(BaseOptimizer):
         else:
             theta_s = th.tensor(theta_s_samples, dtype=th.float32)
 
-        if sample_mode == "random":
+        if sample_mode in ["random", "lhs"]:
             theta_c_samples = self.sample_theta_x(
                 n_c_samples,
                 "c",
                 seed if seed is not None else None,
                 normalize=normalize,
+                mode=sample_mode,
             )
             theta_p_samples = self.sample_theta_x(
                 n_p_samples,
                 "p",
                 seed + 1 if seed is not None else None,
                 normalize=normalize,
+                mode=sample_mode,
             )
             if use_ag:
                 theta_c = theta_c_samples
