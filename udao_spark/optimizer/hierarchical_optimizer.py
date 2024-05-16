@@ -1074,6 +1074,18 @@ class HierarchicalOptimizer(BaseOptimizer):
                     [50, 75],  # 2
                 ]
 
+            elif n_c_samples == 360:  # 4  2  5  1  2 * 2 = 360
+                c_grids = [
+                    [1, 2, 3, 4, 5],  # 5
+                    [1, 2, 3],  # 3
+                    [6, 8, 10, 12, 14, 16],  # 6
+                    [2],
+                    [2],
+                    [0, 1],  # 2
+                    [1],
+                    [50, 75],  # 2
+                ]
+
             elif n_c_samples == 64:
                 if "test_end" in save_data_header:
                     # to test for end-to-end
@@ -1208,6 +1220,20 @@ class HierarchicalOptimizer(BaseOptimizer):
                     [1, 2, 3],
                     [1, 2],  # default
                 ]
+
+            elif n_p_samples == 324:  # 2 3  3  3  3  2 = 162
+                p_grids = [
+                    [2, 4],  # default
+                    [2],  # default
+                    [0, 14, 28],  # 0MB/160MB maxShuffledHashJoinLocalMapThreshold
+                    [0, 14, 28],  # 0MB/160MB autoBroadcastJoinThreshold
+                    [10, 20, 40],  # 80/160/320 sql.shuffle.partitions
+                    [2],
+                    [50],  # default
+                    [1, 2, 3],
+                    [1, 2],  # default
+                ]
+
             elif n_p_samples == 128:
                 p_grids = [
                     [0],
