@@ -205,14 +205,16 @@ def even_weights(stepsize: float, m: int) -> List[Any]:
 def weighted_utopia_nearest(
     pareto_objs: np.ndarray,
     pareto_confs: np.ndarray,
-    weights: np.ndarray,
+    weights: np.ndarray = np.array([1, 1]),
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     return the Pareto point that is closest to the utopia point
     in a weighted distance function
     """
     n_pareto = pareto_objs.shape[0]
-    assert n_pareto > 0
+    if n_pareto == 0:
+        logger.error("No Pareto point, return None")
+        raise ValueError("No Pareto point, return None")
     if n_pareto == 1:
         # (2,), (n, 2)
         return pareto_objs[0], pareto_confs[0]
@@ -256,36 +258,6 @@ def utopia_nearest(
     distances = np.linalg.norm(po_objs_norm, axis=1)
     un_ind = np.argmin(distances)
     return po_objs[un_ind], po_confs[un_ind]
-
-
-def weighted_utopia_nearest_impl(
-    pareto_objs: np.ndarray, pareto_confs: np.ndarray
-) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    return the Pareto point that is closest to the utopia point
-    in a weighted distance function
-    """
-    n_pareto = pareto_objs.shape[0]
-    assert n_pareto > 0
-    if n_pareto == 1:
-        # (2,), (n, 2)
-        return pareto_objs[0], pareto_confs[0]
-
-    utopia = np.zeros_like(pareto_objs[0])
-    min_objs, max_objs = pareto_objs.min(0), pareto_objs.max(0)
-    pareto_norm = (pareto_objs - min_objs) / (max_objs - min_objs)
-    # fixme: internal weights
-    weights = np.array([1, 1])
-    # weights = np.array([0.7, 0.3])
-    pareto_weighted_norm = pareto_norm * weights
-    # check the speed comparison: https://stackoverflow.com/a/37795190/5338690
-    dists = np.sum((pareto_weighted_norm - utopia) ** 2, axis=1)
-    wun_id = np.argmin(dists)
-
-    picked_pareto = pareto_objs[wun_id]
-    picked_confs = pareto_confs[wun_id]
-
-    return picked_pareto, picked_confs
 
 
 class Model:

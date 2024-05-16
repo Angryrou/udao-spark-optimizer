@@ -30,7 +30,7 @@ from udao_spark.optimizer.utils import (
     even_weights,
     save_json,
     save_results,
-    weighted_utopia_nearest_impl,
+    weighted_utopia_nearest,
 )
 from udao_spark.utils.logging import logger
 from udao_spark.utils.monitor import DivAndConqMonitor, UdaoMonitor
@@ -312,6 +312,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         is_oracle: bool,
         save_data_header: str,
         benchmark: str,
+        weights: np.ndarray = np.array([1.0, 1.0]),
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         start = time.time()
         theta_c: Union[th.Tensor, np.ndarray]
@@ -426,7 +427,7 @@ class HierarchicalOptimizer(BaseOptimizer):
                 )
 
         # add WUN
-        objs, conf = weighted_utopia_nearest_impl(po_objs, conf_raw)
+        objs, conf = weighted_utopia_nearest(po_objs, conf_raw, weights)
         tc_po_rec = time.time() - start_rec
         print(f"FUNCTION: time cost of {algo} with WUN " f"is: {tc_po_rec}")
 
@@ -466,6 +467,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         save_data_header: str,
         is_query_control: bool,
         is_oracle: bool,
+        weights: np.ndarray = np.array([1.0, 1.0]),
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         start = time.time()
         if use_ag:
@@ -580,7 +582,7 @@ class HierarchicalOptimizer(BaseOptimizer):
             )
 
         # add WUN
-        objs, conf = weighted_utopia_nearest_impl(po_objs, conf2)
+        objs, conf = weighted_utopia_nearest(po_objs, conf2, weights)
         tc_po_rec = time.time() - start_rec
         print(f"FUNCTION: time cost of {algo} with WUN " f"is: {tc_po_rec}")
 
@@ -620,6 +622,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         save_data_header: str,
         is_query_control: bool,
         is_oracle: bool,
+        weights: np.ndarray = np.array([1.0, 1.0]),
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         start = time.time()
         if use_ag:
@@ -747,7 +750,7 @@ class HierarchicalOptimizer(BaseOptimizer):
             )
 
         # add WUN
-        objs, conf = weighted_utopia_nearest_impl(po_objs, conf2)
+        objs, conf = weighted_utopia_nearest(po_objs, conf2, weights)
         tc_po_rec = time.time() - start_rec
         print(f"FUNCTION: time cost of {algo} with WUN " f"is: {tc_po_rec}")
 
@@ -787,6 +790,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         is_query_control: bool,
         save_data_header: str,
         is_oracle: bool,
+        weights: np.ndarray = np.array([1.0, 1.0]),
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         start = time.time()
         if use_ag:
@@ -970,7 +974,7 @@ class HierarchicalOptimizer(BaseOptimizer):
             )
 
         # add WUN
-        objs, conf = weighted_utopia_nearest_impl(po_objs, conf2)
+        objs, conf = weighted_utopia_nearest(po_objs, conf2, weights)
         tc_po_rec = time.time() - start_rec
         print(f"FUNCTION: time cost of {algo} with WUN " f"is: {tc_po_rec}")
 
