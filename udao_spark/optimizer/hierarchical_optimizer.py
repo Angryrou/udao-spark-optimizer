@@ -177,7 +177,7 @@ class HierarchicalOptimizer(BaseOptimizer):
             join_ids = []
             for qs_id, v in non_decision_input.items():
                 if ".Join" in JsonHandler.dump_to_string(v["qs_lqp"]):
-                    join_ids.append(qs_id)
+                    join_ids.append(int(qs_id.split("-")[1]))
             print(f"template: {template}: join_ids is {join_ids}")
             objs, conf = self._hmooc(
                 len_theta_per_subQ,
@@ -322,7 +322,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         is_oracle: bool,
         save_data_header: str,
         benchmark: str,
-        join_ids: List[str],
+        join_ids: List[int],
         weights: np.ndarray = np.array([1.0, 1.0]),
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         start = time.time()
@@ -455,7 +455,7 @@ class HierarchicalOptimizer(BaseOptimizer):
             if len(join_ids) > 0:
                 theta[s3] = "{}MB".format(
                     min(
-                        int(fine_conf["runtime_theta"][ji]["theta_p"][s3][:-2])
+                        int(fine_conf["runtime_theta"][f"qs{ji}"]["theta_p"][s3][:-2])
                         for ji in join_ids
                     )
                 )
@@ -463,14 +463,18 @@ class HierarchicalOptimizer(BaseOptimizer):
                     max(
                         10,
                         min(
-                            int(fine_conf["runtime_theta"][ji]["theta_p"][s4][:-2])
+                            int(
+                                fine_conf["runtime_theta"][f"qs{ji}"]["theta_p"][s4][
+                                    :-2
+                                ]
+                            )
                             for ji in join_ids
                         ),
                     )
                 )
                 theta[s5] = str(
                     max(
-                        int(fine_conf["runtime_theta"][ji]["theta_p"][s5])
+                        int(fine_conf["runtime_theta"][f"qs{ji}"]["theta_p"][s5])
                         for ji in join_ids
                     )
                 )
