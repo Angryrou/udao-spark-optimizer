@@ -1,6 +1,6 @@
 import numpy as np
 
-from ..optimizer.utils import utopia_nearest
+from ..optimizer.utils import weighted_utopia_nearest
 
 
 def test_utopia_nearest() -> None:
@@ -39,5 +39,5 @@ def test_utopia_nearest() -> None:
             ["0.11", "1024KB"],
         ]
     )
-    ret = utopia_nearest(po_objs, po_confs)
+    ret = weighted_utopia_nearest(po_objs, po_confs, weights=np.array([1, 1]))
     assert ret is not None
