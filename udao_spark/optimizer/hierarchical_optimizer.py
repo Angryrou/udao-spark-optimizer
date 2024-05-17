@@ -425,9 +425,6 @@ class HierarchicalOptimizer(BaseOptimizer):
                 )
             }
             fine_conf["runtime_theta"] = {}
-            theta = {
-                k: v for k, v in zip(self.sc.knob_names, fine_conf_qs_raw[i * n_subQs])
-            }
             for j in range(n_subQs):
                 qs_theta_p = {
                     k: v
@@ -447,25 +444,41 @@ class HierarchicalOptimizer(BaseOptimizer):
                         ],
                     )
                 }
-                if f"qs-{j}" in join_ids:
-                    theta[s3] = "{}MB".format(
-                        min(int(theta[s3][:-2]), int(qs_theta_p[s3][:-2]))
-                    )
-                    theta[s4] = "{}MB".format(
-                        max(
-                            10,
-                            min(
-                                int(theta[s4][:-2]),
-                                int(qs_theta_p[s4][:-2]),
-                            ),
-                        )
-                    )
-                    theta[s5] = str(max(int(theta[s5]), int(qs_theta_p[s5])))
 
                 fine_conf["runtime_theta"][f"qs{j}"] = {
                     "theta_p": qs_theta_p,
                     "theta_s": qs_theta_s,
                 }
+            theta = {
+                k: v for k, v in zip(self.sc.knob_names, fine_conf_qs_raw[i * n_subQs])
+            }
+            if len(join_ids) > 0:
+                theta[s3] = "{}MB".format(
+                    min(
+                        int(fine_conf["runtime_theta"][f"qs{ji}"]["theta_p"][s3][:-2])
+                        for ji in join_ids
+                    )
+                )
+                theta[s4] = "{}MB".format(
+                    max(
+                        10,
+                        min(
+                            int(
+                                fine_conf["runtime_theta"][f"qs{ji}"]["theta_p"][s4][
+                                    :-2
+                                ]
+                            )
+                            for ji in join_ids
+                        ),
+                    )
+                )
+                theta[s5] = str(
+                    max(
+                        int(fine_conf["runtime_theta"][f"qs{ji}"]["theta_p"][s5])
+                        for ji in join_ids
+                    )
+                )
+
             po_conf_fine_list.append(fine_conf)
             po_conf_agg_list.append(theta)
 
