@@ -12,7 +12,6 @@ from udao.optimization.concepts.utils import InputParameters, InputVariables
 from udao_trace.utils import JsonHandler
 
 from ..model.utils import get_graph_ckp_info
-from ..utils.constants import EPS
 from ..utils.logging import logger
 from ..utils.params import QType
 
@@ -230,34 +229,6 @@ def weighted_utopia_nearest(
     picked_confs = pareto_confs[wun_id]
 
     return picked_pareto, picked_confs
-
-
-def utopia_nearest(
-    po_objs: np.ndarray,
-    po_confs: np.ndarray,
-) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
-    """
-    return the Pareto point that is closest to the utopia point
-    """
-    if po_objs.ndim != 2 or po_confs.ndim != 2:
-        raise ValueError("po_objs and po_confs should be 2D arrays")
-    if len(po_objs) == 0:
-        logger.error("No Pareto point, return None")
-        return None, None
-    if len(po_objs) == 1:
-        logger.warning("Only one Pareto point, return it directly")
-        return po_objs[0], po_confs[0]
-    if po_objs.dtype != np.float32:
-        po_objs = po_objs.astype(np.float32)
-
-    objs_min, objs_max = po_objs.min(axis=0), po_objs.max(axis=0)
-    objs_range = objs_max - objs_min
-    objs_range[np.where(objs_range == 0)] = EPS
-    po_objs_norm = (po_objs - objs_min) / objs_range
-    # after normalization, the utopia point locates at [0, 0]
-    distances = np.linalg.norm(po_objs_norm, axis=1)
-    un_ind = np.argmin(distances)
-    return po_objs[un_ind], po_confs[un_ind]
 
 
 class Model:
