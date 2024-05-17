@@ -128,6 +128,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         is_query_control: bool = False,
         benchmark: str = "tpch",
         weights: np.ndarray = np.array([0.9, 0.1]),
+        selected_features: Optional[Dict[str, List[str]]] = None,
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         self.current_target_template = template
 
@@ -199,6 +200,7 @@ class HierarchicalOptimizer(BaseOptimizer):
                 benchmark=benchmark,
                 join_ids=join_ids,
                 weights=weights,
+                selected_features=selected_features,
             )
 
         elif algo == "evo":
@@ -324,6 +326,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         benchmark: str,
         join_ids: List[int],
         weights: np.ndarray = np.array([1.0, 1.0]),
+        selected_features: Optional[Dict[str, List[str]]] = None,
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         start = time.time()
         theta_c: Union[th.Tensor, np.ndarray]
@@ -339,6 +342,7 @@ class HierarchicalOptimizer(BaseOptimizer):
             sample_mode=sample_mode,
             save_data_header=save_data_header,
             seed=seed,
+            selected_features=selected_features,
         )
 
         # len_theta_per_qs = theta_c.shape[1] + theta_p.shape[1] + theta_s.shape[1]
@@ -598,7 +602,11 @@ class HierarchicalOptimizer(BaseOptimizer):
         else:
             normalize = True
         theta_s_samples = self.sample_theta_x(
-            1, "s", seed + 2 if seed is not None else None, normalize=normalize
+            1,
+            "s",
+            seed + 2 if seed is not None else None,
+            selected_features=None,
+            normalize=normalize,
         )
         theta_s: Union[th.Tensor, np.ndarray]
         if use_ag:
@@ -753,7 +761,11 @@ class HierarchicalOptimizer(BaseOptimizer):
         else:
             normalize = True
         theta_s_samples = self.sample_theta_x(
-            1, "s", seed + 2 if seed is not None else None, normalize=normalize
+            1,
+            "s",
+            seed + 2 if seed is not None else None,
+            selected_features=None,
+            normalize=normalize,
         )
         theta_s: Union[np.ndarray, th.Tensor]
         if use_ag:
@@ -921,7 +933,11 @@ class HierarchicalOptimizer(BaseOptimizer):
         else:
             normalize = True
         theta_s_samples = self.sample_theta_x(
-            1, "s", seed + 2 if seed is not None else None, normalize=normalize
+            1,
+            "s",
+            seed + 2 if seed is not None else None,
+            selected_features=None,
+            normalize=normalize,
         )
         theta_s: Union[np.ndarray, th.Tensor]
         if use_ag:
@@ -1125,6 +1141,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         sample_mode: str,
         save_data_header: str,
         seed: Optional[int],
+        selected_features: Optional[Dict[str, List[str]]],
     ) -> Tuple[
         Union[np.ndarray, th.Tensor],
         Union[np.ndarray, th.Tensor],
@@ -1151,6 +1168,7 @@ class HierarchicalOptimizer(BaseOptimizer):
                 seed if seed is not None else None,
                 normalize=normalize,
                 mode=sample_mode,
+                selected_features=selected_features,
             )
             theta_p_samples = self.sample_theta_x(
                 n_p_samples,
@@ -1158,6 +1176,7 @@ class HierarchicalOptimizer(BaseOptimizer):
                 seed + 1 if seed is not None else None,
                 normalize=normalize,
                 mode=sample_mode,
+                selected_features=selected_features,
             )
             if use_ag:
                 theta_c = theta_c_samples

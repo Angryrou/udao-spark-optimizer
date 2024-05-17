@@ -1387,7 +1387,7 @@ class DAGOpt:
         change_indices = np.where(np.diff(theta_c_ids) != 0)[0] + 1
 
         # Define starting and ending indices for each sub-array
-        # between each start and end, it is the sub-array under the same subQ and theta_c id
+        # b/w each start and end, it is the sub-array under the same subQ and theta_c id
         # e.g. given two subQs and two theta_c, sub-arrays follow the order:
         # [subQ0, theta_c0], [subQ0, theta_c1], [subQ1, theta_c0], [subQ1, theta_c1]
         starts = np.concatenate([np.array([0]), change_indices])
@@ -1405,7 +1405,11 @@ class DAGOpt:
         ]
 
         # the list length is n_subQ * n_theta_c
-        # the order is: [subQ0, theta_c0], [subQ0, theta_c1], [subQ1, theta_c0], [subQ1, theta_c1]
+        # the order is:
+        #   [subQ0, theta_c0],
+        #   [subQ0, theta_c1],
+        #   [subQ1, theta_c0],
+        #   [subQ1, theta_c1]
         # each item is an array with shape (n_objs, n_objs), here n_objs = 2
         # the first row is latency, and the second is cost
         obj_values_boundary = [

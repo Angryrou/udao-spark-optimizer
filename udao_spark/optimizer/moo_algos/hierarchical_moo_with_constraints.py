@@ -1583,23 +1583,14 @@ class Hierarchical_MOO_with_Constraints:
         :return: newly generated theta_c
         """
         n_new_samples = len(union_opt_theta_c_list)
-        if use_ag:
-            new_theta_c_list = self.theta_sample_funcs(
-                n_new_samples,
-                "c",
-                self.seed + n_new_samples if self.seed is not None else None,
-                False,
-                mode="random",
-            ).tolist()
-        else:
-            new_theta_c_list = self.theta_sample_funcs(
-                n_new_samples,
-                "c",
-                self.seed + n_new_samples if self.seed is not None else None,
-                True,
-                mode="random",
-            ).tolist()
-
+        new_theta_c_list = self.theta_sample_funcs(
+            n_samples=n_new_samples,
+            theta_type="c",
+            seed=self.seed + n_new_samples if self.seed is not None else None,
+            selected_features=None,
+            normalize=not use_ag,
+            mode="random",
+        ).tolist()
         return new_theta_c_list
 
     @timeis

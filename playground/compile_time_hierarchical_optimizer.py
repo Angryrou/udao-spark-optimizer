@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Dict, List, Optional
 
 import numpy as np
 
@@ -142,6 +143,16 @@ if __name__ == "__main__":
             "io_mb": params.ag_model_qs_io or "CatBoost",
         }
 
+        selected_features: Optional[Dict[str, List[str]]] = (
+            {
+                "c": [f"k{i}" for i in [1, 2, 3, 4, 6, 7]],
+                "p": [f"s{i}" for i in [1, 4, 5, 8, 9]],
+                "s": [],
+            }
+            if params.selected_features
+            else None
+        )
+
         objs, conf = hier_optimizer.solve(
             template=template,
             non_decision_input=non_decision_input,
@@ -159,6 +170,7 @@ if __name__ == "__main__":
             is_query_control=params.set_query_control,
             benchmark=bm,
             weights=np.array(params.weights),
+            selected_features=selected_features,
         )
         if objs is None or conf is None:
             logger.warning(f"Failed to solve {template}")
