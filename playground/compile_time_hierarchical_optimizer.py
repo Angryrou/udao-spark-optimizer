@@ -179,10 +179,11 @@ if __name__ == "__main__":
             ",".join([dict(conf)[k] for k in spark_conf.knob_names])
         ]
     print(torun_json)
+    name_prefix = "selected_params_" if selected_features is not None else ""
     JsonHandler.dump_to_file(
         torun_json,
         file=f"{params.conf_save}/{bm}100/{params.moo_algo}_{params.sample_mode}/"
-        f"nc{params.n_c_samples}_np{params.n_p_samples}_"
+        f"{name_prefix}nc{params.n_c_samples}_np{params.n_p_samples}_"
         f"{'_'.join([f'{w:.1f}' for w in params.weights])}.json",
         indent=2,
     )
