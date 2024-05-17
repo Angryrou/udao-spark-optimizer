@@ -161,6 +161,7 @@ class RuntimeOptimizer:
         sample_mode: str,
         n_samples: int,
         moo_mode: str,
+        selected_features: Optional[Dict[str, list]] = None,
     ) -> str:
         monitor = UdaoMonitor()
         t1 = time.perf_counter_ns()
@@ -195,6 +196,7 @@ class RuntimeOptimizer:
             n_samples=n_samples,
             moo_mode=moo_mode,
             monitor=monitor,
+            selected_features=selected_features,
         )
 
         t4 = time.perf_counter_ns()
@@ -248,6 +250,7 @@ class RuntimeOptimizer:
         sample_mode: str,
         n_samples: int,
         moo_mode: str,
+        selected_features: Optional[Dict[str, list]] = None,
     ) -> None:
         sock = socket(AF_INET, SOCK_STREAM)
         sock.bind((host, port))
@@ -294,6 +297,7 @@ class RuntimeOptimizer:
                                 sample_mode=sample_mode,
                                 n_samples=n_samples,
                                 moo_mode=moo_mode,
+                                selected_features=selected_features,
                             )
                             + "\n"
                         )
@@ -326,6 +330,7 @@ class RuntimeOptimizer:
         sample_mode: str,
         n_samples: int,
         moo_mode: str,
+        selected_features: Optional[Dict[str, list]] = None,
     ) -> None:
         with open(file_path) as f:
             msg = f.read().strip()
@@ -337,4 +342,5 @@ class RuntimeOptimizer:
             sample_mode=sample_mode,
             n_samples=n_samples,
             moo_mode=moo_mode,
+            selected_features=selected_features,
         )

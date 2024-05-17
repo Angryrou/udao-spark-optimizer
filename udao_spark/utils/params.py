@@ -318,5 +318,6 @@ def get_runtime_optimizer_parameters() -> ArgumentParser:
                         help="Moo mode for the runtime optimization")
     parser.add_argument("--verbose", action="store_true",
                         help="Enable verbose mode")
+    parser.add_argument("--selected_features", action="store_true")
     # fmt: on
     return parser
