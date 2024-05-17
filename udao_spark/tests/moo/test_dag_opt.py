@@ -1067,26 +1067,16 @@ class TestDAGOpt:
         )
 
         expect_boundary_obj_values_all_subQs = [
-            np.array([[22, 24], [25, 20], [23, 25], [23, 25]]),
-            np.array([[27, 27], [27, 27], [23, 29], [28, 21]]),
+            np.array([[22, 24], [25, 20]]),
+            np.array([[23, 25], [23, 25]]),
+            np.array([[27, 27], [27, 27]]),
+            np.array([[23, 29], [28, 21]]),
         ]
         expect_boundary_configs_all_subQs = [
-            np.array(
-                [
-                    [9, 4, 23, 24, 36, 1, 2],
-                    [9, 4, 26, 27, 34, 1, 2],
-                    [12, 16, 37, 25, 33, 1, 2],
-                    [12, 16, 37, 25, 33, 1, 2],
-                ]
-            ),
-            np.array(
-                [
-                    [9, 4, 26, 27, 34, 1, 2],
-                    [9, 4, 26, 27, 34, 1, 2],
-                    [12, 16, 26, 27, 34, 1, 2],
-                    [12, 16, 37, 25, 33, 1, 2],
-                ]
-            ),
+            np.array([[9, 4, 23, 24, 36, 1, 2], [9, 4, 26, 27, 34, 1, 2]]),
+            np.array([[12, 16, 37, 25, 33, 1, 2], [12, 16, 37, 25, 33, 1, 2]]),
+            np.array([[9, 4, 26, 27, 34, 1, 2], [9, 4, 26, 27, 34, 1, 2]]),
+            np.array([[12, 16, 26, 27, 34, 1, 2], [12, 16, 37, 25, 33, 1, 2]]),
         ]
         assert all(
             [
@@ -1107,34 +1097,30 @@ class TestDAGOpt:
 
     def test_construct_query_solutions(self, dag_opt: DAGOpt) -> None:
         boundary_obj_values_all_subQs = [
-            np.array([[22, 24], [25, 20], [23, 25], [23, 25]]),
-            np.array([[27, 27], [27, 27], [23, 29], [28, 21]]),
+            np.array([[22, 24], [25, 20]]),
+            np.array([[23, 25], [23, 25]]),
+            np.array([[27, 27], [27, 27]]),
+            np.array([[23, 29], [28, 21]]),
         ]
         boundary_configs_all_subQs = [
-            np.array(
-                [
-                    [9, 4, 23, 24, 36, 1, 2],
-                    [9, 4, 26, 27, 34, 1, 2],
-                    [12, 16, 37, 25, 33, 1, 2],
-                    [12, 16, 37, 25, 33, 1, 2],
-                ]
-            ),
-            np.array(
-                [
-                    [9, 4, 26, 27, 34, 1, 2],
-                    [9, 4, 26, 27, 34, 1, 2],
-                    [12, 16, 26, 27, 34, 1, 2],
-                    [12, 16, 37, 25, 33, 1, 2],
-                ]
-            ),
+            np.array([[9, 4, 23, 24, 36, 1, 2], [9, 4, 26, 27, 34, 1, 2]]),
+            np.array([[12, 16, 37, 25, 33, 1, 2], [12, 16, 37, 25, 33, 1, 2]]),
+            np.array([[9, 4, 26, 27, 34, 1, 2], [9, 4, 26, 27, 34, 1, 2]]),
+            np.array([[12, 16, 26, 27, 34, 1, 2], [12, 16, 37, 25, 33, 1, 2]]),
         ]
-        n_subQs = len(boundary_obj_values_all_subQs)
+        n_subQs = 2
+        n_theta_c = 2
+        n_objs = 2
+        len_theta = 7
 
         (
             boundary_query_objs,
             boundary_configs_all_subQs_arr,
         ), _ = dag_opt.compute_query_solutions(
             n_subQs,
+            n_theta_c,
+            n_objs,
+            len_theta,
             boundary_obj_values_all_subQs,
             boundary_configs_all_subQs,
         )

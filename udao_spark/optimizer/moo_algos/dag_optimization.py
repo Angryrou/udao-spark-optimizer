@@ -175,11 +175,17 @@ class DAGOpt:
             tc_compute_boundary_all_subQs
         )
 
+        n_theta_c = np.unique(sorted_subQ_indices[:, 1]).shape[0]
+        n_objs = self.n_objs
+        len_theta = self.len_theta
         (
             boundary_query_objs,
             boundary_configs_all_subQs_arr,
         ), tc_compute_query_solutions = self.compute_query_solutions(
             n_subQs,
+            n_theta_c,
+            n_objs,
+            len_theta,
             boundary_obj_values_all_subQs,
             boundary_configs_all_subQs,
         )
@@ -1364,80 +1370,101 @@ class DAGOpt:
                 and theta_p indices
         :return: boundary_obj_values_all_subQs: boundary objective values with
                         minimum latency/cost among all theta_c;
-                        list: length 2 * n_theta_c, follows the order of theta_c ids
+                        list: length n_subQs * n_theta_c
                 boundary_configs_all_subQs: boundary configurations with minimum
                         latency/cost among all theta_c;
-                        list: length 2 * n_theta_c, follows the order of theta_c ids
+                        list: length n_subQs * n_theta_c
         """
-        boundary_obj_values_all_subQs = []
-        boundary_configs_all_subQs = []
 
-        for subQ_id, subQ_obj_values, subQ_configs in zip(
-            subQs, obj_values_all_subQs, configs_all_subQs
-        ):
-            len_p_counts = np.unique(
-                sorted_subQ_indices[np.where(sorted_subQ_indices[:, 0] == subQ_id)][
-                    :, 1
-                ],
-                return_counts=True,
-            )[1]
-            cumsum_counts = np.cumsum(len_p_counts)[:-1]
-            obj_values_list = np.split(subQ_obj_values, cumsum_counts)
-            configs_list = np.split(subQ_configs, cumsum_counts)
-            p_max = len_p_counts.max()
-            padded_f_arr = np.array(
+        sorted_obj_values_all_subQs = np.concatenate(obj_values_all_subQs)
+        sorted_configs_all_subQs = np.concatenate(configs_all_subQs)
+
+        n_theta_c = np.unique(sorted_subQ_indices[:, 1]).shape[0]
+        n_subQs = len(subQs)
+
+        # Find the indices where the theta_c id values change
+        theta_c_ids = sorted_subQ_indices[:, 1]
+        change_indices = np.where(np.diff(theta_c_ids) != 0)[0] + 1
+
+        # Define starting and ending indices for each sub-array
+        # between each start and end, it is the sub-array under the same subQ and theta_c id
+        # e.g. given two subQs and two theta_c, sub-arrays follow the order:
+        # [subQ0, theta_c0], [subQ0, theta_c1], [subQ1, theta_c0], [subQ1, theta_c1]
+        starts = np.concatenate([np.array([0]), change_indices])
+        ends = np.concatenate([starts[1:], [theta_c_ids.shape[0]]])
+        assert starts.shape[0] == ends.shape[0]
+        assert starts.shape[0] == n_theta_c * n_subQs
+
+        # find the indices of solutions with minimum latency and cost for each sub-array
+        sorted_sub_arrays_ids = [
+            [
+                np.argmin(sorted_obj_values_all_subQs[start:end][:, 0]),
+                np.argmin(sorted_obj_values_all_subQs[start:end][:, 1]),
+            ]
+            for start, end in zip(starts, ends)
+        ]
+
+        # the list length is n_subQ * n_theta_c
+        # the order is: [subQ0, theta_c0], [subQ0, theta_c1], [subQ1, theta_c0], [subQ1, theta_c1]
+        # each item is an array with shape (n_objs, n_objs), here n_objs = 2
+        # the first row is latency, and the second is cost
+        obj_values_boundary = [
+            np.vstack(
                 [
-                    np.tile(array, (int(p_max / array.shape[0] + 1), 1))[:p_max, :]
-                    if array.shape[0] < p_max
-                    else array
-                    for array in obj_values_list
+                    sorted_obj_values_all_subQs[start:end][boundary_inds[0]],
+                    sorted_obj_values_all_subQs[start:end][boundary_inds[1]],
                 ]
             )
-            min_row_inds_per_obj = np.argmin(padded_f_arr, axis=1)
-            min_rows_obj_values = padded_f_arr[
-                np.arange(padded_f_arr.shape[0])[:, None], min_row_inds_per_obj, :
-            ].reshape(-1, self.n_objs)
-            boundary_obj_values_all_subQs.append(min_rows_obj_values)
+            for start, end, boundary_inds in zip(starts, ends, sorted_sub_arrays_ids)
+        ]
+        configs_boundary = [
+            np.vstack(
+                [
+                    sorted_configs_all_subQs[start:end][boundary_inds[0]],
+                    sorted_configs_all_subQs[start:end][boundary_inds[1]],
+                ]
+            )
+            for start, end, boundary_inds in zip(starts, ends, sorted_sub_arrays_ids)
+        ]
 
-            min_configs = [
-                conf[min_ind].tolist()
-                for conf, min_ind in zip(configs_list, min_row_inds_per_obj)
-            ]
+        assert len(obj_values_boundary) == len(configs_boundary)
 
-            configs = np.array(sum(min_configs, []))
-            assert configs.shape[0] == min_rows_obj_values.shape[0]
-            boundary_configs_all_subQs.append(configs)
-
-        assert len(boundary_obj_values_all_subQs) == len(boundary_configs_all_subQs)
-
-        return boundary_obj_values_all_subQs, boundary_configs_all_subQs
+        return obj_values_boundary, configs_boundary
 
     @timeis
     def compute_query_solutions(
         self,
         n_subQs: int,
+        n_theta_c: int,
+        n_objs: int,
+        len_theta: int,
         boundary_obj_values_all_subQs: List[np.ndarray],
         boundary_configs_all_subQs: List[np.ndarray],
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         compute the query-level values from the boundary subQ-level solutions.
         :param n_subQs: the number of subQs.
+        :param n_theta_c: the number of theta_c.
+        :param n_objs: the number of objectives.
+        :param len_theta: the number of parameters for one subQ.
         :param boundary_obj_values_all_subQs: boundary objective values with minimum
                 latency/cost among all theta_c;
-                list: length 2 * n_theta_c, follows the order of theta_c ids
+                list: length n_subQs * n_theta_c
         :param boundary_configs_all_subQs: boundary configurations with minimum
                 latency/cost among all theta_c;
-                list: length 2 * n_theta_c, follows the order of theta_c ids
+                list: length n_subQs * n_theta_c, follows the order of theta_c ids
         :return: boundary_query_objs: query-level objective values with shape
                         (2 * n_theta_c, n_objs)
                 boundary_configs_all_subQs_arr: configurations of all subQs,
                             with shape (2 * n_theta_c, n_subQs * len_one_theta)
         """
         # fixme: double-check
-        boundary_obj_values_all_subQs_arr = np.hstack(boundary_obj_values_all_subQs)
-        boundary_configs_all_subQs_arr = np.hstack(boundary_configs_all_subQs)
-
-        assert boundary_configs_all_subQs_arr.shape[1] == self.len_theta * n_subQs
+        boundary_obj_values_all_subQs_arr = np.concatenate(
+            np.split(np.array(boundary_obj_values_all_subQs), n_subQs), axis=2
+        ).reshape((n_theta_c * n_objs, n_subQs * n_objs))
+        boundary_configs_all_subQs_arr = np.concatenate(
+            np.split(np.array(boundary_configs_all_subQs), n_subQs), axis=2
+        ).reshape((n_theta_c * n_objs, n_subQs * len_theta))
 
         query_lat = np.sum(boundary_obj_values_all_subQs_arr[:, 0::2], axis=1)
         query_cost = np.sum(boundary_obj_values_all_subQs_arr[:, 1::2], axis=1)
