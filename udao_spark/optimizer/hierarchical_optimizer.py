@@ -34,7 +34,7 @@ from udao_spark.optimizer.utils import (
 )
 from udao_spark.utils.logging import logger
 from udao_spark.utils.monitor import DivAndConqMonitor, UdaoMonitor
-from udao_trace.parser.spark_parser import THETA_C, THETA_P, THETA_S
+from udao_trace.parser.spark_parser import THETA_C, THETA_P
 from udao_trace.utils import JsonHandler
 from udao_trace.utils.interface import VarTypes
 
@@ -412,11 +412,17 @@ class HierarchicalOptimizer(BaseOptimizer):
         s3 = "spark.sql.adaptive.maxShuffledHashJoinLocalMapThreshold"
         s4 = "spark.sql.autoBroadcastJoinThreshold"
         s5 = "spark.sql.shuffle.partitions"
+        knob_names = self.sc.knob_names
+        theta_c_names = knob_names[: len(THETA_C)]
+        theta_p_names = knob_names[len(THETA_C) : len(THETA_C) + len(THETA_P)]
+        theta_s_names = knob_names[len(THETA_C) + len(THETA_P) :]
         for i in range(po_conf.shape[0]):
             fine_conf = {}
             fine_conf["theta_c"] = {
                 k: v
-                for k, v in zip(THETA_C, fine_conf_qs_raw[i * n_subQs][: len(THETA_C)])
+                for k, v in zip(
+                    theta_c_names, fine_conf_qs_raw[i * n_subQs][: len(THETA_C)]
+                )
             }
             fine_conf["runtime_theta"] = {}
             theta = {
@@ -426,7 +432,7 @@ class HierarchicalOptimizer(BaseOptimizer):
                 qs_theta_p = {
                     k: v
                     for k, v in zip(
-                        THETA_P,
+                        theta_p_names,
                         fine_conf_qs_raw[i * n_subQs + j][
                             len(THETA_C) : len(THETA_C) + len(THETA_P)
                         ],
@@ -435,13 +441,13 @@ class HierarchicalOptimizer(BaseOptimizer):
                 qs_theta_s = {
                     k: v
                     for k, v in zip(
-                        THETA_S,
+                        theta_s_names,
                         fine_conf_qs_raw[i * n_subQs + j][
                             len(THETA_C) + len(THETA_P) :
                         ],
                     )
                 }
-                if j in join_ids:
+                if f"qs-{j}" in join_ids:
                     theta[s3] = "{}MB".format(
                         min(int(theta[s3][:-2]), int(qs_theta_p[s3][:-2]))
                     )
