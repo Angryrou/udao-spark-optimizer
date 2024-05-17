@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 import numpy as np
+import pandas as pd
 
 from udao_spark.data.extractors.injection_extractor import (
     get_non_decision_inputs_for_qs_compile_dict,
@@ -10,7 +11,7 @@ from udao_spark.optimizer.hierarchical_optimizer import HierarchicalOptimizer
 from udao_spark.optimizer.utils import get_ag_meta
 from udao_spark.utils.params import QType, get_compile_time_optimizer_parameters
 from udao_trace.configuration import SparkConf
-from udao_trace.utils import BenchmarkType, JsonHandler
+from udao_trace.utils import BenchmarkType, JsonHandler, PickleHandler
 from udao_trace.utils.logging import logger
 from udao_trace.workload import Benchmark
 
@@ -180,11 +181,24 @@ if __name__ == "__main__":
         ]
     print(torun_json)
     name_prefix = "selected_params_" if selected_features is not None else ""
+    weights = params.weights
+    fname = (
+        f"{name_prefix}nc{params.n_c_samples}_np{params.n_p_samples}_"
+        f"{'_'.join([f'{w:.1f}' for w in weights])}"
+    )
     JsonHandler.dump_to_file(
         torun_json,
-        file=f"{params.conf_save}/{bm}100/{params.moo_algo}_{params.sample_mode}/"
-        f"{name_prefix}nc{params.n_c_samples}_np{params.n_p_samples}_"
-        f"{'_'.join([f'{w:.1f}' for w in params.weights])}.json",
+        file=f"{params.conf_save}/{bm}100/{params.moo_algo}_{params.sample_mode}/{fname}.json",
         indent=2,
+    )
+    pref = int(10 * weights[0])
+    pref_dict = {
+        pref: pd.DataFrame.from_dict(torun_json, orient="index")
+        .reset_index()
+        .rename(columns={"index": "query_id", 0: "conf"})
+    }
+    pred_dict_file = f"pref_to_df_{params.moo_algo}_{params.sample_mode}_{fname}.pkl"
+    PickleHandler.save(
+        pref_dict, f"{params.conf_save}/{bm}100/", pred_dict_file, overwrite=True
     )
     logger.info("Done!")
