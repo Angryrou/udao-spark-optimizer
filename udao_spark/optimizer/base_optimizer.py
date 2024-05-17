@@ -606,8 +606,9 @@ class BaseOptimizer(ABC):
         else:
             if mode == "random":
                 samples_selected = np.random.randint(
-                    low=theta_min,  # inclusive
-                    high=theta_max + 1,  # exclusive
+                    low=theta_min,
+                    # fixme: high is exclusive, should be theta_max + 1
+                    high=theta_max,
                     size=(n_samples, n_params),
                 )
             elif mode == "lhs":
