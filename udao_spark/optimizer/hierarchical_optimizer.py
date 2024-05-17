@@ -455,7 +455,7 @@ class HierarchicalOptimizer(BaseOptimizer):
             if len(join_ids) > 0:
                 theta[s3] = "{}MB".format(
                     min(
-                        int(fine_conf["runtime_theta"][f"qs{ji}"]["theta_p"][s3][:-2])
+                        int(fine_conf["runtime_theta"][ji]["theta_p"][s3][:-2])
                         for ji in join_ids
                     )
                 )
@@ -463,18 +463,14 @@ class HierarchicalOptimizer(BaseOptimizer):
                     max(
                         10,
                         min(
-                            int(
-                                fine_conf["runtime_theta"][f"qs{ji}"]["theta_p"][s4][
-                                    :-2
-                                ]
-                            )
+                            int(fine_conf["runtime_theta"][ji]["theta_p"][s4][:-2])
                             for ji in join_ids
                         ),
                     )
                 )
                 theta[s5] = str(
                     max(
-                        int(fine_conf["runtime_theta"][f"qs{ji}"]["theta_p"][s5])
+                        int(fine_conf["runtime_theta"][ji]["theta_p"][s5])
                         for ji in join_ids
                     )
                 )
