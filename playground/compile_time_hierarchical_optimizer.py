@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import numpy as np
+
 from udao_spark.data.extractors.injection_extractor import (
     get_non_decision_inputs_for_qs_compile_dict,
 )
@@ -7,7 +9,7 @@ from udao_spark.optimizer.hierarchical_optimizer import HierarchicalOptimizer
 from udao_spark.optimizer.utils import get_ag_meta
 from udao_spark.utils.params import QType, get_compile_time_optimizer_parameters
 from udao_trace.configuration import SparkConf
-from udao_trace.utils import BenchmarkType
+from udao_trace.utils import BenchmarkType, JsonHandler
 from udao_trace.utils.logging import logger
 from udao_trace.workload import Benchmark
 
@@ -96,6 +98,7 @@ if __name__ == "__main__":
     # Compile time QS logical plans from CBO estimation (a list of LQP-sub)
     is_oracle = q_type == "qs_lqp_runtime"
     use_ag = not params.use_mlp
+    torun_json = {}
 
     for template, trace in zip(benchmark.templates, raw_traces):
         logger.info(f"Processing {trace}")
@@ -139,7 +142,7 @@ if __name__ == "__main__":
             "io_mb": params.ag_model_qs_io or "CatBoost",
         }
 
-        po_points = hier_optimizer.solve(
+        objs, conf = hier_optimizer.solve(
             template=template,
             non_decision_input=non_decision_input,
             seed=params.seed,
@@ -155,4 +158,20 @@ if __name__ == "__main__":
             save_data_header=params.save_data_header,
             is_query_control=params.set_query_control,
             benchmark=bm,
+            weights=np.array(params.weights),
         )
+        if objs is None or conf is None:
+            logger.warning(f"Failed to solve {template}")
+            continue
+        torun_json[query_id] = [
+            ",".join([dict(conf)[k] for k in spark_conf.knob_names])
+        ]
+    print(torun_json)
+    JsonHandler.dump_to_file(
+        torun_json,
+        file=f"{params.conf_save}/{bm}100/{params.moo_algo}_{params.sample_mode}/"
+        f"nc{params.n_c_samples}_np{params.n_p_samples}_"
+        f"{'_'.join([f'{w:.1f}' for w in params.weights])}.json",
+        indent=2,
+    )
+    logger.info("Done!")

@@ -224,7 +224,7 @@ def weighted_utopia_nearest(
     pareto_norm = (pareto_objs - min_objs) / (max_objs - min_objs)
     pareto_weighted_norm = pareto_norm * weights
     dists = np.sum((pareto_weighted_norm - utopia) ** 2, axis=1)
-    wun_id = np.argmin(dists)
+    wun_id = int(np.argmin(dists))
 
     picked_pareto = pareto_objs[wun_id]
     picked_confs = pareto_confs[wun_id]

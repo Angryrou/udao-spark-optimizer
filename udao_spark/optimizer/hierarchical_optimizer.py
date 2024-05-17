@@ -34,6 +34,8 @@ from udao_spark.optimizer.utils import (
 )
 from udao_spark.utils.logging import logger
 from udao_spark.utils.monitor import DivAndConqMonitor, UdaoMonitor
+from udao_trace.parser.spark_parser import THETA_C, THETA_P, THETA_S
+from udao_trace.utils import JsonHandler
 from udao_trace.utils.interface import VarTypes
 
 
@@ -125,6 +127,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         save_data_header: str = "./output",
         is_query_control: bool = False,
         benchmark: str = "tpch",
+        weights: np.ndarray = np.array([0.9, 0.1]),
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         self.current_target_template = template
 
@@ -171,6 +174,11 @@ class HierarchicalOptimizer(BaseOptimizer):
         len_theta_per_subQ = len_theta_c + len_theta_p + len_theta_s
 
         if "hmooc" in algo:
+            join_ids = []
+            for qs_id, v in non_decision_input.items():
+                if ".Join" in JsonHandler.dump_to_string(v["qs_lqp"]):
+                    join_ids.append(qs_id)
+            print(f"template: {template}: join_ids is {join_ids}")
             objs, conf = self._hmooc(
                 len_theta_per_subQ,
                 graph_embeddings,
@@ -189,6 +197,8 @@ class HierarchicalOptimizer(BaseOptimizer):
                 is_oracle,
                 save_data_header,
                 benchmark=benchmark,
+                join_ids=join_ids,
+                weights=weights,
             )
 
         elif algo == "evo":
@@ -312,6 +322,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         is_oracle: bool,
         save_data_header: str,
         benchmark: str,
+        join_ids: List[str],
         weights: np.ndarray = np.array([1.0, 1.0]),
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         start = time.time()
@@ -385,13 +396,99 @@ class HierarchicalOptimizer(BaseOptimizer):
         )
 
         start_rec = time.time()
+
+        # added by chenghao to get the PO solutions with preferences directly
+        fine_conf_qs_raw = (
+            self.sc.construct_configuration(
+                po_conf.reshape(-1, len_theta_per_subQ).copy()
+            )
+            if use_ag
+            else self.sc.construct_configuration_from_norm(
+                po_conf.reshape(-1, len_theta_per_subQ).copy()
+            )
+        )
+        po_conf_fine_list = []
+        po_conf_agg_list = []
+        s3 = "spark.sql.adaptive.maxShuffledHashJoinLocalMapThreshold"
+        s4 = "spark.sql.autoBroadcastJoinThreshold"
+        s5 = "spark.sql.shuffle.partitions"
+        for i in range(po_conf.shape[0]):
+            fine_conf = {}
+            fine_conf["theta_c"] = {
+                k: v
+                for k, v in zip(THETA_C, fine_conf_qs_raw[i * n_subQs][: len(THETA_C)])
+            }
+            fine_conf["runtime_theta"] = {}
+            theta = {
+                k: v for k, v in zip(self.sc.knob_names, fine_conf_qs_raw[i * n_subQs])
+            }
+            for j in range(n_subQs):
+                qs_theta_p = {
+                    k: v
+                    for k, v in zip(
+                        THETA_P,
+                        fine_conf_qs_raw[i * n_subQs + j][
+                            len(THETA_C) : len(THETA_C) + len(THETA_P)
+                        ],
+                    )
+                }
+                qs_theta_s = {
+                    k: v
+                    for k, v in zip(
+                        THETA_S,
+                        fine_conf_qs_raw[i * n_subQs + j][
+                            len(THETA_C) + len(THETA_P) :
+                        ],
+                    )
+                }
+                if j in join_ids:
+                    theta[s3] = "{}MB".format(
+                        min(int(theta[s3][:-2]), int(qs_theta_p[s3][:-2]))
+                    )
+                    theta[s4] = "{}MB".format(
+                        max(
+                            10,
+                            min(
+                                int(theta[s4][:-2]),
+                                int(qs_theta_p[s4][:-2]),
+                            ),
+                        )
+                    )
+                    theta[s5] = str(max(int(theta[s5]), int(qs_theta_p[s5])))
+
+                fine_conf["runtime_theta"][f"qs{j}"] = {
+                    "theta_p": qs_theta_p,
+                    "theta_s": qs_theta_s,
+                }
+            po_conf_fine_list.append(fine_conf)
+            po_conf_agg_list.append(theta)
+
+        pref2theta = {}
+        pref2theta_agg = {}
+        for pref in [
+            (0, 1),
+            (0.1, 0.9),
+            (0.5, 0.5),
+            (0.9, 0.1),
+            (1, 0),
+        ]:
+            objs, conf_fine = weighted_utopia_nearest(
+                po_objs, np.array(po_conf_fine_list), np.array(pref)
+            )
+            objs, conf_agg = weighted_utopia_nearest(
+                po_objs, np.array(po_conf_agg_list), np.array(pref)
+            )
+            pref2theta[f"{pref[0]:.1f}_{pref[1]:.1f}"] = conf_fine
+            pref2theta_agg[f"{pref[0]:.1f}_{pref[1]:.1f}"] = conf_agg
+            print(f"weights: {pref}, objs: {objs}, conf: {conf_agg}")
+
         conf_qs0 = po_conf[:, :len_theta_per_subQ].reshape(-1, len_theta_per_subQ)
         conf_all_qs = np.vstack(np.split(po_conf, n_subQs, axis=1))
         if use_ag:
-            conf_raw = self.sc.construct_configuration(conf_qs0).reshape(
+            conf_raw = self.sc.construct_configuration(conf_qs0.copy()).reshape(
                 -1, len_theta_per_subQ
             )
-            conf_raw_all = self.sc.construct_configuration(conf_all_qs).reshape(
+            conf_raw_all = self.sc.construct_configuration(conf_all_qs.copy()).reshape(
                 -1, len_theta_per_subQ
             )
             if n_c_samples == 1:
@@ -427,7 +524,9 @@ class HierarchicalOptimizer(BaseOptimizer):
                 )
 
         # add WUN
-        objs, conf = weighted_utopia_nearest(po_objs, conf_raw, weights)
+        objs, conf = weighted_utopia_nearest(
+            po_objs, np.array(po_conf_agg_list), weights
+        )
         tc_po_rec = time.time() - start_rec
         print(f"FUNCTION: time cost of {algo} with WUN " f"is: {tc_po_rec}")
 
@@ -446,7 +545,12 @@ class HierarchicalOptimizer(BaseOptimizer):
             save_json(data_path, time_cost_dict, mode="time_cost_json")
             save_json(data_path, total_time_profile, mode="time_profile")
 
-        return conf, objs
+            JsonHandler.dump_to_file(pref2theta, f"{data_path}/pref2theta.json", 2)
+            JsonHandler.dump_to_file(
+                pref2theta_agg, f"{data_path}/pref2theta_agg.json", 2
+            )
+
+        return objs, conf
 
     def _evo(
         self,
