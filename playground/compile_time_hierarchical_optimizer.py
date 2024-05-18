@@ -1,6 +1,8 @@
 from pathlib import Path
+from typing import Dict, List, Optional
 
 import numpy as np
+import pandas as pd
 
 from udao_spark.data.extractors.injection_extractor import (
     get_non_decision_inputs_for_qs_compile_dict,
@@ -9,7 +11,7 @@ from udao_spark.optimizer.hierarchical_optimizer import HierarchicalOptimizer
 from udao_spark.optimizer.utils import get_ag_meta
 from udao_spark.utils.params import QType, get_compile_time_optimizer_parameters
 from udao_trace.configuration import SparkConf
-from udao_trace.utils import BenchmarkType, JsonHandler
+from udao_trace.utils import BenchmarkType, JsonHandler, PickleHandler
 from udao_trace.utils.logging import logger
 from udao_trace.workload import Benchmark
 
@@ -142,6 +144,16 @@ if __name__ == "__main__":
             "io_mb": params.ag_model_qs_io or "CatBoost",
         }
 
+        selected_features: Optional[Dict[str, List[str]]] = (
+            {
+                "c": [f"k{i}" for i in [1, 2, 3, 4, 6, 7]],
+                "p": [f"s{i}" for i in [1, 4, 5, 8, 9]],
+                "s": [],
+            }
+            if params.selected_features
+            else None
+        )
+
         objs, conf = hier_optimizer.solve(
             template=template,
             non_decision_input=non_decision_input,
@@ -159,6 +171,7 @@ if __name__ == "__main__":
             is_query_control=params.set_query_control,
             benchmark=bm,
             weights=np.array(params.weights),
+            selected_features=selected_features,
         )
         if objs is None or conf is None:
             logger.warning(f"Failed to solve {template}")
@@ -167,11 +180,25 @@ if __name__ == "__main__":
             ",".join([dict(conf)[k] for k in spark_conf.knob_names])
         ]
     print(torun_json)
+    name_prefix = "selected_params_" if selected_features is not None else ""
+    weights = params.weights
+    fname = (
+        f"{name_prefix}nc{params.n_c_samples}_np{params.n_p_samples}_"
+        f"{'_'.join([f'{w:.1f}' for w in weights])}"
+    )
     JsonHandler.dump_to_file(
         torun_json,
-        file=f"{params.conf_save}/{bm}100/{params.moo_algo}_{params.sample_mode}/"
-        f"nc{params.n_c_samples}_np{params.n_p_samples}_"
-        f"{'_'.join([f'{w:.1f}' for w in params.weights])}.json",
+        file=f"{params.conf_save}/{bm}100/{params.moo_algo}_{params.sample_mode}/{fname}.json",
         indent=2,
+    )
+    pref = int(10 * weights[0])
+    pref_dict = {
+        pref: pd.DataFrame.from_dict(torun_json, orient="index")
+        .reset_index()
+        .rename(columns={"index": "query_id", 0: "conf"})
+    }
+    pred_dict_file = f"pref_to_df_{params.moo_algo}_{params.sample_mode}_{fname}.pkl"
+    PickleHandler.save(
+        pref_dict, f"{params.conf_save}/{bm}100/", pred_dict_file, overwrite=True
     )
     logger.info("Done!")

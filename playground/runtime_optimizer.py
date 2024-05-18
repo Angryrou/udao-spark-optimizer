@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Dict, List, Optional
 
 from udao_spark.optimizer.runtime_optimizer import R_Q, R_QS, RuntimeOptimizer
 from udao_spark.optimizer.utils import get_ag_meta
@@ -72,6 +73,16 @@ if __name__ == "__main__":
     else:
         ag_model_dict = {R_Q: {}, R_QS: {}}
 
+    selected_features: Optional[Dict[str, List[str]]] = (
+        {
+            "c": [f"k{i}" for i in [1, 2, 3, 4, 6, 7]],
+            "p": [f"s{i}" for i in [1, 4, 5, 8, 9]],
+            "s": [],
+        }
+        if params.selected_features
+        else None
+    )
+
     if params.sanity_check:
         for file_path in [
             "assets/runtime_samples/sample_runtime_lqp.txt",
@@ -89,6 +100,7 @@ if __name__ == "__main__":
                 sample_mode=params.sample_mode,
                 n_samples=params.n_samples,
                 moo_mode=params.moo_mode,
+                selected_features=selected_features,
             )
     else:
         ro.setup_server(
@@ -100,4 +112,5 @@ if __name__ == "__main__":
             sample_mode=params.sample_mode,
             n_samples=params.n_samples,
             moo_mode=params.moo_mode,
+            selected_features=selected_features,
         )

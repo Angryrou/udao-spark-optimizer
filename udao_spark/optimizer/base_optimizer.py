@@ -118,6 +118,19 @@ class BaseOptimizer(ABC):
                 np.array(spark_conf.knob_max[-len(THETA_S) :]),
             ),
         }
+        self.theta_names = {
+            "c": THETA_C,
+            "p": THETA_P,
+            "s": THETA_S,
+        }
+        self.theta_default_all = spark_conf.deconstruct_configuration(
+            np.array([[k.default for k in spark_conf.knob_list]])
+        )
+        self.theta_default = {
+            "c": self.theta_default_all[:, : len(THETA_C)],
+            "p": self.theta_default_all[:, len(THETA_C) : len(THETA_C) + len(THETA_P)],
+            "s": self.theta_default_all[:, -len(THETA_S) :],
+        }
         self.theta_ktype = {
             "c": [k.ktype for k in spark_conf.knob_list[: len(THETA_C)]],
             "p": [
@@ -501,15 +514,56 @@ class BaseOptimizer(ABC):
         )
 
     def sample_theta_all(
-        self, n_samples: int, seed: Optional[int], normalize: bool
+        self,
+        n_samples: int,
+        seed: Optional[int],
+        selected_features: Optional[Dict[str, List[str]]],
+        normalize: bool,
+        mode: str = "random",
     ) -> np.ndarray:
         if seed is not None:
             np.random.seed(seed)
-        samples = np.random.randint(
-            low=self.theta_all_minmax[0],
-            high=self.theta_all_minmax[1],
-            size=(n_samples, len(self.sc.knob_min)),
-        )
+
+        if selected_features is not None:
+            theta_params = (
+                self.theta_names["c"] + self.theta_names["p"] + self.theta_names["s"]
+            )
+            total_selected_features = (
+                selected_features["c"] + selected_features["p"] + selected_features["s"]
+            )
+            selected_ids = []
+            for c in total_selected_features:
+                if c not in theta_params:
+                    raise ValueError(f"{c} is not in {theta_params}")
+                selected_ids.append(theta_params.index(c))
+        else:
+            selected_ids = list(range(len(self.theta_all_minmax[0])))
+
+        theta_min = self.theta_all_minmax[0][selected_ids]
+        theta_max = self.theta_all_minmax[1][selected_ids]
+        n_params = len(selected_ids)
+        samples = np.repeat(self.theta_default_all, n_samples, axis=0)
+        if n_params == 0:
+            logger.warning("no selected features, force to use default")
+        else:
+            if mode == "random":
+                samples_selected = np.random.randint(
+                    low=theta_min,  # inclusive
+                    high=theta_max + 1,  # exclusive
+                    size=(n_samples, n_params),
+                )
+            elif mode == "lhs":
+                # a trivial implementation of Latin Hypercube Sampling when
+                # all parameters(knobs) are integers
+                sampler = qmc.LatinHypercube(d=n_params, seed=seed)
+                samples_normed = sampler.random(n_samples)
+                samples_selected = np.floor(
+                    samples_normed * (theta_max + 1 - theta_min) + theta_min
+                ).astype(int)
+            else:
+                raise ValueError(f"mode {mode} is not supported")
+            samples[:, selected_ids] = samples_selected
+
         if normalize:
             samples_normalized = (samples - self.theta_all_minmax[0]) / (
                 self.theta_all_minmax[1] - self.theta_all_minmax[0]
@@ -523,29 +577,52 @@ class BaseOptimizer(ABC):
         n_samples: int,
         theta_type: ThetaType,
         seed: Optional[int],
+        selected_features: Optional[Dict[str, List[str]]],
         normalize: bool = True,
         mode: str = "random",
     ) -> np.ndarray:
         if seed is not None:
             np.random.seed(seed)
-        if mode == "random":
-            samples = np.random.randint(
-                low=self.theta_minmax[theta_type][0],
-                high=self.theta_minmax[theta_type][1],
-                size=(n_samples, len(self.theta_minmax[theta_type][0])),
-            )
-        elif mode == "lhs":
-            # a trivial implementation of Latin Hypercube Sampling when
-            # all parameters(knobs) are integers
-            sampler = qmc.LatinHypercube(
-                d=len(self.theta_minmax[theta_type][0]), seed=seed
-            )
-            samples_normed = sampler.random(n_samples)
-            low = self.theta_minmax[theta_type][0]
-            high = self.theta_minmax[theta_type][1] + 1
-            samples = np.floor(samples_normed * (high - low) + low).astype(int)
+
+        if selected_features is not None:
+            theta_params = self.theta_names[theta_type]
+            selected_ids = []
+            for c in selected_features[theta_type]:
+                if c not in theta_params:
+                    raise ValueError(f"{c} is not in {theta_params}")
+                selected_ids.append(theta_params.index(c))
         else:
-            raise ValueError(f"mode {mode} is not supported")
+            selected_ids = list(range(len(self.theta_names[theta_type])))
+
+        theta_min = self.theta_minmax[theta_type][0][selected_ids]
+        theta_max = self.theta_minmax[theta_type][1][selected_ids]
+        n_params = len(selected_ids)
+
+        samples = np.repeat(self.theta_default[theta_type], n_samples, axis=0)
+        if n_params == 0:
+            logger.warning(
+                f"no selected features for {theta_type}, force to use default"
+            )
+        else:
+            if mode == "random":
+                samples_selected = np.random.randint(
+                    low=theta_min,
+                    # fixme: high is exclusive, should be theta_max + 1
+                    high=theta_max,
+                    size=(n_samples, n_params),
+                )
+            elif mode == "lhs":
+                # a trivial implementation of Latin Hypercube Sampling when
+                # all parameters(knobs) are integers
+                sampler = qmc.LatinHypercube(d=n_params, seed=seed)
+                samples_normed = sampler.random(n_samples)
+                samples_selected = np.floor(
+                    samples_normed * (theta_max + 1 - theta_min) + theta_min
+                ).astype(int)
+            else:
+                raise ValueError(f"mode {mode} is not supported")
+            samples[:, selected_ids] = samples_selected
+
         if normalize:
             samples_normalized = (samples - self.theta_minmax[theta_type][0]) / (
                 self.theta_minmax[theta_type][1] - self.theta_minmax[theta_type][0]
@@ -563,6 +640,7 @@ class BaseOptimizer(ABC):
                 1,
                 "c",
                 seed if seed is not None else None,
+                selected_features=None,
                 normalize=normalize,
                 mode=mode,
             ),
@@ -572,6 +650,7 @@ class BaseOptimizer(ABC):
             n_stages,
             "p",
             seed + 1 if seed is not None else None,
+            selected_features=None,
             normalize=normalize,
             mode=mode,
         )
@@ -579,6 +658,7 @@ class BaseOptimizer(ABC):
             n_stages,
             "s",
             seed + 2 if seed is not None else None,
+            selected_features=None,
             normalize=normalize,
             mode=mode,
         )

@@ -268,10 +268,13 @@ def get_compile_time_optimizer_parameters() -> ArgumentParser:
     parser.add_argument("--set_query_control", action="store_true",
                         help="Enable query-level control, "
                              "which is fine-grained control by default")
+
+    # add by chenghao
     parser.add_argument("--weights", nargs="+", type=int,
                         default=[0.9, 0.1])
     parser.add_argument("--conf_save", type=str,
                         default="chenghao_conf_save")
+    parser.add_argument("--selected_features", action="store_true")
 
     # fmt: on
     return parser
@@ -315,5 +318,6 @@ def get_runtime_optimizer_parameters() -> ArgumentParser:
                         help="Moo mode for the runtime optimization")
     parser.add_argument("--verbose", action="store_true",
                         help="Enable verbose mode")
+    parser.add_argument("--selected_features", action="store_true")
     # fmt: on
     return parser

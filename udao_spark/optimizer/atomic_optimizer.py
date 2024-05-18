@@ -1,12 +1,11 @@
 import time
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 import torch as th
 from udao.optimization.utils.moo_utils import is_pareto_efficient
 
-from ..data.utils import get_lhs_confs
 from ..utils.constants import THETA_COMPILE
 from ..utils.logging import logger
 from ..utils.monitor import UdaoMonitor
@@ -53,6 +52,7 @@ class AtomicOptimizer(BaseOptimizer):
         monitor: UdaoMonitor = UdaoMonitor(),
         ercilla: bool = True,
         graph_choice: str = "gtn",
+        selected_features: Optional[Dict[str, List[str]]] = None,
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         non_decision_dict = self.extract_data_and_compute_non_decision_features(
             monitor, non_decision_input, use_ag, ercilla, graph_choice
@@ -64,21 +64,20 @@ class AtomicOptimizer(BaseOptimizer):
         ]
 
         t3 = time.perf_counter_ns()
-        if sample_mode == "random":
+        if sample_mode in ["random", "lhs"]:
+            # for lhs, a general way is to use:
+            # sampled_theta = get_lhs_confs(
+            #   self.sc, n_samples, seed=seed, normalize=not use_ag).values
+            # )
+            # since the knobs are all int in our case, we can simplify it to
+            # sample via self.sample_theta_all
             sampled_theta = self.sample_theta_all(
-                n_samples=n_samples, seed=seed, normalize=not use_ag
+                n_samples=n_samples,
+                seed=seed,
+                selected_features=selected_features,
+                normalize=not use_ag,
+                mode=sample_mode,
             )[:, -len(self.decision_variables) :]
-        elif sample_mode == "lhs":
-            if len(self.decision_variables) != 19:
-                raise ValueError(
-                    f"lhs sampling is only supported for 19 decision variables, "
-                    f"but got {len(self.decision_variables)}"
-                )
-            if seed is None:
-                seed = 0
-            sampled_theta = get_lhs_confs(
-                self.sc, n_samples, seed=seed, normalize=not use_ag
-            ).values
         elif sample_mode == "preset":
             if pre_samples is None:
                 raise ValueError("samples is required for preset sampling")
