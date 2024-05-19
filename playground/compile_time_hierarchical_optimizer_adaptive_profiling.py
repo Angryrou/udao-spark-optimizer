@@ -186,11 +186,22 @@ if __name__ == "__main__":
                 current_po_objs = po_objs
                 current_po_confs = po_conf
             else:
-                current_po_objs = np.vstack([current_po_objs, po_objs])
-                current_po_confs = np.hstack([current_po_confs, po_conf])
-                po_inds = is_pareto_efficient(current_po_objs)
-                current_po_objs = current_po_objs[po_inds]
-                current_po_confs = current_po_confs[po_inds]
+                new_objs_ids = [
+                    po_id
+                    for po_id, po_obj in enumerate(po_objs)
+                    if not np.any(np.all(current_po_objs == po_obj, axis=1))
+                ]
+                # only append new objectives to avoid po_conf inconsistency
+                if len(new_objs_ids) > 0:
+                    current_po_objs = np.vstack(
+                        [current_po_objs, po_objs[new_objs_ids]]
+                    )
+                    current_po_confs = np.hstack(
+                        [current_po_confs, po_conf[new_objs_ids]]
+                    )
+                    po_inds = is_pareto_efficient(current_po_objs)
+                    current_po_objs = current_po_objs[po_inds]
+                    current_po_confs = current_po_confs[po_inds]
 
             print(
                 f"current_po_objs by consuming {trace_id} "
