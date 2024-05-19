@@ -155,11 +155,6 @@ class HierarchicalOptimizer(BaseOptimizer):
             )
         )
 
-        # non_decision_df = self.extract_non_decision_df(non_decision_input)
-        # (
-        #     graph_embeddings,
-        #     non_decision_tabular_features,
-        # ) = self.extract_non_decision_embeddings_from_df(non_decision_df)
         tc_compute_non_decision = time.time() - start_compute_non_decision
         logger.info("graph_embeddings shape: %s", graph_embeddings.shape)
         logger.warning(

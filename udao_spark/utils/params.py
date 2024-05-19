@@ -270,7 +270,7 @@ def get_compile_time_optimizer_parameters() -> ArgumentParser:
                              "which is fine-grained control by default")
 
     # add by chenghao
-    parser.add_argument("--weights", nargs="+", type=int,
+    parser.add_argument("--weights", nargs="+", type=float,
                         default=[0.9, 0.1])
     parser.add_argument("--conf_save", type=str,
                         default="chenghao_conf_save")
