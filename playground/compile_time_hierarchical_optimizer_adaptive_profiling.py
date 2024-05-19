@@ -203,12 +203,12 @@ if __name__ == "__main__":
     )
     JsonHandler.dump_to_file(
         torun_distinct_json,
-        file=f"{params.conf_save}/{bm}100/{params.moo_algo}_{params.sample_mode}/{fname}.json",
+        file=f"{params.conf_save}/{bm}100/{params.moo_algo}_{params.sample_mode}/{fname}_distinct.json",
         indent=2,
     )
     JsonHandler.dump_to_file(
         torun_json,
-        file=f"{params.conf_save}/{bm}100/{params.moo_algo}_{params.sample_mode}/{fname}_distinct.json",
+        file=f"{params.conf_save}/{bm}100/{params.moo_algo}_{params.sample_mode}/{fname}.json",
         indent=2,
     )
     logger.info("Done!")
