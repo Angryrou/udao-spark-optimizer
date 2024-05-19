@@ -16,8 +16,9 @@ from typing import Any, List, Tuple, Union
 
 import numpy as np
 import torch as th
+from udao.optimization.utils.moo_utils import is_pareto_efficient
 
-from udao_spark.optimizer.utils import is_pareto_efficient, timeis
+from udao_spark.optimizer.utils import timeis
 
 
 class DAGOpt:

@@ -100,60 +100,57 @@ if __name__ == "__main__":
     # Compile time QS logical plans from CBO estimation (a list of LQP-sub)
     is_oracle = q_type == "qs_lqp_runtime"
     use_ag = not params.use_mlp
+
+    if params.moo_algo == "evo":
+        param_meta = {
+            "pop_size": params.pop_size,
+            "nfe": params.nfe,
+        }
+    elif params.moo_algo == "ws":
+        param_meta = {
+            "n_samples": params.n_samples,
+            "n_ws": params.n_ws,
+        }
+    elif "hmooc" or "div_and_conq_moo" in params.moo_algo:
+        param_meta = {
+            "n_c_samples": params.n_c_samples,
+            "n_p_samples": params.n_p_samples,
+        }
+    elif params.moo_algo == "ppf":
+        param_meta = {
+            "n_process": params.n_process,
+            "n_grids": params.n_grids,
+            "n_max_iters": params.n_max_iters,
+        }
+    elif params.moo_algo == "analyze_model_accuracy" or params.moo_algo == "test":
+        param_meta = {}
+    else:
+        raise Exception(f"algo {params.moo_algo} is not supported!")
+
+    ag_model = {
+        "ana_latency_s": params.ag_model_qs_ana_latency or "WeightedEnsemble_L2_FULL",
+        "io_mb": params.ag_model_qs_io or "CatBoost",
+    }
+
+    selected_features: Optional[Dict[str, List[str]]] = (
+        {
+            "c": [f"k{i}" for i in [1, 2, 3, 4, 6, 7]],
+            "p": [f"s{i}" for i in [1, 4, 5, 8, 9]],
+            "s": [],
+        }
+        if params.selected_features
+        else None
+    )
+
     torun_json = {}
 
     for template, trace in zip(benchmark.templates, raw_traces):
         logger.info(f"Processing {trace}")
-
         query_id = trace.split(f"{bm}100_")[1].split("_")[0]  # e.g. 2-1
         print(f"query_id is {query_id}")
-
         non_decision_input = get_non_decision_inputs_for_qs_compile_dict(
             trace, is_oracle=is_oracle
         )
-
-        if params.moo_algo == "evo":
-            param_meta = {
-                "pop_size": params.pop_size,
-                "nfe": params.nfe,
-            }
-        elif params.moo_algo == "ws":
-            param_meta = {
-                "n_samples": params.n_samples,
-                "n_ws": params.n_ws,
-            }
-        elif "hmooc" or "div_and_conq_moo" in params.moo_algo:
-            param_meta = {
-                "n_c_samples": params.n_c_samples,
-                "n_p_samples": params.n_p_samples,
-            }
-        elif params.moo_algo == "ppf":
-            param_meta = {
-                "n_process": params.n_process,
-                "n_grids": params.n_grids,
-                "n_max_iters": params.n_max_iters,
-            }
-        elif params.moo_algo == "analyze_model_accuracy" or params.moo_algo == "test":
-            param_meta = {}
-        else:
-            raise Exception(f"algo {params.moo_algo} is not supported!")
-
-        ag_model = {
-            "ana_latency_s": params.ag_model_qs_ana_latency
-            or "WeightedEnsemble_L2_FULL",
-            "io_mb": params.ag_model_qs_io or "CatBoost",
-        }
-
-        selected_features: Optional[Dict[str, List[str]]] = (
-            {
-                "c": [f"k{i}" for i in [1, 2, 3, 4, 6, 7]],
-                "p": [f"s{i}" for i in [1, 4, 5, 8, 9]],
-                "s": [],
-            }
-            if params.selected_features
-            else None
-        )
-
         objs, conf = hier_optimizer.solve(
             template=template,
             non_decision_input=non_decision_input,
@@ -179,6 +176,7 @@ if __name__ == "__main__":
         torun_json[query_id] = [
             ",".join([dict(conf)[k] for k in spark_conf.knob_names])
         ]
+
     print(torun_json)
     name_prefix = "selected_params_" if selected_features is not None else ""
     weights = params.weights

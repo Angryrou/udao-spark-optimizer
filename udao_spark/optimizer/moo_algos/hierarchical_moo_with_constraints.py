@@ -18,9 +18,10 @@ import numpy as np
 import pandas as pd
 import torch as th
 from sklearn.cluster import KMeans
+from udao.optimization.utils.moo_utils import is_pareto_efficient
 
 from udao_spark.optimizer.moo_algos.dag_optimization import DAGOpt
-from udao_spark.optimizer.utils import is_pareto_efficient, timeis
+from udao_spark.optimizer.utils import timeis
 
 
 class Hierarchical_MOO_with_Constraints:

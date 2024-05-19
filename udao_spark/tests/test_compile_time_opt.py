@@ -11,8 +11,7 @@
 # Created at 14/02/2024
 
 import numpy as np
-
-from ..optimizer.utils import is_pareto_efficient
+from udao.optimization.utils.moo_utils import is_pareto_efficient
 
 
 def test_is_pareto_efficient() -> None:
