@@ -197,8 +197,8 @@ if __name__ == "__main__":
         f"{name_prefix}nc{params.n_c_samples}_np{params.n_p_samples}_"
         f"{'_'.join([f'{w:.1f}' for w in weights])}"
     ) + (
-        ("_" + "+".join(params.target_queries))
-        if params.target_queries is not None
+        ("_" + "+".join(params.target_templates))
+        if params.target_templates is not None
         else ""
     )
     JsonHandler.dump_to_file(
