@@ -193,9 +193,14 @@ if __name__ == "__main__":
     name_prefix = "selected_params_" if selected_features is not None else ""
     weights = params.weights
     fname = (
-        f"adaptive_"
-        f"{name_prefix}nc{params.n_c_samples}_np{params.n_p_samples}_"
-        f"{'_'.join([f'{w:.1f}' for w in weights])}"
+        (
+            f"adaptive_"
+            f"{name_prefix}nc{params.n_c_samples}_np{params.n_p_samples}_"
+            f"{'_'.join([f'{w:.1f}' for w in weights])}"
+        )
+        + ""
+        if params.target_query is None
+        else "_" + "+".join(params.target_queries)
     )
     JsonHandler.dump_to_file(
         torun_distinct_json,
