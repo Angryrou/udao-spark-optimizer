@@ -20,7 +20,7 @@ logger.setLevel("INFO")
 
 def get_params() -> argparse.ArgumentParser:
     parser = get_compile_time_optimizer_parameters()
-    parser.add_argument("--target_queries", nargs="+", type=str, default=None)
+    parser.add_argument("--target_templates", nargs="+", type=str, default=None)
     parser.add_argument("--ordered_queries_header", type=str, default="assets")
     return parser
 
@@ -86,7 +86,7 @@ if __name__ == "__main__":
     if not Path(path).exists():
         raise FileNotFoundError(f"{path} does not exist")
     ordered_traces = JsonHandler.load_json(path)
-    target_templates = params.target_queries or Benchmark(BenchmarkType(bm)).templates
+    target_templates = params.target_templates or Benchmark(BenchmarkType(bm)).templates
     target_queries = [f"{t}-1" for t in target_templates]
     target_traces = {}
     for query_id, ordered_traces in ordered_traces.items():
@@ -96,6 +96,7 @@ if __name__ == "__main__":
                 raise FileNotFoundError(f"{trace} does not exist")
         if query_id in target_queries:
             target_traces[query_id] = ordered_traces
+            print(f"Found {query_id} with {len(ordered_traces)} traces")
 
     # Compile time QS logical plans from CBO estimation (a list of LQP-sub)
     is_oracle = q_type == "qs_lqp_runtime"
