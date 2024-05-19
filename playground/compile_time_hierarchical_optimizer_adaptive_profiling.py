@@ -85,11 +85,11 @@ if __name__ == "__main__":
     )
     if not Path(path).exists():
         raise FileNotFoundError(f"{path} does not exist")
-    ordered_traces = JsonHandler.load_json(path)
+    ordered_traces_dict = JsonHandler.load_json(path)
     target_templates = params.target_templates or Benchmark(BenchmarkType(bm)).templates
     target_queries = [f"{t}-1" for t in target_templates]
     target_traces = {}
-    for query_id, ordered_traces in ordered_traces.items():
+    for query_id, ordered_traces in ordered_traces_dict.items():
         for trace in ordered_traces:
             if not Path(trace).exists():
                 print(f"{trace} does not exist")
