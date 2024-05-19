@@ -3,12 +3,13 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 import numpy as np
+from udao.optimization.utils.moo_utils import is_pareto_efficient
 
 from udao_spark.data.extractors.injection_extractor import (
     get_non_decision_inputs_for_qs_compile_dict,
 )
 from udao_spark.optimizer.hierarchical_optimizer import HierarchicalOptimizer
-from udao_spark.optimizer.utils import get_ag_meta
+from udao_spark.optimizer.utils import get_ag_meta, weighted_utopia_nearest
 from udao_spark.utils.params import QType, get_compile_time_optimizer_parameters
 from udao_trace.configuration import SparkConf
 from udao_trace.utils import BenchmarkType, JsonHandler
@@ -150,14 +151,14 @@ if __name__ == "__main__":
         logger.info(f"Processing {query_id} with {len(raw_traces)} traces")
         torun_json[query_id] = {}
         torun_distinct_json[query_id] = []
-        current_best_lat = float("inf")
-        current_best_conf = ""
+        current_po_objs = None
+        current_po_confs = None
 
         for trace_id, trace in enumerate(raw_traces):
             non_decision_input = get_non_decision_inputs_for_qs_compile_dict(
                 trace, is_oracle=is_oracle
             )
-            objs, conf = hier_optimizer.solve(
+            po_objs, po_conf = hier_optimizer.solve(
                 template=query_id.split("-")[0],
                 non_decision_input=non_decision_input,
                 seed=params.seed,
@@ -175,19 +176,35 @@ if __name__ == "__main__":
                 benchmark=bm,
                 weights=np.array(params.weights),
                 selected_features=selected_features,
+                return_pareto_set=True,
             )
-            if objs is None or conf is None:
+            if po_objs is None or po_conf is None:
                 logger.warning(f"Failed to solve {query_id}")
                 continue
 
-            if objs[0] < current_best_lat:
-                current_best_lat = objs[0]
-                current_best_conf = ",".join(
-                    [dict(conf)[k] for k in spark_conf.knob_names]
-                )
-                torun_distinct_json[query_id].append(current_best_conf)
+            if current_po_objs is None:
+                current_po_objs = po_objs
+                current_po_confs = po_conf
+            else:
+                current_po_objs = np.vstack([current_po_objs, po_objs])
+                current_po_confs = np.vstack([current_po_confs, po_conf])
+                po_ind = is_pareto_efficient(current_po_objs)
+                current_po_objs = current_po_objs[po_ind]
+                current_po_confs = current_po_confs[po_ind]
 
-            torun_json[query_id][trace_id] = current_best_conf
+            print(
+                f"current_po_objs by consuming {trace_id} "
+                f"QS structures: {len(current_po_objs)}"
+            )
+
+            ret_objs, ret_conf = weighted_utopia_nearest(
+                current_po_objs, current_po_confs, np.array(params.weights)
+            )
+            conf_str = ",".join([dict(ret_conf)[k] for k in spark_conf.knob_names])
+
+            torun_json[query_id][trace_id] = conf_str
+            if conf_str not in torun_distinct_json[query_id]:
+                torun_distinct_json[query_id].append(conf_str)
 
     print(torun_json)
     name_prefix = "selected_params_" if selected_features is not None else ""

@@ -129,6 +129,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         benchmark: str = "tpch",
         weights: np.ndarray = np.array([0.9, 0.1]),
         selected_features: Optional[Dict[str, List[str]]] = None,
+        return_pareto_set: bool = False,
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         self.current_target_template = template
 
@@ -196,6 +197,7 @@ class HierarchicalOptimizer(BaseOptimizer):
                 join_ids=join_ids,
                 weights=weights,
                 selected_features=selected_features,
+                return_pareto_set=return_pareto_set,
             )
 
         elif algo == "evo":
@@ -322,6 +324,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         join_ids: List[int],
         weights: np.ndarray = np.array([1.0, 1.0]),
         selected_features: Optional[Dict[str, List[str]]] = None,
+        return_pareto_set: bool = False,  # return PO set or WUN point
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         start = time.time()
         theta_c: Union[th.Tensor, np.ndarray]
@@ -542,7 +545,7 @@ class HierarchicalOptimizer(BaseOptimizer):
                 )
 
         # add WUN
-        objs, conf = weighted_utopia_nearest(
+        ret_objs, ret_conf = weighted_utopia_nearest(
             po_objs, np.array(po_conf_agg_list), weights
         )
         tc_po_rec = time.time() - start_rec
@@ -568,7 +571,13 @@ class HierarchicalOptimizer(BaseOptimizer):
                 pref2theta_agg, f"{data_path}/pref2theta_agg.json", 2
             )
 
-        return objs, conf
+        if return_pareto_set:
+            return (
+                po_objs,
+                np.array(po_conf_agg_list),
+            )
+        else:
+            return ret_objs, ret_conf
 
     def _evo(
         self,
