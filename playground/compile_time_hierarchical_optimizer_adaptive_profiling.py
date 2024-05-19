@@ -187,10 +187,10 @@ if __name__ == "__main__":
                 current_po_confs = po_conf
             else:
                 current_po_objs = np.vstack([current_po_objs, po_objs])
-                current_po_confs = np.vstack([current_po_confs, po_conf])
-                po_ind = is_pareto_efficient(current_po_objs)
-                current_po_objs = current_po_objs[po_ind]
-                current_po_confs = current_po_confs[po_ind]
+                current_po_confs = np.hstack([current_po_confs, po_conf])
+                po_inds = is_pareto_efficient(current_po_objs)
+                current_po_objs = current_po_objs[po_inds]
+                current_po_confs = current_po_confs[po_inds]
 
             print(
                 f"current_po_objs by consuming {trace_id} "
