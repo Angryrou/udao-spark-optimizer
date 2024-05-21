@@ -243,7 +243,7 @@ def get_compile_time_optimizer_parameters() -> ArgumentParser:
     parser.add_argument("--sample_mode", type=str, default="grid-search",
                         choices=["grid-search", "random", "lhs",
                                  "grid-adaptive-cut-1P", "grid-adaptive-cut-5P",
-                                 "grid-adaptive-cut-Cum5P"
+                                 "grid-adaptive-cut-Cum5P",  "grid-adaptive-cut-Cum5P-2"
                                  ],
                         help="Sample type for HMOOC")
     parser.add_argument("--pop_size", type=int, default=100,
