@@ -1271,14 +1271,14 @@ class HierarchicalOptimizer(BaseOptimizer):
                         ]
                 elif n_c_samples == 36:  # 3  2  3 * 2 (<= 64)
                     c_grids = [
-                        [1, 3, 5],  # 3
-                        [1, 2],  # 2
-                        [8, 12, 16],  # 3
-                        [2],
-                        [2],
-                        [0, 1],  # 2
-                        [1],
-                        [60],  # 1
+                        [1, 3, 5],  # k1: 3
+                        [1, 2],  # k2: 2
+                        [8, 12, 16],  # k3: 3
+                        [2],  # k4:
+                        [2],  # k5
+                        [0, 1],  # k6: 2
+                        [1],  # k7
+                        [60],  # k8
                     ]
                 elif n_c_samples == 32:
                     if "test_end" in save_data_header:
@@ -1473,7 +1473,8 @@ class HierarchicalOptimizer(BaseOptimizer):
                 # the choices of grid based on the selected importance of the knobs
                 # k7, k1, k3, k2, k4, k6 (set k5 and k8 to default)
                 # s4, s5, s8, s9, s1 (set s2, s3, s6, s7 to default)
-                if n_c_samples not in [32, 64, 128, 256]:
+                # adjust
+                if n_c_samples not in [32, 64, 128, 256, 512]:
                     raise Exception(
                         f"# of theta_c samples {n_c_samples} "
                         f"is not supported for {sample_mode}!"
@@ -1520,6 +1521,17 @@ class HierarchicalOptimizer(BaseOptimizer):
                     c_grids = [
                         [1, 2, 4, 5],  # k1
                         [1, 4],  # k2
+                        [4, 8, 12, 16],  # k3
+                        [1, 4],  # k4
+                        [2],  # k5 - default: 2
+                        [0, 1],  # k6
+                        [0, 1],  # k7
+                        [60],  # k8 - default: 60
+                    ]
+                elif n_c_samples == 512:
+                    c_grids = [
+                        [1, 2, 4, 5],  # k1
+                        [1, 2, 3, 4],  # k2
                         [4, 8, 12, 16],  # k3
                         [1, 4],  # k4
                         [2],  # k5 - default: 2
