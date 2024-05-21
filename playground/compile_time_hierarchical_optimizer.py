@@ -8,7 +8,7 @@ from udao_spark.data.extractors.injection_extractor import (
     get_non_decision_inputs_for_qs_compile_dict,
 )
 from udao_spark.optimizer.hierarchical_optimizer import HierarchicalOptimizer
-from udao_spark.optimizer.utils import get_ag_meta
+from udao_spark.optimizer.utils import get_ag_meta, weighted_utopia_nearest
 from udao_spark.utils.params import QType, get_compile_time_optimizer_parameters
 from udao_trace.configuration import SparkConf
 from udao_trace.utils import BenchmarkType, JsonHandler, PickleHandler
@@ -21,6 +21,8 @@ if __name__ == "__main__":
     # Initialize InjectionExtractor
     params = get_compile_time_optimizer_parameters().parse_args()
     logger.info(f"get parameters: {params}")
+    if params.sample_mode.startswith("grid") and params.selected_features:
+        raise ValueError("grid search does not support selected features")
 
     bm = params.benchmark
     q_type: QType = params.q_type
@@ -142,8 +144,8 @@ if __name__ == "__main__":
         else None
     )
 
-    torun_json = {}
-
+    po_set_dict = {}
+    solving_time_dict = {}
     for template, trace in zip(benchmark.templates, raw_traces):
         logger.info(f"Processing {trace}")
         query_id = trace.split(f"{bm}100_")[1].split("_")[0]  # e.g. 2-1
@@ -151,7 +153,7 @@ if __name__ == "__main__":
         non_decision_input = get_non_decision_inputs_for_qs_compile_dict(
             trace, is_oracle=is_oracle
         )
-        objs, conf = hier_optimizer.solve(
+        po_objs, po_conf, dt = hier_optimizer.solve(
             template=template,
             non_decision_input=non_decision_input,
             seed=params.seed,
@@ -167,36 +169,64 @@ if __name__ == "__main__":
             save_data_header=params.save_data_header,
             is_query_control=params.set_query_control,
             benchmark=bm,
-            weights=np.array(params.weights),
             selected_features=selected_features,
         )
-        if objs is None or conf is None:
+        solving_time_dict[query_id] = dt
+        if po_objs is None or po_conf is None:
             logger.warning(f"Failed to solve {template}")
             continue
-        torun_json[query_id] = [
-            ",".join([dict(conf)[k] for k in spark_conf.knob_names])
-        ]
 
-    print(torun_json)
+        conf_strs = np.array(
+            [
+                ",".join([dict(conf)[k] for k in spark_conf.knob_names])
+                for conf in po_conf
+            ]
+        )
+        po_set_dict[query_id] = {
+            "po_objs": po_objs,
+            "po_confs": conf_strs,
+        }
+
     name_prefix = "selected_params_" if selected_features is not None else ""
-    weights = params.weights
-    fname = (
-        f"{name_prefix}nc{params.n_c_samples}_np{params.n_p_samples}_"
-        f"{'_'.join([f'{w:.1f}' for w in weights])}"
-    )
+    fname_prefix = f"{name_prefix}nc{params.n_c_samples}_np{params.n_p_samples}"
+    for weights in [[1.0, 0.0], [0.9, 0.1], [0.5, 0.5], [0.1, 0.9], [0.0, 1.0]]:
+        fname = f"{fname_prefix}_{'_'.join([f'{w:.1f}' for w in weights])}"
+        torun_json = {
+            query_id: [
+                weighted_utopia_nearest(
+                    po_set["po_objs"], po_set["po_confs"], np.array(weights)
+                )[1]
+            ]
+            for query_id, po_set in po_set_dict.items()
+        }
+        JsonHandler.dump_to_file(
+            torun_json,
+            file=f"{params.conf_save}/{bm}100/{params.moo_algo}_{params.sample_mode}/{fname}.json",
+            indent=2,
+        )
+        pref = int(10 * weights[0])
+        pref_dict = {
+            pref: pd.DataFrame.from_dict(torun_json, orient="index")
+            .reset_index()
+            .rename(columns={"index": "query_id", 0: "conf"})
+        }
+        pred_dict_file = (
+            f"pref_to_df_{params.moo_algo}_{params.sample_mode}_{fname}.pkl"
+        )
+        PickleHandler.save(
+            pref_dict, f"{params.conf_save}/{bm}100/", pred_dict_file, overwrite=True
+        )
+
     JsonHandler.dump_to_file(
-        torun_json,
-        file=f"{params.conf_save}/{bm}100/{params.moo_algo}_{params.sample_mode}/{fname}.json",
+        solving_time_dict,
+        file=f"{params.conf_save}/{bm}100/{params.moo_algo}_{params.sample_mode}/{fname_prefix}_solving_time.json",
         indent=2,
     )
-    pref = int(10 * weights[0])
-    pref_dict = {
-        pref: pd.DataFrame.from_dict(torun_json, orient="index")
-        .reset_index()
-        .rename(columns={"index": "query_id", 0: "conf"})
-    }
-    pred_dict_file = f"pref_to_df_{params.moo_algo}_{params.sample_mode}_{fname}.pkl"
     PickleHandler.save(
-        pref_dict, f"{params.conf_save}/{bm}100/", pred_dict_file, overwrite=True
+        po_set_dict,
+        header=f"{params.conf_save}/{bm}100/{params.moo_algo}_{params.sample_mode}",
+        file_name=f"{fname_prefix}_po_set_dict.pkl",
+        overwrite=True,
     )
+
     logger.info("Done!")

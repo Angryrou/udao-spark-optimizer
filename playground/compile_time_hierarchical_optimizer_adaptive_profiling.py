@@ -23,6 +23,7 @@ def get_params() -> argparse.ArgumentParser:
     parser = get_compile_time_optimizer_parameters()
     parser.add_argument("--target_templates", nargs="+", type=str, default=None)
     parser.add_argument("--ordered_queries_header", type=str, default="assets")
+    parser.add_argument("--weights", nargs="+", type=float, default=[0.9, 0.1])
     return parser
 
 
@@ -158,7 +159,7 @@ if __name__ == "__main__":
             non_decision_input = get_non_decision_inputs_for_qs_compile_dict(
                 trace, is_oracle=is_oracle
             )
-            po_objs, po_conf = hier_optimizer.solve(
+            po_objs, po_conf, dt = hier_optimizer.solve(
                 template=query_id.split("-")[0],
                 non_decision_input=non_decision_input,
                 seed=params.seed,
@@ -174,9 +175,7 @@ if __name__ == "__main__":
                 save_data_header=params.save_data_header,
                 is_query_control=params.set_query_control,
                 benchmark=bm,
-                weights=np.array(params.weights),
                 selected_features=selected_features,
-                return_pareto_set=True,
             )
             if po_objs is None or po_conf is None:
                 logger.warning(f"Failed to solve {query_id}")

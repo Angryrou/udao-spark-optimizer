@@ -53,7 +53,7 @@ class AtomicOptimizer(BaseOptimizer):
         ercilla: bool = True,
         graph_choice: str = "gtn",
         selected_features: Optional[Dict[str, List[str]]] = None,
-    ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+    ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], float]:
         non_decision_dict = self.extract_data_and_compute_non_decision_features(
             monitor, non_decision_input, use_ag, ercilla, graph_choice
         )
@@ -136,7 +136,7 @@ class AtomicOptimizer(BaseOptimizer):
 
         n_po = len(po_objs)
         if n_po == 0:
-            return None, None
+            return None, None, -1
 
         logger.debug(f"po_objs: {po_objs}, po_theta: {po_theta}")
         po_confs = self.construct_po_confs(po_theta, use_ag)
@@ -147,4 +147,4 @@ class AtomicOptimizer(BaseOptimizer):
         if self.verbose:
             logger.info(f">> constructed configurations in {(t7 - t6) / 1e6} ms")
 
-        return po_objs, po_confs
+        return po_objs, po_confs, -1

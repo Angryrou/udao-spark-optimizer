@@ -65,7 +65,7 @@ if __name__ == "__main__":
         query_id = f"{template}-1"
         non_decision_input = get_non_decision_inputs_for_q_compile(trace)
         monitor = UdaoMonitor()
-        po_objs, po_confs = atomic_optimizer.solve(
+        po_objs, po_confs, _ = atomic_optimizer.solve(
             template=template,
             non_decision_input=non_decision_input,
             seed=params.seed,

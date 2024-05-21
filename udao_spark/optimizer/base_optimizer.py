@@ -671,7 +671,7 @@ class BaseOptimizer(ABC):
         non_decision_input: Dict[str, Any],
         seed: Optional[int] = None,
         use_ag: bool = True,
-    ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+    ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], float]:
         pass
 
     def weighted_utopia_nearest(self, pareto_points: List[Point]) -> Point:
