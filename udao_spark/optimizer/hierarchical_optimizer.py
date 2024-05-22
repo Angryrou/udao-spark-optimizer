@@ -1468,541 +1468,7 @@ class HierarchicalOptimizer(BaseOptimizer):
                     ]
                 else:
                     raise Exception(f"n_p_samples {n_p_samples} is not supported!")
-
-            elif sample_mode == "grid-adaptive-cut-1P":
-                # the choices of grid based on the selected importance of the knobs
-                # k7, k1, k3, k2, k4, k6 (set k5 and k8 to default)
-                # s4, s5, s8, s9, s1 (set s2, s3, s6, s7 to default)
-                # adjust
-                if n_c_samples not in [32, 64, 128, 256, 512]:
-                    raise Exception(
-                        f"# of theta_c samples {n_c_samples} "
-                        f"is not supported for {sample_mode}!"
-                    )
-                if n_p_samples not in [32, 64, 128]:
-                    raise Exception(
-                        f"# of theta_p samples {n_p_samples} "
-                        f"is not supported for {sample_mode}!"
-                    )
-                if n_c_samples == 32:
-                    c_grids = [
-                        [1, 5],  # k1
-                        [1, 4],  # k2
-                        [4, 16],  # k3
-                        [1, 4],  # k4
-                        [2],  # k5 - default: 2
-                        [0],  # k6 - set to "0"
-                        [0, 1],  # k7
-                        [60],  # k8 - default: 60
-                    ]
-                elif n_c_samples == 64:
-                    c_grids = [
-                        [1, 5],  # k1
-                        [1, 4],  # k2
-                        [4, 16],  # k3
-                        [1, 4],  # k4
-                        [2],  # k5 - default: 2
-                        [0, 1],  # k6
-                        [0, 1],  # k7
-                        [60],  # k8 - default: 60
-                    ]
-                elif n_c_samples == 128:
-                    c_grids = [
-                        [1, 2, 4, 5],  # k1
-                        [1, 4],  # k2
-                        [4, 16],  # k3
-                        [1, 4],  # k4
-                        [2],  # k5 - default: 2
-                        [0, 1],  # k6
-                        [0, 1],  # k7
-                        [60],  # k8 - default: 60
-                    ]
-                elif n_c_samples == 256:
-                    c_grids = [
-                        [1, 2, 4, 5],  # k1
-                        [1, 4],  # k2
-                        [4, 8, 12, 16],  # k3
-                        [1, 4],  # k4
-                        [2],  # k5 - default: 2
-                        [0, 1],  # k6
-                        [0, 1],  # k7
-                        [60],  # k8 - default: 60
-                    ]
-                elif n_c_samples == 512:
-                    c_grids = [
-                        [1, 2, 4, 5],  # k1
-                        [1, 2, 3, 4],  # k2
-                        [4, 8, 12, 16],  # k3
-                        [1, 4],  # k4
-                        [2],  # k5 - default: 2
-                        [0, 1],  # k6
-                        [0, 1],  # k7
-                        [60],  # k8 - default: 60
-                    ]
-                else:
-                    raise Exception(
-                        f"# of theta_c samples {n_c_samples} "
-                        f"is not supported for {sample_mode}!"
-                    )
-
-                # for some realistic concerns, we reset the range for
-                # s4: [1MB - 280MB] to avoid failures and missing good broadcast
-                # s5: [10 - 50] to avoid bad performance within same resource usage
-                if n_p_samples == 32:
-                    p_grids = [
-                        [0, 5],  # s1
-                        [2],  # s2 default
-                        [0],  # s3 default: 0MB maxShuffledHashJoinLocalMapThreshold
-                        [1, 28],  # s4: 10MB/280MB autoBroadcastJoinThreshold
-                        [10, 50],  # s5: 80/400 sql.shuffle.partitions
-                        [2],  # s6 default
-                        [50],  # s7: default
-                        [0, 4],  # s8: spark.sql.files.maxPartitionBytes
-                        [0, 4],  # s9: default
-                    ]
-                elif n_p_samples == 64:
-                    p_grids = [
-                        [0, 5],  # s1
-                        [2],  # s2 default
-                        [0],  # s3 default: 0MB maxShuffledHashJoinLocalMapThreshold
-                        [1, 4, 14, 28],  # s4: 10MB/280MB autoBroadcastJoinThreshold
-                        [10, 50],  # s5: 80/400 sql.shuffle.partitions
-                        [2],  # s6 default
-                        [50],  # s7: default
-                        [0, 4],  # s8: spark.sql.files.maxPartitionBytes
-                        [0, 4],  # s9: default
-                    ]
-                elif n_p_samples == 128:
-                    p_grids = [
-                        [0, 5],  # s1
-                        [2],  # s2 default
-                        [0],  # s3 default: 0MB maxShuffledHashJoinLocalMapThreshold
-                        [1, 4, 14, 28],  # s4: 10MB/280MB autoBroadcastJoinThreshold
-                        [10, 20, 40, 50],  # s5: 80/400 sql.shuffle.partitions
-                        [2],  # s6 default
-                        [50],  # s7: default
-                        [0, 4],  # s8: spark.sql.files.maxPartitionBytes
-                        [0, 4],  # s9: default
-                    ]
-                else:
-                    raise Exception(
-                        f"# of theta_p samples {n_p_samples} "
-                        f"is not supported for {sample_mode}!"
-                    )
-
-            elif sample_mode == "grid-adaptive-cut-5P":
-                # the choices of grid based on the selected importance of the knobs
-                # k7, k1, k3 (set k2, k4, k6, k5 and k8 to default)
-                # s4, s5, s8 (set s9, s1, s2, s3, s6, s7 to default)
-                if n_c_samples not in [32, 128]:
-                    raise Exception(
-                        f"# of theta_c samples {n_c_samples} "
-                        f"is not supported for {sample_mode}!"
-                    )
-                if n_p_samples not in [32, 64, 128]:
-                    raise Exception(
-                        f"# of theta_p samples {n_p_samples} "
-                        f"is not supported for {sample_mode}!"
-                    )
-                if n_c_samples == 32:
-                    c_grids = [
-                        [1, 2, 4, 5],  # k1
-                        [1],  # k2
-                        [4, 8, 12, 16],  # k3
-                        [2],  # k4 - from best practice
-                        [2],  # k5 - default: 2
-                        [0],  # k6 - set to "0"
-                        [0, 1],  # k7
-                        [60],  # k8 - default: 60
-                    ]
-                elif n_c_samples == 128:
-                    c_grids = [
-                        [1, 2, 4, 5],  # k1
-                        [1, 2, 3, 4],  # k2
-                        [4, 8, 12, 16],  # k3
-                        [2],  # k4 - from best practice
-                        [2],  # k5 - default: 2
-                        [0],  # k6 - set to "0"
-                        [0, 1],  # k7
-                        [60],  # k8 - default: 60
-                    ]
-                else:
-                    raise Exception(
-                        f"# of theta_c samples {n_c_samples} "
-                        f"is not supported for {sample_mode}!"
-                    )
-
-                # for some realistic concerns, we reset the range for
-                # s4: [1MB - 280MB] to avoid failures and missing good broadcast
-                # s5: [10 - 50] to avoid bad performance within same resource usage
-                if n_p_samples == 32:
-                    p_grids = [
-                        [2],  # s1 default
-                        [2],  # s2 default
-                        [0],  # s3 default: 0MB maxShuffledHashJoinLocalMapThreshold
-                        [1, 4, 14, 28],  # s4: autoBroadcastJoinThreshold
-                        [10, 20, 40, 50],  # s5: 80/160 sql.shuffle.partitions
-                        [2],  # s6 default
-                        [50],  # s7: default
-                        [0, 4],  # s8: spark.sql.files.maxPartitionBytes
-                        [2],  # s9: default
-                    ]
-                elif n_p_samples == 64:
-                    p_grids = [
-                        [2],  # s1 default
-                        [2],  # s2 default
-                        [0],  # s3 default: 0MB maxShuffledHashJoinLocalMapThreshold
-                        [1, 4, 14, 28],  # s4: autoBroadcastJoinThreshold
-                        [10, 20, 40, 50],  # s5: 80/160 sql.shuffle.partitions
-                        [2],  # s6 default
-                        [50],  # s7: default
-                        [0, 1, 2, 4],  # s8: spark.sql.files.maxPartitionBytes
-                        [2],  # s9: default
-                    ]
-                elif n_p_samples == 128:
-                    p_grids = [
-                        [2],  # s1 default
-                        [2],  # s2 default
-                        [0],  # s3 default: 0MB maxShuffledHashJoinLocalMapThreshold
-                        [1, 4, 14, 28],  # s4: autoBroadcastJoinThreshold
-                        [10, 20, 40, 50],  # s5: 80/160 sql.shuffle.partitions
-                        [2],  # s6 default
-                        [50],  # s7: default
-                        [0, 1, 2, 4],  # s8: spark.sql.files.maxPartitionBytes
-                        [1, 2],  # s9 - when s4,s5,s8 are concerned, configure the knob
-                    ]
-                else:
-                    raise Exception(
-                        f"# of theta_p samples {n_p_samples} "
-                        f"is not supported for {sample_mode}!"
-                    )
-
-            elif sample_mode == "grid-adaptive-cut-Cum5P":
-                # the choices of grid based on the selected importance of the knobs
-                # set default to parameters from the low rank to the high rank
-                # that cumulatively sum up to 5% of WMAPE
-                #
-                # k7, k1, k3, k2 (set k2, k4, k6, k5 and k8 to default)
-                # s4, s5, s8, s9, s1 (set s2, s3, s6, s7 to default)
-                if n_c_samples not in [32, 54, 128]:
-                    raise Exception(
-                        f"# of theta_c samples {n_c_samples} "
-                        f"is not supported for {sample_mode}!"
-                    )
-                if n_p_samples not in [32, 64, 81, 128, 243]:
-                    raise Exception(
-                        f"# of theta_p samples {n_p_samples} "
-                        f"is not supported for {sample_mode}!"
-                    )
-                if n_c_samples == 32:
-                    c_grids = [
-                        [1, 5],  # k1
-                        [1, 4],  # k2
-                        [4, 8, 12, 16],  # k3
-                        [2],  # k4 - from best practice
-                        [2],  # k5 - default: 2
-                        [0],  # k6 - set to "0"
-                        [0, 1],  # k7
-                        [60],  # k8 - default: 60
-                    ]
-                elif n_c_samples == 54:  # chosen <- 3-value strateg
-                    c_grids = [
-                        [1, 3, 5],  # k1
-                        [1, 2, 3],  # k2
-                        [4, 10, 16],  # k3 -> Fixme: diff
-                        [2],  # k4 - from best practice
-                        [2],  # k5 - default: 2
-                        [0],  # k6 - set to "0"
-                        [0, 1],  # k7 -> Fixme: diff
-                        [60],  # k8 - default: 60
-                    ]
-                elif n_c_samples == 128:
-                    c_grids = [
-                        [1, 2, 4, 5],  # k1
-                        [1, 2, 3, 4],  # k2
-                        [4, 8, 12, 16],  # k3
-                        [2],  # k4 - from best practice
-                        [2],  # k5 - default: 2
-                        [0],  # k6 - set to "0"
-                        [0, 1],  # k7
-                        [60],  # k8 - default: 60
-                    ]
-                else:
-                    raise Exception(
-                        f"# of theta_c samples {n_c_samples} "
-                        f"is not supported for {sample_mode}!"
-                    )
-
-                # s4, s5, s8, s9, s1 (set s2, s3, s6, s7 to default)
-                # for some realistic concerns, we reset the range for
-                # s4: [0MB - 280MB] to avoid failures and missing good broadcast
-                # s5: [10 - 50] to avoid bad performance within same resource usage
-                if n_p_samples == 32:
-                    p_grids = [
-                        [0, 5],  # s1
-                        [2],  # s2 default
-                        [0],  # s3 default: 0MB maxShuffledHashJoinLocalMapThreshold
-                        [1, 28],  # s4: 10MB/280MB autoBroadcastJoinThreshold
-                        [10, 50],  # s5: 80/400 sql.shuffle.partitions
-                        [2],  # s6 default
-                        [50],  # s7: default
-                        [0, 4],  # s8: spark.sql.files.maxPartitionBytes
-                        [0, 4],  # s9: default
-                    ]
-                elif n_p_samples == 64:
-                    p_grids = [
-                        [0, 5],  # s1
-                        [2],  # s2 default
-                        [0],  # s3 default: 0MB maxShuffledHashJoinLocalMapThreshold
-                        [1, 4, 14, 28],  # s4: 10MB/280MB autoBroadcastJoinThreshold
-                        [10, 50],  # s5: 80/400 sql.shuffle.partitions
-                        [2],  # s6 default
-                        [50],  # s7: default
-                        [0, 4],  # s8: spark.sql.files.maxPartitionBytes
-                        [0, 4],  # s9: default
-                    ]
-                elif n_p_samples == 81:  # 3^4 = 81
-                    p_grids = [
-                        [2],  # s1 <--
-                        [2],  # s2 default
-                        [0],  # s3 default: 0MB maxShuffledHashJoinLocalMapThreshold
-                        [0, 14, 28],  # s4: 10MB/280MB autoBroadcastJoinThreshold
-                        [10, 20, 50],  # s5: 80/400 sql.shuffle.partitions
-                        [2],  # s6 default
-                        [50],  # s7: default
-                        [
-                            0,
-                            2,
-                            4,
-                        ],  # s8: spark.sql.files.maxPartitionBytes <-- fixme: diff
-                        [0, 2, 4],  # s9: default <-- fixme: diff
-                    ]
-                elif n_p_samples == 243:  # 3^5 = 243
-                    p_grids = [
-                        [0, 2, 5],  # s1 <--
-                        [2],  # s2 default
-                        [0],  # s3 default: 0MB maxShuffledHashJoinLocalMapThreshold
-                        [0, 14, 28],  # s4: 10MB/280MB autoBroadcastJoinThreshold
-                        [10, 20, 50],  # s5: 80/400 sql.shuffle.partitions
-                        [2],  # s6 default
-                        [50],  # s7: default
-                        [0, 2, 4],  # s8: spark.sql.files.maxPartitionBytes
-                        [0, 2, 4],  # s9: default <--
-                    ]
-                elif n_p_samples == 128:  #
-                    p_grids = [
-                        [0, 5],  # s1
-                        [2],  # s2 default
-                        [0],  # s3 default: 0MB maxShuffledHashJoinLocalMapThreshold
-                        [1, 4, 14, 28],  # s4: 10MB/280MB autoBroadcastJoinThreshold
-                        [10, 20, 40, 50],  # s5: 80/400 sql.shuffle.partitions
-                        [2],  # s6 default
-                        [50],  # s7: default
-                        [0, 4],  # s8: spark.sql.files.maxPartitionBytes
-                        [0, 4],  # s9: default
-                    ]
-                else:
-                    raise Exception(
-                        f"# of theta_p samples {n_p_samples} "
-                        f"is not supported for {sample_mode}!"
-                    )
-            elif sample_mode == "grid-adaptive-cut-Cum5P-2":
-                # s8: [0, 2, 4] -> [1, 2, 3]
-
-                # the choices of grid based on the selected importance of the knobs
-                # set default to parameters from the low rank to the high rank
-                # that cumulatively sum up to 5% of WMAPE
-                #
-                # k7, k1, k3, k2 (set k2, k4, k6, k5 and k8 to default)
-                # s4, s5, s8, s9, s1 (set s2, s3, s6, s7 to default)
-                if n_c_samples not in [54]:
-                    raise Exception(
-                        f"# of theta_c samples {n_c_samples} "
-                        f"is not supported for {sample_mode}!"
-                    )
-                if n_p_samples not in [81]:
-                    raise Exception(
-                        f"# of theta_p samples {n_p_samples} "
-                        f"is not supported for {sample_mode}!"
-                    )
-                if n_c_samples == 54:  # chosen <- 3-value strateg
-                    c_grids = [
-                        [1, 3, 5],  # k1
-                        [1, 2, 3],  # k2
-                        [4, 10, 16],  # k3 -> Fixme: diff
-                        [2],  # k4 - from best practice
-                        [2],  # k5 - default: 2
-                        [0],  # k6 - set to "0"
-                        [0, 1],  # k7 -> Fixme: diff
-                        [60],  # k8 - default: 60
-                    ]
-                else:
-                    raise Exception(
-                        f"# of theta_c samples {n_c_samples} "
-                        f"is not supported for {sample_mode}!"
-                    )
-
-                # s4, s5, s8, s9, s1 (set s2, s3, s6, s7 to default)
-                # for some realistic concerns, we reset the range for
-                # s4: [0MB - 280MB] to avoid failures and missing good broadcast
-                # s5: [10 - 50] to avoid bad performance within same resource usage
-                if n_p_samples == 81:  # 3^4 = 81
-                    p_grids = [
-                        [2],  # s1 <--
-                        [2],  # s2 default
-                        [0],  # s3 default: 0MB maxShuffledHashJoinLocalMapThreshold
-                        [0, 14, 28],  # s4: 10MB/280MB autoBroadcastJoinThreshold
-                        [10, 20, 50],  # s5: 80/400 sql.shuffle.partitions
-                        [2],  # s6 default
-                        [50],  # s7: default
-                        [
-                            1,
-                            2,
-                            3,
-                        ],  # s8: spark.sql.files.maxPartitionBytes <-- fixme: diff
-                        [0, 2, 4],  # s9: default <-- fixme: diff
-                    ]
-                else:
-                    raise Exception(
-                        f"# of theta_p samples {n_p_samples} "
-                        f"is not supported for {sample_mode}!"
-                    )
-            elif sample_mode == "grid-adaptive-cut-Cum5P-3":
-                # k3: [4, 10, 16] -> [8, 12, 16]
-
-                # the choices of grid based on the selected importance of the knobs
-                # set default to parameters from the low rank to the high rank
-                # that cumulatively sum up to 5% of WMAPE
-                #
-                # k7, k1, k3, k2 (set k2, k4, k6, k5 and k8 to default)
-                # s4, s5, s8, s9, s1 (set s2, s3, s6, s7 to default)
-                if n_c_samples not in [54]:
-                    raise Exception(
-                        f"# of theta_c samples {n_c_samples} "
-                        f"is not supported for {sample_mode}!"
-                    )
-                if n_p_samples not in [81, 243]:
-                    raise Exception(
-                        f"# of theta_p samples {n_p_samples} "
-                        f"is not supported for {sample_mode}!"
-                    )
-                if n_c_samples == 54:  # chosen <- 3-value strateg
-                    c_grids = [
-                        [1, 3, 5],  # k1
-                        [1, 2, 3],  # k2
-                        [8, 12, 16],  # k3 -> Fixme: diff
-                        [2],  # k4 - from best practice
-                        [2],  # k5 - default: 2
-                        [0],  # k6 - set to "0"
-                        [0, 1],  # k7 -> Fixme: diff
-                        [60],  # k8 - default: 60
-                    ]
-                else:
-                    raise Exception(
-                        f"# of theta_c samples {n_c_samples} "
-                        f"is not supported for {sample_mode}!"
-                    )
-
-                # s4, s5, s8, s9, s1 (set s2, s3, s6, s7 to default)
-                # for some realistic concerns, we reset the range for
-                # s4: [0MB - 280MB] to avoid failures and missing good broadcast
-                # s5: [10 - 50] to avoid bad performance within same resource usage
-                if n_p_samples == 81:  # 3^4 = 81
-                    p_grids = [
-                        [2],  # s1 <--
-                        [2],  # s2 default
-                        [0],  # s3 default: 0MB maxShuffledHashJoinLocalMapThreshold
-                        [0, 14, 28],  # s4: 10MB/280MB autoBroadcastJoinThreshold
-                        [10, 20, 50],  # s5: 80/400 sql.shuffle.partitions
-                        [2],  # s6 default
-                        [50],  # s7: default
-                        [0, 2, 4],  # s8: spark.sql.files.maxPartitionBytes
-                        [0, 2, 4],  # s9: default <-- fixme: diff
-                    ]
-                if n_p_samples == 243:  # 3^5 = 81
-                    p_grids = [
-                        [2],  # s1 <--
-                        [2],  # s2 default
-                        [
-                            0,
-                            14,
-                            28,
-                        ],  # s3 default: 0MB maxShuffledHashJoinLocalMapThreshold
-                        [0, 14, 28],  # s4: 10MB/280MB autoBroadcastJoinThreshold
-                        [10, 20, 50],  # s5: 80/400 sql.shuffle.partitions
-                        [2],  # s6 default
-                        [50],  # s7: default
-                        [0, 2, 4],  # s8: spark.sql.files.maxPartitionBytes
-                        [0, 2, 4],  # s9: default <-- fixme: diff
-                    ]
-                else:
-                    raise Exception(
-                        f"# of theta_p samples {n_p_samples} "
-                        f"is not supported for {sample_mode}!"
-                    )
-            elif sample_mode == "grid-adaptive-cut-Cum5P-4":
-                # k3=[4, 10, 16] & turn on s3 in 81
-
-                # the choices of grid based on the selected importance of the knobs
-                # set default to parameters from the low rank to the high rank
-                # that cumulatively sum up to 5% of WMAPE
-                #
-                # k7, k1, k3, k2 (set k2, k4, k6, k5 and k8 to default)
-                # s4, s5, s8, s9, s1 (set s2, s3, s6, s7 to default)
-                if n_c_samples not in [54]:
-                    raise Exception(
-                        f"# of theta_c samples {n_c_samples} "
-                        f"is not supported for {sample_mode}!"
-                    )
-                if n_p_samples not in [81]:
-                    raise Exception(
-                        f"# of theta_p samples {n_p_samples} "
-                        f"is not supported for {sample_mode}!"
-                    )
-                if n_c_samples == 54:  # chosen <- 3-value strateg
-                    c_grids = [
-                        [1, 3, 5],  # k1
-                        [1, 2, 3],  # k2
-                        [4, 10, 16],  # k3 -> Fixme: diff
-                        [2],  # k4 - from best practice
-                        [2],  # k5 - default: 2
-                        [0],  # k6 - set to "0"
-                        [0, 1],  # k7 -> Fixme: diff
-                        [60],  # k8 - default: 60
-                    ]
-                else:
-                    raise Exception(
-                        f"# of theta_c samples {n_c_samples} "
-                        f"is not supported for {sample_mode}!"
-                    )
-
-                # s4, s5, s8, s9, s1 (set s2, s3, s6, s7 to default)
-                # for some realistic concerns, we reset the range for
-                # s4: [0MB - 280MB] to avoid failures and missing good broadcast
-                # s5: [10 - 50] to avoid bad performance within same resource usage
-                if n_p_samples == 81:  # 3^4 = 81
-                    p_grids = [
-                        [2],  # s1 <--
-                        [2],  # s2 default
-                        [
-                            0,
-                            14,
-                            28,
-                        ],  # s3 default: 0MB maxShuffledHashJoinLocalMapThreshold
-                        [0, 14, 28],  # s4: 10MB/280MB autoBroadcastJoinThreshold
-                        [10, 20, 50],  # s5: 80/400 sql.shuffle.partitions
-                        [2],  # s6 default
-                        [50],  # s7: default
-                        [0, 2, 4],  # s8: spark.sql.files.maxPartitionBytes
-                        [2],  # s9: default <-- fixme: diff
-                    ]
-                else:
-                    raise Exception(
-                        f"# of theta_p samples {n_p_samples} "
-                        f"is not supported for {sample_mode}!"
-                    )
-
-            elif sample_mode == "grid-adaptive-cut-Cum5P-5":
+            elif sample_mode == "grid-adaptive-cut":  # cut at cumulative 5\%
                 # k3=[8, 12, 16] & turn on s3 in 81
 
                 # the choices of grid based on the selected importance of the knobs
@@ -2011,7 +1477,7 @@ class HierarchicalOptimizer(BaseOptimizer):
                 #
                 # k7, k1, k3, k2 (set k2, k4, k6, k5 and k8 to default)
                 # s4, s5, s8, s9, s1 (set s2, s3, s6, s7 to default)
-                if n_c_samples not in [54]:
+                if n_c_samples not in [54, 152]:
                     raise Exception(
                         f"# of theta_c samples {n_c_samples} "
                         f"is not supported for {sample_mode}!"
@@ -2021,15 +1487,37 @@ class HierarchicalOptimizer(BaseOptimizer):
                         f"# of theta_p samples {n_p_samples} "
                         f"is not supported for {sample_mode}!"
                     )
-                if n_c_samples == 54:  # chosen <- 3-value strateg
+                if n_c_samples == 54:
                     c_grids = [
                         [1, 3, 5],  # k1
                         [1, 2, 3],  # k2
-                        [8, 12, 16],  # k3 -> Fixme: diff
+                        [8, 12, 16],  # k3
                         [2],  # k4 - from best practice
                         [2],  # k5 - default: 2
                         [0],  # k6 - set to "0"
-                        [0, 1],  # k7 -> Fixme: diff
+                        [0, 1],  # k7
+                        [60],  # k8 - default: 60
+                    ]
+                elif n_c_samples == 90:  # 5 * 3 * 3 * 2 = 90
+                    c_grids = [
+                        [1, 2, 3, 4, 5],  # k1
+                        [1, 2, 3],  # k2
+                        [8, 12, 16],  # k3
+                        [2],  # k4 - from best practice
+                        [2],  # k5 - default: 2
+                        [0],  # k6 - set to "0"
+                        [0, 1],  # k7
+                        [60],  # k8 - default: 60
+                    ]
+                elif n_c_samples == 150:  # 5 * 5 * 3 * 2 = 150
+                    c_grids = [
+                        [1, 2, 3, 4, 5],  # k1
+                        [1, 2, 3],  # k2
+                        [8, 10, 12, 14, 16],  # k3
+                        [2],  # k4 - from best practice
+                        [2],  # k5 - default: 2
+                        [0],  # k6 - set to "0"
+                        [0, 1],  # k7
                         [60],  # k8 - default: 60
                     ]
                 else:
@@ -2046,17 +1534,13 @@ class HierarchicalOptimizer(BaseOptimizer):
                     p_grids = [
                         [2],  # s1 <--
                         [2],  # s2 default
-                        [
-                            0,
-                            14,
-                            28,
-                        ],  # s3 default: 0MB maxShuffledHashJoinLocalMapThreshold
-                        [0, 14, 28],  # s4: 10MB/280MB autoBroadcastJoinThreshold
-                        [10, 20, 50],  # s5: 80/400 sql.shuffle.partitions
+                        [0, 14, 28],  # s3: maxShuffledHashJoinLocalMapThreshold
+                        [0, 14, 28],  # s4: 10/140/280MB autoBroadcastJoinThreshold
+                        [10, 20, 50],  # s5: 80/160/400 sql.shuffle.partitions
                         [2],  # s6 default
                         [50],  # s7: default
                         [0, 2, 4],  # s8: spark.sql.files.maxPartitionBytes
-                        [2],  # s9: default <-- fixme: diff
+                        [2],  # s9: default
                     ]
                 else:
                     raise Exception(
