@@ -1,7 +1,7 @@
 bm=$1
 cname=$2
-nreps=$4
-runtime=$5
+nreps=$3
+runtime=$4
 
 if [ "$bm" = "tpch" ]; then
   host=node21-opa
