@@ -245,7 +245,10 @@ def get_compile_time_optimizer_parameters() -> ArgumentParser:
                                  "grid-adaptive-cut-1P", "grid-adaptive-cut-5P",
                                  "grid-adaptive-cut-Cum5P",
                                  "grid-adaptive-cut-Cum5P-2",
-                                 "grid-adaptive-cut-Cum5P-3"],
+                                 "grid-adaptive-cut-Cum5P-3",
+                                 "grid-adaptive-cut-Cum5P-4",
+                                 "grid-adaptive-cut-Cum5P-5"
+                                 ],
                         help="Sample type for HMOOC")
     parser.add_argument("--pop_size", type=int, default=100,
                         help="Population size in EVO")
