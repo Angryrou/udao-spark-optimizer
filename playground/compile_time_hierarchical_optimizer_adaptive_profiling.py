@@ -1,4 +1,5 @@
 import argparse
+from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -12,7 +13,7 @@ from udao_spark.optimizer.hierarchical_optimizer import HierarchicalOptimizer
 from udao_spark.optimizer.utils import get_ag_meta, weighted_utopia_nearest
 from udao_spark.utils.params import QType, get_compile_time_optimizer_parameters
 from udao_trace.configuration import SparkConf
-from udao_trace.utils import BenchmarkType, JsonHandler
+from udao_trace.utils import BenchmarkType, JsonHandler, PickleHandler
 from udao_trace.utils.logging import logger
 from udao_trace.workload import Benchmark
 
@@ -23,7 +24,6 @@ def get_params() -> argparse.ArgumentParser:
     parser = get_compile_time_optimizer_parameters()
     parser.add_argument("--target_templates", nargs="+", type=str, default=None)
     parser.add_argument("--ordered_queries_header", type=str, default="assets")
-    parser.add_argument("--weights", nargs="+", type=float, default=[0.9, 0.1])
     return parser
 
 
@@ -31,6 +31,8 @@ if __name__ == "__main__":
     # Initialize InjectionExtractor
     params = get_params().parse_args()
     logger.info(f"get parameters: {params}")
+    if params.sample_mode.startswith("grid") and params.selected_features:
+        raise ValueError("grid search does not support selected features")
 
     bm = params.benchmark
     q_type: QType = params.q_type
@@ -145,13 +147,12 @@ if __name__ == "__main__":
         else None
     )
 
-    torun_json: Dict[str, Dict[int, str]] = {}
-    torun_distinct_json: Dict[str, List[str]] = {}
+    po_set_dict = defaultdict(list)
+    solving_time_dict = defaultdict(list)
 
     for query_id, raw_traces in target_traces.items():
         logger.info(f"Processing {query_id} with {len(raw_traces)} traces")
-        torun_json[query_id] = {}
-        torun_distinct_json[query_id] = []
+
         current_po_objs = None
         current_po_confs = None
 
@@ -177,6 +178,7 @@ if __name__ == "__main__":
                 benchmark=bm,
                 selected_features=selected_features,
             )
+            solving_time_dict[query_id].append(dt)
             if po_objs is None or po_conf is None:
                 logger.warning(f"Failed to solve {query_id}")
                 continue
@@ -202,40 +204,70 @@ if __name__ == "__main__":
                     current_po_objs = current_po_objs[po_inds]
                     current_po_confs = current_po_confs[po_inds]
 
+            current_conf_strs = np.array(
+                [
+                    ",".join([dict(conf)[k] for k in spark_conf.knob_names])
+                    for conf in current_po_confs
+                ]
+            )
+            po_set_dict[query_id].append(
+                {
+                    "po_objs": current_po_objs,
+                    "po_confs": current_conf_strs,
+                }
+            )
+
             print(
                 f"current_po_objs by consuming {trace_id} "
                 f"QS structures: {len(current_po_objs)}"
             )
 
-            ret_objs, ret_conf = weighted_utopia_nearest(
-                current_po_objs, current_po_confs, np.array(params.weights)
-            )
-            conf_str = ",".join([dict(ret_conf)[k] for k in spark_conf.knob_names])
-
-            torun_json[query_id][trace_id] = conf_str
-            if conf_str not in torun_distinct_json[query_id]:
-                torun_distinct_json[query_id].append(conf_str)
-
-    print(torun_json)
+    # print(torun_json)
     name_prefix = "selected_params_" if selected_features is not None else ""
-    weights = params.weights
-    fname = (
-        f"adaptive_"
-        f"{name_prefix}nc{params.n_c_samples}_np{params.n_p_samples}_"
-        f"{'_'.join([f'{w:.1f}' for w in weights])}"
-    ) + (
-        ("_" + "+".join(params.target_templates))
-        if params.target_templates is not None
-        else ""
+    fname_prefix = (
+        f"adaptive_{name_prefix}nc{params.n_c_samples}_np{params.n_p_samples}"
     )
+    fname_suffix = (
+        "all" if params.target_templates is None else "+".join(params.target_templates)
+    )
+
+    for weights in [[1.0, 0.0], [0.9, 0.1], [0.5, 0.5], [0.1, 0.9], [0.0, 1.0]]:
+        fname = (
+            f"{fname_prefix}_{'_'.join([f'{w:.1f}' for w in weights])}_{fname_suffix}"
+        )
+        torun_json = {
+            query_id: [
+                weighted_utopia_nearest(
+                    po_set["po_objs"], po_set["po_confs"], np.array(weights)
+                )[1]
+                for po_set in po_set_list
+            ]
+            for query_id, po_set_list in po_set_dict.items()
+        }
+        torun_json_distinct = {
+            query_id: list(set(conf_strs)) for query_id, conf_strs in torun_json.items()
+        }
+
+        JsonHandler.dump_to_file(
+            torun_json,
+            file=f"{params.conf_save}/{bm}100/{params.moo_algo}_{params.sample_mode}/{fname}.json",
+            indent=2,
+        )
+        JsonHandler.dump_to_file(
+            torun_json_distinct,
+            file=f"{params.conf_save}/{bm}100/{params.moo_algo}_{params.sample_mode}/{fname}_distinct.json",
+            indent=2,
+        )
+
     JsonHandler.dump_to_file(
-        torun_distinct_json,
-        file=f"{params.conf_save}/{bm}100/{params.moo_algo}_{params.sample_mode}/{fname}_distinct.json",
+        solving_time_dict,
+        file=f"{params.conf_save}/{bm}100/{params.moo_algo}_{params.sample_mode}/{fname_prefix}_{fname_suffix}_solving_time.json",
         indent=2,
     )
-    JsonHandler.dump_to_file(
-        torun_json,
-        file=f"{params.conf_save}/{bm}100/{params.moo_algo}_{params.sample_mode}/{fname}.json",
-        indent=2,
+    PickleHandler.save(
+        po_set_dict,
+        header=f"{params.conf_save}/{bm}100/{params.moo_algo}_{params.sample_mode}",
+        file_name=f"{fname_prefix}_{fname_suffix}_po_set_dict.pkl",
+        overwrite=True,
     )
     logger.info("Done!")
