@@ -241,7 +241,8 @@ def get_compile_time_optimizer_parameters() -> ArgumentParser:
                         help="the number of random samples of theta_p")
 
     parser.add_argument("--sample_mode", type=str, default="grid-search",
-                        choices=["grid-search", "random", "lhs"],
+                        choices=["grid-search", "random", "lhs",
+                                 "grid-adaptive-cut"],
                         help="Sample type for HMOOC")
     parser.add_argument("--pop_size", type=int, default=100,
                         help="Population size in EVO")
@@ -270,8 +271,6 @@ def get_compile_time_optimizer_parameters() -> ArgumentParser:
                              "which is fine-grained control by default")
 
     # add by chenghao
-    parser.add_argument("--weights", nargs="+", type=float,
-                        default=[0.9, 0.1])
     parser.add_argument("--conf_save", type=str,
                         default="chenghao_conf_save")
     parser.add_argument("--selected_features", action="store_true")

@@ -1467,7 +1467,7 @@ class Hierarchical_MOO_with_Constraints:
         :param theta_c_samples: theta_c samples
         :return: newly generated theta_c samples
         """
-        if theta_sample_mode == "grid-search":
+        if theta_sample_mode.startswith("grid"):
             (
                 new_theta_c_list,
                 tc_random_sample_new_theta_c,

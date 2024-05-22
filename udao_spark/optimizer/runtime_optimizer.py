@@ -186,7 +186,7 @@ class RuntimeOptimizer:
             logger.info(f"> got non_decision_input and ro in {(t3 - t2) // 1e6} ms")
         monitor.input_extraction_ms = (t3 - t2) / 1e6  # monitoring
 
-        po_objs, po_confs = ro.solve(
+        po_objs, po_confs, _ = ro.solve(
             template=parsed_dict["TemplateId"],
             non_decision_input=non_decision_input,
             seed=self.seed,

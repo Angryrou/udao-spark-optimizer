@@ -127,10 +127,8 @@ class HierarchicalOptimizer(BaseOptimizer):
         save_data_header: str = "./output",
         is_query_control: bool = False,
         benchmark: str = "tpch",
-        weights: np.ndarray = np.array([0.9, 0.1]),
         selected_features: Optional[Dict[str, List[str]]] = None,
-        return_pareto_set: bool = False,
-    ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+    ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], float]:
         self.current_target_template = template
 
         # initial a monitor
@@ -195,9 +193,7 @@ class HierarchicalOptimizer(BaseOptimizer):
                 save_data_header,
                 benchmark=benchmark,
                 join_ids=join_ids,
-                weights=weights,
                 selected_features=selected_features,
-                return_pareto_set=return_pareto_set,
             )
 
         elif algo == "evo":
@@ -300,7 +296,7 @@ class HierarchicalOptimizer(BaseOptimizer):
 
         logger.info(f"conf: {conf}")
         logger.info(f"objs: {objs}")
-        return objs, conf
+        return objs, conf, tc_end_to_end
 
     def _hmooc(
         self,
@@ -322,10 +318,9 @@ class HierarchicalOptimizer(BaseOptimizer):
         save_data_header: str,
         benchmark: str,
         join_ids: List[int],
-        weights: np.ndarray = np.array([1.0, 1.0]),
         selected_features: Optional[Dict[str, List[str]]] = None,
-        return_pareto_set: bool = False,  # return PO set or WUN point
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+        # return the pareto set
         start = time.time()
         theta_c: Union[th.Tensor, np.ndarray]
         theta_p: Union[th.Tensor, np.ndarray]
@@ -544,10 +539,8 @@ class HierarchicalOptimizer(BaseOptimizer):
                     f"query_{query_id}_n_{n_subQs}/{sample_mode}/{dag_opt_algo}"
                 )
 
-        # add WUN
-        ret_objs, ret_conf = weighted_utopia_nearest(
-            po_objs, np.array(po_conf_agg_list), weights
-        )
+        # placeholder to compute WUN time.
+        weighted_utopia_nearest(po_objs, np.array(po_conf_agg_list))
         tc_po_rec = time.time() - start_rec
         print(f"FUNCTION: time cost of {algo} with WUN " f"is: {tc_po_rec}")
 
@@ -571,13 +564,10 @@ class HierarchicalOptimizer(BaseOptimizer):
                 pref2theta_agg, f"{data_path}/pref2theta_agg.json", 2
             )
 
-        if return_pareto_set:
-            return (
-                po_objs,
-                np.array(po_conf_agg_list),
-            )
-        else:
-            return ret_objs, ret_conf
+        return (
+            po_objs,
+            np.array(po_conf_agg_list),
+        )
 
     def _evo(
         self,
@@ -1188,103 +1178,134 @@ class HierarchicalOptimizer(BaseOptimizer):
             else:
                 theta_c = th.tensor(theta_c_samples, dtype=th.float32)
                 theta_p = th.tensor(theta_p_samples, dtype=th.float32)
-        elif sample_mode == "grid-search":
-            if n_c_samples == 256:
-                c_grids = [
-                    [1, 5],
-                    [1, 4],
-                    [4, 16],
-                    [1, 4],
-                    [0, 5],
-                    [0, 1],
-                    [0, 1],
-                    [50, 75],
-                ]
-            elif n_c_samples == 128:
-                c_grids = [
-                    [1, 5],
-                    [1, 4],
-                    [4, 16],
-                    [1, 4],
-                    [0, 5],
-                    [0, 1],
-                    [1],
-                    [50, 75],
-                ]
-
-            elif n_c_samples == 160:  # 4  2  5  1  2 * 2 = 160
-                c_grids = [
-                    [1, 2, 3, 5],  # 4
-                    [1, 2],  # 2
-                    [8, 10, 12, 14, 16],  # 5
-                    [2],
-                    [2],
-                    [0, 1],  # 2
-                    [1],
-                    [50, 75],  # 2
-                ]
-
-            elif n_c_samples == 360:  # 4  2  5  1  2 * 2 = 360
-                c_grids = [
-                    [1, 2, 3, 4, 5],  # 5
-                    [1, 2, 3],  # 3
-                    [6, 8, 10, 12, 14, 16],  # 6
-                    [2],
-                    [2],
-                    [0, 1],  # 2
-                    [1],
-                    [50, 75],  # 2
-                ]
-
-            elif n_c_samples == 64:
-                if "test_end" in save_data_header:
-                    # to test for end-to-end
+        elif sample_mode.startswith("grid"):
+            if sample_mode == "grid-search":
+                if n_c_samples == 512:
                     c_grids = [
-                        [2, 3, 4, 5],
-                        [1, 2, 3, 4],
-                        [4, 8, 12, 16],
+                        [1, 2, 4, 5],
                         [1, 4],
-                        [0, 5],
-                        [0],
-                        [1],
-                        [50, 75],
+                        [4, 16],
+                        [1, 4],
+                        [0, 5],  # k5 not important
+                        [0, 1],
+                        [0, 1],
+                        [60],  # k8 not important
                     ]
-                else:
+
+                elif n_c_samples == 256:
                     c_grids = [
                         [1, 5],
                         [1, 4],
                         [4, 16],
                         [1, 4],
                         [0, 5],
-                        [0],
-                        [1],
+                        [0, 1],
+                        [0, 1],
                         [50, 75],
                     ]
-            elif n_c_samples == 36:  # 3  2  3 * 2 (<= 64)
-                c_grids = [
-                    [1, 3, 5],  # 3
-                    [1, 2],  # 2
-                    [8, 12, 16],  # 3
-                    [2],
-                    [2],
-                    [0, 1],  # 2
-                    [1],
-                    [60],  # 1
-                ]
-            elif n_c_samples == 32:
-                if "test_end" in save_data_header:
-                    # to test for end-to-end
+                elif n_c_samples == 128:
                     c_grids = [
-                        [2, 3, 4, 5],
-                        [1, 2, 3, 4],
-                        [4, 8, 12, 16],
+                        [1, 5],
                         [1, 4],
-                        [5],
-                        [0],
+                        [4, 16],
+                        [1, 4],
+                        [0, 5],
+                        [0, 1],
                         [1],
                         [50, 75],
                     ]
-                else:
+
+                elif n_c_samples == 160:  # 4  2  5  1  2 * 2 = 160
+                    # e2e performance and time measurements
+                    # 32 - choose top-5 with all high-low combinations
+                    # 2^6 64 (all high-low combinations)
+                    # 2^7 128 (4 for most important knob k3)
+                    # 2^8 256 (4 for top-2 most important knob k3, k1)
+
+                    c_grids = [
+                        [1, 2, 3, 5],  # 4
+                        [1, 2],  # 2
+                        [8, 10, 12, 14, 16],  # 5
+                        [2],  # k4
+                        [2],
+                        [0, 1],  # 2
+                        [1],  # need more choices for k7
+                        [60],  # 2
+                    ]
+
+                elif n_c_samples == 360:  # 4  2  5  1  2 * 2 = 360
+                    c_grids = [
+                        [1, 2, 3, 4, 5],  # 5
+                        [1, 2, 3],  # 3
+                        [6, 8, 10, 12, 14, 16],  # 6
+                        [2],
+                        [2],
+                        [0, 1],  # 2
+                        [1],
+                        [50, 75],  # 2
+                    ]
+
+                elif n_c_samples == 64:
+                    if "test_end" in save_data_header:
+                        # to test for end-to-end
+                        c_grids = [
+                            [2, 3, 4, 5],
+                            [1, 2, 3, 4],
+                            [4, 8, 12, 16],
+                            [1, 4],
+                            [0, 5],
+                            [0],
+                            [1],
+                            [50, 75],
+                        ]
+                    else:
+                        c_grids = [
+                            [1, 5],
+                            [1, 4],
+                            [4, 16],
+                            [1, 4],
+                            [0, 5],
+                            [0],
+                            [1],
+                            [50, 75],
+                        ]
+                elif n_c_samples == 36:  # 3  2  3 * 2 (<= 64)
+                    c_grids = [
+                        [1, 3, 5],  # k1: 3
+                        [1, 2],  # k2: 2
+                        [8, 12, 16],  # k3: 3
+                        [2],  # k4:
+                        [2],  # k5
+                        [0, 1],  # k6: 2
+                        [1],  # k7
+                        [60],  # k8
+                    ]
+                elif n_c_samples == 32:
+                    if "test_end" in save_data_header:
+                        # to test for end-to-end
+                        c_grids = [
+                            [2, 3, 4, 5],
+                            [1, 2, 3, 4],
+                            [4, 8, 12, 16],
+                            [1, 4],
+                            [5],
+                            [0],
+                            [1],
+                            [50, 75],
+                        ]
+                    else:
+                        c_grids = [
+                            [1, 5],
+                            [1, 4],
+                            [4, 16],
+                            [1, 4],
+                            [5],
+                            [0],
+                            [1],
+                            [50, 75],
+                        ]
+
+                elif n_c_samples == 16:
                     c_grids = [
                         [1, 5],
                         [1, 4],
@@ -1293,50 +1314,25 @@ class HierarchicalOptimizer(BaseOptimizer):
                         [5],
                         [0],
                         [1],
-                        [50, 75],
+                        [50],
                     ]
+                elif n_c_samples == 1:
+                    c_grids = [
+                        [1],  # r1: 1, r2: 3, r3: 5, r4: 1
+                        [1],  # r1: 1, r2: 1, r3: 4, r4: 4
+                        [16],  # r1: 4, r2: 16, r3: 16, r4: 4
+                        [1],
+                        [5],
+                        [0],
+                        [1],
+                        [75],  ##1,1,16
+                    ]
+                else:
+                    raise Exception(f"n_c_samples {n_c_samples} is not supported!")
 
-            elif n_c_samples == 16:
-                c_grids = [
-                    [1, 5],
-                    [1, 4],
-                    [4, 16],
-                    [1, 4],
-                    [5],
-                    [0],
-                    [1],
-                    [50],
-                ]
-            elif n_c_samples == 1:
-                c_grids = [
-                    [1],  # r1: 1, r2: 3, r3: 5, r4: 1
-                    [1],  # r1: 1, r2: 1, r3: 4, r4: 4
-                    [16],  # r1: 4, r2: 16, r3: 16, r4: 4
-                    [1],
-                    [5],
-                    [0],
-                    [1],
-                    [75],  ##1,1,16
-                ]
-            else:
-                raise Exception(f"n_c_samples {n_c_samples} is not supported!")
-
-            if n_p_samples == 512:
-                p_grids = [
-                    [0, 5],
-                    [1, 6],
-                    [0, 32],
-                    [0, 32],
-                    [2, 50],
-                    [0, 4],
-                    [20, 80],
-                    [0, 4],
-                    [0, 4],
-                ]
-            elif n_p_samples == 256:
-                if "test_end_diff_p" in save_data_header:
+                if n_p_samples == 512:
                     p_grids = [
-                        [0],
+                        [0, 5],
                         [1, 6],
                         [0, 32],
                         [0, 32],
@@ -1346,7 +1342,58 @@ class HierarchicalOptimizer(BaseOptimizer):
                         [0, 4],
                         [0, 4],
                     ]
-                else:
+                elif n_p_samples == 256:
+                    if "test_end_diff_p" in save_data_header:
+                        p_grids = [
+                            [0],
+                            [1, 6],
+                            [0, 32],
+                            [0, 32],
+                            [2, 50],
+                            [0, 4],
+                            [20, 80],
+                            [0, 4],
+                            [0, 4],
+                        ]
+                    else:
+                        p_grids = [
+                            [0],
+                            [1, 6],
+                            [0, 32],
+                            [0, 32],
+                            [2, 50],
+                            [0, 4],
+                            [20, 80],
+                            [0, 4],
+                            [0, 4],
+                        ]
+                elif n_p_samples == 162:  # 3  3  3  3  2 = 162
+                    p_grids = [
+                        [2],  # default
+                        [2],  # default
+                        [0, 14, 28],  # 0MB/160MB maxShuffledHashJoinLocalMapThreshold
+                        [0, 14, 28],  # 0MB/160MB autoBroadcastJoinThreshold
+                        [10, 20, 40],  # 80/160/320 sql.shuffle.partitions
+                        [2],
+                        [50],  # default
+                        [1, 2, 3],
+                        [1, 2],  # default
+                    ]
+
+                elif n_p_samples == 324:  # 2 3  3  3  3  2 = 162
+                    p_grids = [
+                        [2, 4],  # default
+                        [2],  # default
+                        [0, 14, 28],  # 0MB/160MB maxShuffledHashJoinLocalMapThreshold
+                        [0, 14, 28],  # 0MB/160MB autoBroadcastJoinThreshold
+                        [10, 20, 40],  # 80/160/320 sql.shuffle.partitions
+                        [2],
+                        [50],  # default
+                        [1, 2, 3],
+                        [1, 2],  # default
+                    ]
+
+                elif n_p_samples == 128:
                     p_grids = [
                         [0],
                         [1, 6],
@@ -1355,61 +1402,59 @@ class HierarchicalOptimizer(BaseOptimizer):
                         [2, 50],
                         [0, 4],
                         [20, 80],
-                        [0, 4],
+                        [0],
                         [0, 4],
                     ]
-            elif n_p_samples == 162:  # 3  3  3  3  2 = 162
-                p_grids = [
-                    [2],  # default
-                    [2],  # default
-                    [0, 14, 28],  # 0MB/160MB maxShuffledHashJoinLocalMapThreshold
-                    [0, 14, 28],  # 0MB/160MB autoBroadcastJoinThreshold
-                    [10, 20, 40],  # 80/160/320 sql.shuffle.partitions
-                    [2],
-                    [50],  # default
-                    [1, 2, 3],
-                    [1, 2],  # default
-                ]
-
-            elif n_p_samples == 324:  # 2 3  3  3  3  2 = 162
-                p_grids = [
-                    [2, 4],  # default
-                    [2],  # default
-                    [0, 14, 28],  # 0MB/160MB maxShuffledHashJoinLocalMapThreshold
-                    [0, 14, 28],  # 0MB/160MB autoBroadcastJoinThreshold
-                    [10, 20, 40],  # 80/160/320 sql.shuffle.partitions
-                    [2],
-                    [50],  # default
-                    [1, 2, 3],
-                    [1, 2],  # default
-                ]
-
-            elif n_p_samples == 128:
-                p_grids = [
-                    [0],
-                    [1, 6],
-                    [0, 32],
-                    [0, 32],
-                    [2, 50],
-                    [0, 4],
-                    [20, 80],
-                    [0],
-                    [0, 4],
-                ]
-            elif n_p_samples == 64:
-                p_grids = [
-                    [0],
-                    [1],
-                    [0, 32],
-                    [0, 32],
-                    [2, 50],
-                    [0, 4],
-                    [20, 80],
-                    [0],
-                    [0, 4],
-                ]
-            elif n_p_samples == 32:
-                if "test_end_diff_p" in save_data_header:
+                elif n_p_samples == 64:
+                    p_grids = [
+                        [0],
+                        [1],
+                        [0, 32],
+                        [0, 32],
+                        [2, 50],
+                        [0, 4],
+                        [20, 80],
+                        [0],
+                        [0, 4],
+                    ]
+                elif n_p_samples == 32:
+                    if "test_end_diff_p" in save_data_header:
+                        p_grids = [
+                            [0],
+                            [1],
+                            [0, 32],
+                            [0, 32],
+                            [2, 50],
+                            [0],
+                            [20, 80],
+                            [0],
+                            [0, 4],
+                        ]
+                    else:
+                        p_grids = [
+                            [0],
+                            [1],
+                            [0, 32],
+                            [0, 32],
+                            [2, 50],
+                            [0],
+                            [20, 80],
+                            [0],
+                            [0, 4],
+                        ]
+                elif n_p_samples == 24:  # 2  2  2 * 3
+                    p_grids = [
+                        [2],  # default
+                        [2],  # default
+                        [0, 14],  # 0MB/140MB maxShuffledHashJoinLocalMapThreshold
+                        [0, 14],  # 0MB/140MB autoBroadcastJoinThreshold
+                        [10, 20],  # 80/160 sql.shuffle.partitions
+                        [2],
+                        [50],  # default
+                        [1, 2, 3],
+                        [2],  # default
+                    ]
+                elif n_p_samples == 16:
                     p_grids = [
                         [0],
                         [1],
@@ -1419,46 +1464,93 @@ class HierarchicalOptimizer(BaseOptimizer):
                         [0],
                         [20, 80],
                         [0],
-                        [0, 4],
+                        [0],
                     ]
                 else:
-                    p_grids = [
-                        [0],
-                        [1],
-                        [0, 32],
-                        [0, 32],
-                        [2, 50],
-                        [0],
-                        [20, 80],
-                        [0],
-                        [0, 4],
+                    raise Exception(f"n_p_samples {n_p_samples} is not supported!")
+            elif sample_mode == "grid-adaptive-cut":  # cut at cumulative 5\%
+                # k3=[8, 12, 16] & turn on s3 in 81
+
+                # the choices of grid based on the selected importance of the knobs
+                # set default to parameters from the low rank to the high rank
+                # that cumulatively sum up to 5% of WMAPE
+                #
+                # k7, k1, k3, k2 (set k2, k4, k6, k5 and k8 to default)
+                # s4, s5, s8, s9, s1 (set s2, s3, s6, s7 to default)
+                if n_c_samples not in [54, 152]:
+                    raise Exception(
+                        f"# of theta_c samples {n_c_samples} "
+                        f"is not supported for {sample_mode}!"
+                    )
+                if n_p_samples not in [81]:
+                    raise Exception(
+                        f"# of theta_p samples {n_p_samples} "
+                        f"is not supported for {sample_mode}!"
+                    )
+                if n_c_samples == 54:
+                    c_grids = [
+                        [1, 3, 5],  # k1
+                        [1, 2, 3],  # k2
+                        [8, 12, 16],  # k3
+                        [2],  # k4 - from best practice
+                        [2],  # k5 - default: 2
+                        [0],  # k6 - set to "0"
+                        [0, 1],  # k7
+                        [60],  # k8 - default: 60
                     ]
-            elif n_p_samples == 24:  # 2  2  2 * 3
-                p_grids = [
-                    [2],  # default
-                    [2],  # default
-                    [0, 14],  # 0MB/140MB maxShuffledHashJoinLocalMapThreshold
-                    [0, 14],  # 0MB/140MB autoBroadcastJoinThreshold
-                    [10, 20],  # 80/160 sql.shuffle.partitions
-                    [2],
-                    [50],  # default
-                    [1, 2, 3],
-                    [2],  # default
-                ]
-            elif n_p_samples == 16:
-                p_grids = [
-                    [0],
-                    [1],
-                    [0, 32],
-                    [0, 32],
-                    [2, 50],
-                    [0],
-                    [20, 80],
-                    [0],
-                    [0],
-                ]
+                elif n_c_samples == 90:  # 5 * 3 * 3 * 2 = 90
+                    c_grids = [
+                        [1, 2, 3, 4, 5],  # k1
+                        [1, 2, 3],  # k2
+                        [8, 12, 16],  # k3
+                        [2],  # k4 - from best practice
+                        [2],  # k5 - default: 2
+                        [0],  # k6 - set to "0"
+                        [0, 1],  # k7
+                        [60],  # k8 - default: 60
+                    ]
+                elif n_c_samples == 150:  # 5 * 5 * 3 * 2 = 150
+                    c_grids = [
+                        [1, 2, 3, 4, 5],  # k1
+                        [1, 2, 3],  # k2
+                        [8, 10, 12, 14, 16],  # k3
+                        [2],  # k4 - from best practice
+                        [2],  # k5 - default: 2
+                        [0],  # k6 - set to "0"
+                        [0, 1],  # k7
+                        [60],  # k8 - default: 60
+                    ]
+                else:
+                    raise Exception(
+                        f"# of theta_c samples {n_c_samples} "
+                        f"is not supported for {sample_mode}!"
+                    )
+
+                # s4, s5, s8, s9, s1 (set s2, s3, s6, s7 to default)
+                # for some realistic concerns, we reset the range for
+                # s4: [0MB - 280MB] to avoid failures and missing good broadcast
+                # s5: [10 - 50] to avoid bad performance within same resource usage
+                if n_p_samples == 81:  # 3^4 = 81
+                    p_grids = [
+                        [2],  # s1 <--
+                        [2],  # s2 default
+                        [0, 14, 28],  # s3: maxShuffledHashJoinLocalMapThreshold
+                        [0, 14, 28],  # s4: 10/140/280MB autoBroadcastJoinThreshold
+                        [10, 20, 50],  # s5: 80/160/400 sql.shuffle.partitions
+                        [2],  # s6 default
+                        [50],  # s7: default
+                        [0, 2, 4],  # s8: spark.sql.files.maxPartitionBytes
+                        [2],  # s9: default
+                    ]
+                else:
+                    raise Exception(
+                        f"# of theta_p samples {n_p_samples} "
+                        f"is not supported for {sample_mode}!"
+                    )
             else:
-                raise Exception(f"n_p_samples {n_p_samples} is not supported!")
+                raise Exception(
+                    f"The sample mode {sample_mode} for theta is not supported!"
+                )
 
             if use_ag:
                 theta_c = np.array([list(i) for i in itertools.product(*c_grids)])
