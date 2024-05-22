@@ -29,7 +29,7 @@ if [ "$runtime" -eq 1 ]; then
     --runtime_optimizer_host $host \
     --runtime_optimizer_port 12345 \
     --configuration_header divB_new_grids/on_demand \
-    --configuration_name ${cname}
+    --configuration_name "${cname}"
 else
     python spark_trace_on_demand.py \
     --trace_header "evaluations" \
@@ -40,5 +40,5 @@ else
     --cluster_cores 120 \
     --n_reps $nreps \
     --configuration_header divB_new_grids/on_demand \
-    --configuration_name ${cname}
+    --configuration_name "${cname}"
 fi
