@@ -1,6 +1,5 @@
 bm=$1
 cname=$2
-weights=$3
 nreps=$4
 runtime=$5
 
