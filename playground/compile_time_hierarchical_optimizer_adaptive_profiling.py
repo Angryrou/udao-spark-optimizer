@@ -177,6 +177,7 @@ if __name__ == "__main__":
                 is_query_control=params.set_query_control,
                 benchmark=bm,
                 selected_features=selected_features,
+                verbose=params.verbose,
             )
             solving_time_dict[query_id].append(dt)
             if po_objs is None or po_conf is None:

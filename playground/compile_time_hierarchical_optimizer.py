@@ -94,7 +94,7 @@ if __name__ == "__main__":
     else:
         raise ValueError(f"benchmark {bm} is not supported")
     for trace in raw_traces:
-        print(trace)
+        # print(trace)
         if not Path(trace).exists():
             print(f"{trace} does not exist")
             raise FileNotFoundError(f"{trace} does not exist")
@@ -170,6 +170,7 @@ if __name__ == "__main__":
             is_query_control=params.set_query_control,
             benchmark=bm,
             selected_features=selected_features,
+            verbose=params.verbose,
         )
         solving_time_dict[query_id] = dt
         if po_objs is None or po_conf is None:

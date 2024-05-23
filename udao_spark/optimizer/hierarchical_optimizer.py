@@ -128,6 +128,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         is_query_control: bool = False,
         benchmark: str = "tpch",
         selected_features: Optional[Dict[str, List[str]]] = None,
+        verbose: bool = False,
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], float]:
         self.current_target_template = template
 
@@ -173,7 +174,8 @@ class HierarchicalOptimizer(BaseOptimizer):
             for qs_id, v in non_decision_input.items():
                 if ".Join" in JsonHandler.dump_to_string(v["qs_lqp"]):
                     join_ids.append(int(qs_id.split("-")[1]))
-            print(f"template: {template}: join_ids is {join_ids}")
+            if verbose:
+                print(f"template: {template}: join_ids is {join_ids}")
             objs, conf = self._hmooc(
                 len_theta_per_subQ,
                 graph_embeddings,
@@ -194,6 +196,7 @@ class HierarchicalOptimizer(BaseOptimizer):
                 benchmark=benchmark,
                 join_ids=join_ids,
                 selected_features=selected_features,
+                verbose=verbose,
             )
 
         elif algo == "evo":
@@ -319,6 +322,7 @@ class HierarchicalOptimizer(BaseOptimizer):
         benchmark: str,
         join_ids: List[int],
         selected_features: Optional[Dict[str, List[str]]] = None,
+        verbose: bool = False,
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         # return the pareto set
         start = time.time()
@@ -379,18 +383,19 @@ class HierarchicalOptimizer(BaseOptimizer):
 
         po_objs, po_conf, model_infer_info, total_time_profile = hmooc.solve()
         time_cost_moo_algo = time.time() - start
-        print(f"query id is {query_id}")
-        print(f"FUNCTION: time cost of div_and_conq_moo is: {time_cost_moo_algo}")
-        print(
-            f"The number of Pareto solutions in the DAG opt method"
-            f" {dag_opt_algo} is: "
-            f"{np.unique(po_objs, axis=0).shape[0]}"
-        )
-        print(
-            f"The Pareto solutions in the DAG opt method"
-            f" {dag_opt_algo} is: "
-            f"{np.unique(po_objs, axis=0)}"
-        )
+        if verbose:
+            print(f"query id is {query_id}")
+            print(f"FUNCTION: time cost of div_and_conq_moo is: {time_cost_moo_algo}")
+            print(
+                f"The number of Pareto solutions in the DAG opt method"
+                f" {dag_opt_algo} is: "
+                f"{np.unique(po_objs, axis=0).shape[0]}"
+            )
+            print(
+                f"The Pareto solutions in the DAG opt method"
+                f" {dag_opt_algo} is: "
+                f"{np.unique(po_objs, axis=0)}"
+            )
 
         start_rec = time.time()
 
@@ -496,7 +501,8 @@ class HierarchicalOptimizer(BaseOptimizer):
             )
             pref2theta[f"{pref[0]:.1f}_{pref[1]:.1f}"] = conf_fine
             pref2theta_agg[f"{pref[0]:.1f}_{pref[1]:.1f}"] = conf_agg
-            print(f"weights: {pref}, objs: {objs}, conf: {conf_agg}")
+            if verbose:
+                print(f"weights: {pref}, objs: {objs}, conf: {conf_agg}")
 
         conf_qs0 = po_conf[:, :len_theta_per_subQ].reshape(-1, len_theta_per_subQ)
         conf_all_qs = np.vstack(np.split(po_conf, n_subQs, axis=1))
@@ -542,7 +548,8 @@ class HierarchicalOptimizer(BaseOptimizer):
         # placeholder to compute WUN time.
         weighted_utopia_nearest(po_objs, np.array(po_conf_agg_list))
         tc_po_rec = time.time() - start_rec
-        print(f"FUNCTION: time cost of {algo} with WUN " f"is: {tc_po_rec}")
+        if verbose:
+            print(f"FUNCTION: time cost of {algo} with WUN " f"is: {tc_po_rec}")
 
         time_cost_moo_total = time.time() - start
         time_cost_dict = {
