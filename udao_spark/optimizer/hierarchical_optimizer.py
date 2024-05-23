@@ -1477,7 +1477,7 @@ class HierarchicalOptimizer(BaseOptimizer):
                 #
                 # k7, k1, k3, k2 (set k2, k4, k6, k5 and k8 to default)
                 # s4, s5, s8, s9, s1 (set s2, s3, s6, s7 to default)
-                if n_c_samples not in [54, 152]:
+                if n_c_samples not in [54, 90, 150]:
                     raise Exception(
                         f"# of theta_c samples {n_c_samples} "
                         f"is not supported for {sample_mode}!"
