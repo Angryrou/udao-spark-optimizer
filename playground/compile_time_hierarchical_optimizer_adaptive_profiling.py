@@ -33,6 +33,8 @@ if __name__ == "__main__":
     logger.info(f"get parameters: {params}")
     if params.sample_mode.startswith("grid") and params.selected_features:
         raise ValueError("grid search does not support selected features")
+    if not params.verbose:
+        logger.setLevel("ERROR")
 
     bm = params.benchmark
     q_type: QType = params.q_type

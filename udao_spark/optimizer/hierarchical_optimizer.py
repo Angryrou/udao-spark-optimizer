@@ -130,6 +130,9 @@ class HierarchicalOptimizer(BaseOptimizer):
         selected_features: Optional[Dict[str, List[str]]] = None,
         verbose: bool = False,
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], float]:
+        if not verbose:
+            logger.setLevel("ERROR")
+
         self.current_target_template = template
 
         # initial a monitor
