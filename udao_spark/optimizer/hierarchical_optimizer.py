@@ -1492,7 +1492,7 @@ class HierarchicalOptimizer(BaseOptimizer):
                         f"# of theta_c samples {n_c_samples} "
                         f"is not supported for {sample_mode}!"
                     )
-                if n_p_samples not in [81]:
+                if n_p_samples not in [27, 81]:
                     raise Exception(
                         f"# of theta_p samples {n_p_samples} "
                         f"is not supported for {sample_mode}!"
@@ -1540,7 +1540,19 @@ class HierarchicalOptimizer(BaseOptimizer):
                 # for some realistic concerns, we reset the range for
                 # s4: [0MB - 280MB] to avoid failures and missing good broadcast
                 # s5: [10 - 50] to avoid bad performance within same resource usage
-                if n_p_samples == 81:  # 3^4 = 81
+                if n_p_samples == 27:
+                    p_grids = [
+                        [2],  # s1 <--
+                        [2],  # s2 default
+                        [0, 14, 28],  # s3: maxShuffledHashJoinLocalMapThreshold
+                        [0, 14, 28],  # s4: 10/140/280MB autoBroadcastJoinThreshold
+                        [10, 20, 50],  # s5: 80/160/400 sql.shuffle.partitions
+                        [2],  # s6 default
+                        [50],  # s7: default
+                        [2],  # s8: spark.sql.files.maxPartitionBytes
+                        [2],  # s9: default
+                    ]
+                elif n_p_samples == 81:  # 3^4 = 81
                     p_grids = [
                         [2],  # s1 <--
                         [2],  # s2 default
