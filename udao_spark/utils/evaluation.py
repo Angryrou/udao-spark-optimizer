@@ -407,6 +407,7 @@ def get_mlp_pred_objs(
     weights_path: str,
     split: str,
     force: bool,
+    bm_target: Optional[str] = None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, float, float, Dict]:
     ta = TypeAdvisor(q_type=q_type)
     weights_head = os.path.dirname(weights_path)
@@ -478,9 +479,20 @@ def get_mlp_pred_objs(
     split_iterators = PickleHandler.load(header, "split_iterators.pkl")
     if not isinstance(split_iterators, Dict):
         raise TypeError("split_iterators not found or not a desired type")
-    graph_np_dict = get_graph_embedding(
-        ms, split_iterators, index_splits, weights_header
-    )
+
+    bm_target = bm_target or bm
+    if bm_target == bm:
+        graph_np_dict = get_graph_embedding(
+            ms, split_iterators, index_splits, weights_header, name="graph_np_dict.pkl"
+        )
+    else:
+        graph_np_dict = get_graph_embedding(
+            ms,
+            split_iterators,
+            index_splits,
+            weights_header,
+            name=f"graph_np_dict_{bm_target}.pkl",
+        )
     index = index_splits[split]
     iterator = split_iterators[split]
     if not isinstance(iterator, QueryPlanIterator):
