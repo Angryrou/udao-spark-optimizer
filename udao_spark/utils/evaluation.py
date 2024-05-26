@@ -215,10 +215,13 @@ def get_ag_data(
     )
 
     bm_target = bm_target or bm
-    pw = PathWatcher(base_dir, bm_target, debug, extract_params)
-    df = ParquetHandler.load(pw.cc_prefix, f"df_{ta.get_q_type_for_cache()}.parquet")
+    pw_model = PathWatcher(base_dir, bm, debug, extract_params)
+    pw_data = PathWatcher(base_dir, bm_target, debug, extract_params)
+    df = ParquetHandler.load(
+        pw_data.cc_prefix, f"df_{ta.get_q_type_for_cache()}.parquet"
+    )
     index_splits = PickleHandler.load(
-        pw.cc_prefix, f"index_splits_{ta.get_q_type_for_cache()}.pkl"
+        pw_data.cc_prefix, f"index_splits_{ta.get_q_type_for_cache()}.pkl"
     )
     if not isinstance(index_splits, Dict):
         raise TypeError(f"index_splits is not a dict: {index_splits}")
@@ -245,11 +248,11 @@ def get_ag_data(
         )
         weights_header = "/".join(weights_path.split("/")[:6])
         ms = ModelServer.from_ckp_path(model_sign, model_params_path, weights_path)
-        split_iterators = PickleHandler.load(header, "split_iterators.pkl")
-        if not isinstance(split_iterators, Dict):
-            raise TypeError("split_iterators not found or not a desired type")
 
         if bm_target == bm:
+            split_iterators = PickleHandler.load(header, "split_iterators.pkl")
+            if not isinstance(split_iterators, Dict):
+                raise TypeError("split_iterators not found or not a desired type")
             graph_np_dict = get_graph_embedding(
                 ms,
                 split_iterators,
@@ -258,6 +261,13 @@ def get_ag_data(
                 name="graph_np_dict.pkl",
             )
         else:
+            header = header.replace(
+                f"{bm}_{pw_model.data_sign}", f"{bm_target}_{pw_data.data_sign}"
+            )
+            split_iterators = PickleHandler.load(header, "split_iterators.pkl")
+            if not isinstance(split_iterators, Dict):
+                raise TypeError("split_iterators not found or not a desired type")
+            split_iterators = {"test": split_iterators["test"]}
             graph_np_dict = get_graph_embedding(
                 ms,
                 split_iterators,
@@ -296,7 +306,7 @@ def get_ag_data(
         "data": data,
         "data_queries": data_queries,
         "ta": ta,
-        "pw": pw,
+        "pw": pw_data,
         "objectives": objectives,
     }
 
@@ -410,6 +420,8 @@ def get_mlp_pred_objs(
     bm_target: Optional[str] = None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, float, float, Dict]:
     ta = TypeAdvisor(q_type=q_type)
+    bm_target = bm_target or bm
+
     weights_head = os.path.dirname(weights_path)
     device = "gpu" if th.cuda.is_available() else "cpu"
     cache_name = f"{split}_mlp_objs_{device}.pkl"
@@ -452,10 +464,13 @@ def get_mlp_pred_objs(
             "debug": debug,
         }
     )
-    pw = PathWatcher(Path(__file__).parent, bm, debug, extract_params)
-    df = ParquetHandler.load(pw.cc_prefix, f"df_{ta.get_q_type_for_cache()}.parquet")
+    pw_model = PathWatcher(Path(__file__).parent, bm, debug, extract_params)
+    pw_data = PathWatcher(Path(__file__).parent, bm_target, debug, extract_params)
+    df = ParquetHandler.load(
+        pw_data.cc_prefix, f"df_{ta.get_q_type_for_cache()}.parquet"
+    )
     index_splits = PickleHandler.load(
-        pw.cc_prefix, f"index_splits_{ta.get_q_type_for_cache()}.pkl"
+        pw_data.cc_prefix, f"index_splits_{ta.get_q_type_for_cache()}.pkl"
     )
     if not isinstance(index_splits, Dict):
         raise TypeError(f"index_splits is not a dict: {index_splits}")
@@ -476,16 +491,23 @@ def get_mlp_pred_objs(
     )
     weights_header = "/".join(weights_path.split("/")[:6])
     ms = ModelServer.from_ckp_path(model_sign, model_params_path, weights_path)
-    split_iterators = PickleHandler.load(header, "split_iterators.pkl")
-    if not isinstance(split_iterators, Dict):
-        raise TypeError("split_iterators not found or not a desired type")
-
-    bm_target = bm_target or bm
     if bm_target == bm:
+        split_iterators = PickleHandler.load(header, "split_iterators.pkl")
+        if not isinstance(split_iterators, Dict):
+            raise TypeError("split_iterators not found or not a desired type")
+
         graph_np_dict = get_graph_embedding(
             ms, split_iterators, index_splits, weights_header, name="graph_np_dict.pkl"
         )
     else:
+        header = header.replace(
+            f"{bm}_{pw_model.data_sign}", f"{bm_target}_{pw_data.data_sign}"
+        )
+        split_iterators = PickleHandler.load(header, "split_iterators.pkl")
+        if not isinstance(split_iterators, Dict):
+            raise TypeError("split_iterators not found or not a desired type")
+        split_iterators = {"test": split_iterators["test"]}
+
         graph_np_dict = get_graph_embedding(
             ms,
             split_iterators,
