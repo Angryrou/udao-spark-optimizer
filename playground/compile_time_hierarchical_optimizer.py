@@ -73,6 +73,7 @@ if __name__ == "__main__":
         if params.disable_failure_clf
         else str(base_dir / f"assets/{bm}_valid_clf_meta.json"),
         clf_recall_xhold=params.clf_recall_xhold,
+        verbose=params.verbose,
     )
 
     # Prepare traces
@@ -172,7 +173,6 @@ if __name__ == "__main__":
             is_query_control=params.set_query_control,
             benchmark=bm,
             selected_features=selected_features,
-            verbose=params.verbose,
         )
         solving_time_dict[query_id] = dt
         if po_objs is None or po_conf is None:

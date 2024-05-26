@@ -29,7 +29,7 @@ def get_params() -> ArgumentParser:
     parser.add_argument("--verbose", action="store_true",
                         help="Enable verbose mode")
     parser.add_argument("--ensemble", action="store_true",
-                        help="Enable verbose mode")
+                        help="Enable ensemble mode")
     # fmt: on
     return parser
 
@@ -76,7 +76,6 @@ if __name__ == "__main__":
             monitor=monitor,
             ercilla=True if device == "gpu" else False,
             graph_choice=graph_choice,
-            verbose=params.verbose,
         )
         total_monitor[query_id] = monitor.to_dict()
         if po_objs is None or po_confs is None:

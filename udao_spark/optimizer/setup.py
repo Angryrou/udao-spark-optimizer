@@ -76,7 +76,7 @@ def q_compile_setup(base_dir: Path, params: Namespace) -> Dict[str, Any]:
         if params.disable_failure_clf
         else str(base_dir / f"assets/{bm}_valid_clf_meta.json"),
         clf_recall_xhold=params.clf_recall_xhold,
-        verbose=False,
+        verbose=params.verbose,
     )
     return {
         "atomic_optimizer": atomic_optimizer,

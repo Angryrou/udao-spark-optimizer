@@ -29,7 +29,7 @@ if [ "$runtime" -eq 1 ]; then
     --n_reps $nreps \
     --enable_runtime_optimizer \
     --runtime_optimizer_host $host \
-    --runtime_optimizer_port 12345 \
+    --runtime_optimizer_port $port \
     --configuration_header $configuration_header \
     --configuration_name "${cname}"
 else

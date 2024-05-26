@@ -30,7 +30,7 @@ def get_params() -> ArgumentParser:
     parser.add_argument("--verbose", action="store_true",
                         help="Enable verbose mode")
     parser.add_argument("--ensemble", action="store_true",
-                        help="Enable verbose mode")
+                        help="Enable ensemble mode")
     parser.add_argument("--default-rate", type=float, default=None)
     # fmt: on
     return parser
