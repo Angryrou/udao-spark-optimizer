@@ -23,6 +23,8 @@ if __name__ == "__main__":
     logger.info(f"get parameters: {params}")
     if params.sample_mode.startswith("grid") and params.selected_features:
         raise ValueError("grid search does not support selected features")
+    if not params.verbose:
+        logger.setLevel("ERROR")
 
     bm = params.benchmark
     q_type: QType = params.q_type
@@ -71,6 +73,7 @@ if __name__ == "__main__":
         if params.disable_failure_clf
         else str(base_dir / f"assets/{bm}_valid_clf_meta.json"),
         clf_recall_xhold=params.clf_recall_xhold,
+        verbose=params.verbose,
     )
 
     # Prepare traces
@@ -94,7 +97,7 @@ if __name__ == "__main__":
     else:
         raise ValueError(f"benchmark {bm} is not supported")
     for trace in raw_traces:
-        print(trace)
+        # print(trace)
         if not Path(trace).exists():
             print(f"{trace} does not exist")
             raise FileNotFoundError(f"{trace} does not exist")

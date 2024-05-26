@@ -2,6 +2,8 @@ bm=$1
 cname=$2
 nreps=$3
 runtime=$4
+configuration_header=${5:-divB_new_grids/on_demand}
+port=${6:-12345}
 
 if [ "$bm" = "tpch" ]; then
   host=node21-opa
@@ -27,8 +29,8 @@ if [ "$runtime" -eq 1 ]; then
     --n_reps $nreps \
     --enable_runtime_optimizer \
     --runtime_optimizer_host $host \
-    --runtime_optimizer_port 12345 \
-    --configuration_header divB_new_grids/on_demand \
+    --runtime_optimizer_port $port \
+    --configuration_header $configuration_header \
     --configuration_name "${cname}"
 else
     python spark_trace_on_demand.py \
@@ -39,6 +41,6 @@ else
     --n_processes 16 \
     --cluster_cores 120 \
     --n_reps $nreps \
-    --configuration_header divB_new_grids/on_demand \
+    --configuration_header $configuration_header \
     --configuration_name "${cname}"
 fi

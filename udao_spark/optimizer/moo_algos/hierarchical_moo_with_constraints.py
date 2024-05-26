@@ -700,8 +700,8 @@ class Hierarchical_MOO_with_Constraints:
         :param mesh_theta: the theta for all subQs
         :return: the model predictions, array with shape (n_evals, n_objs)
         """
-
-        print(f"n_evals is {n_evals}")
+        if self.verbose:
+            print(f"n_evals is {n_evals}")
         if self.use_ag:
             y_hat = self.obj_model(
                 mesh_graph_embeddings.cpu().numpy(),

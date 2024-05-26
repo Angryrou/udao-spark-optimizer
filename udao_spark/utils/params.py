@@ -274,6 +274,8 @@ def get_compile_time_optimizer_parameters() -> ArgumentParser:
     parser.add_argument("--conf_save", type=str,
                         default="chenghao_conf_save")
     parser.add_argument("--selected_features", action="store_true")
+    parser.add_argument("--verbose", action="store_true",
+                        help="Enable verbose mode")
 
     # fmt: on
     return parser

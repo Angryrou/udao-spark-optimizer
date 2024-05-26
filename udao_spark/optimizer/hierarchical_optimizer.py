@@ -129,6 +129,9 @@ class HierarchicalOptimizer(BaseOptimizer):
         benchmark: str = "tpch",
         selected_features: Optional[Dict[str, List[str]]] = None,
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], float]:
+        if not self.verbose:
+            logger.setLevel("ERROR")
+
         self.current_target_template = template
 
         # initial a monitor
@@ -173,7 +176,8 @@ class HierarchicalOptimizer(BaseOptimizer):
             for qs_id, v in non_decision_input.items():
                 if ".Join" in JsonHandler.dump_to_string(v["qs_lqp"]):
                     join_ids.append(int(qs_id.split("-")[1]))
-            print(f"template: {template}: join_ids is {join_ids}")
+            if self.verbose:
+                print(f"template: {template}: join_ids is {join_ids}")
             objs, conf = self._hmooc(
                 len_theta_per_subQ,
                 graph_embeddings,
@@ -379,18 +383,19 @@ class HierarchicalOptimizer(BaseOptimizer):
 
         po_objs, po_conf, model_infer_info, total_time_profile = hmooc.solve()
         time_cost_moo_algo = time.time() - start
-        print(f"query id is {query_id}")
-        print(f"FUNCTION: time cost of div_and_conq_moo is: {time_cost_moo_algo}")
-        print(
-            f"The number of Pareto solutions in the DAG opt method"
-            f" {dag_opt_algo} is: "
-            f"{np.unique(po_objs, axis=0).shape[0]}"
-        )
-        print(
-            f"The Pareto solutions in the DAG opt method"
-            f" {dag_opt_algo} is: "
-            f"{np.unique(po_objs, axis=0)}"
-        )
+        if self.verbose:
+            print(f"query id is {query_id}")
+            print(f"FUNCTION: time cost of div_and_conq_moo is: {time_cost_moo_algo}")
+            print(
+                f"The number of Pareto solutions in the DAG opt method"
+                f" {dag_opt_algo} is: "
+                f"{np.unique(po_objs, axis=0).shape[0]}"
+            )
+            print(
+                f"The Pareto solutions in the DAG opt method"
+                f" {dag_opt_algo} is: "
+                f"{np.unique(po_objs, axis=0)}"
+            )
 
         start_rec = time.time()
 
@@ -496,7 +501,8 @@ class HierarchicalOptimizer(BaseOptimizer):
             )
             pref2theta[f"{pref[0]:.1f}_{pref[1]:.1f}"] = conf_fine
             pref2theta_agg[f"{pref[0]:.1f}_{pref[1]:.1f}"] = conf_agg
-            print(f"weights: {pref}, objs: {objs}, conf: {conf_agg}")
+            if self.verbose:
+                print(f"weights: {pref}, objs: {objs}, conf: {conf_agg}")
 
         conf_qs0 = po_conf[:, :len_theta_per_subQ].reshape(-1, len_theta_per_subQ)
         conf_all_qs = np.vstack(np.split(po_conf, n_subQs, axis=1))
@@ -542,7 +548,8 @@ class HierarchicalOptimizer(BaseOptimizer):
         # placeholder to compute WUN time.
         weighted_utopia_nearest(po_objs, np.array(po_conf_agg_list))
         tc_po_rec = time.time() - start_rec
-        print(f"FUNCTION: time cost of {algo} with WUN " f"is: {tc_po_rec}")
+        if self.verbose:
+            print(f"FUNCTION: time cost of {algo} with WUN " f"is: {tc_po_rec}")
 
         time_cost_moo_total = time.time() - start
         time_cost_dict = {
@@ -1477,12 +1484,12 @@ class HierarchicalOptimizer(BaseOptimizer):
                 #
                 # k7, k1, k3, k2 (set k2, k4, k6, k5 and k8 to default)
                 # s4, s5, s8, s9, s1 (set s2, s3, s6, s7 to default)
-                if n_c_samples not in [54, 152]:
+                if n_c_samples not in [54, 90, 150]:
                     raise Exception(
                         f"# of theta_c samples {n_c_samples} "
                         f"is not supported for {sample_mode}!"
                     )
-                if n_p_samples not in [81]:
+                if n_p_samples not in [27, 81]:
                     raise Exception(
                         f"# of theta_p samples {n_p_samples} "
                         f"is not supported for {sample_mode}!"
@@ -1530,7 +1537,19 @@ class HierarchicalOptimizer(BaseOptimizer):
                 # for some realistic concerns, we reset the range for
                 # s4: [0MB - 280MB] to avoid failures and missing good broadcast
                 # s5: [10 - 50] to avoid bad performance within same resource usage
-                if n_p_samples == 81:  # 3^4 = 81
+                if n_p_samples == 27:
+                    p_grids = [
+                        [2],  # s1 <--
+                        [2],  # s2 default
+                        [0, 14, 28],  # s3: maxShuffledHashJoinLocalMapThreshold
+                        [0, 14, 28],  # s4: 10/140/280MB autoBroadcastJoinThreshold
+                        [10, 20, 50],  # s5: 80/160/400 sql.shuffle.partitions
+                        [2],  # s6 default
+                        [50],  # s7: default
+                        [2],  # s8: spark.sql.files.maxPartitionBytes
+                        [2],  # s9: default
+                    ]
+                elif n_p_samples == 81:  # 3^4 = 81
                     p_grids = [
                         [2],  # s1 <--
                         [2],  # s2 default
