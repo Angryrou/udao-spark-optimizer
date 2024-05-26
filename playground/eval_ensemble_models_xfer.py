@@ -92,3 +92,24 @@ if __name__ == "__main__":
     )
 
     print(f"metrics: {metrics}, throughput (regr only): {throughput} K/s")
+
+    if q_type.startswith("qs"):
+        m1, m2 = metrics["ana_latency_s"], metrics["io_mb"]
+    else:
+        m1, m2 = metrics["latency_s"], metrics["io_mb"]
+    print("-" * 20)
+    print(
+        "{:.3f} & {:.3f} & {:.3f} & {:.3f} & {:.3f} & "
+        "{:.3f} & {:.3f} & {:.3f} & {:.0f} \\\\".format(
+            m1["wmape"],
+            m1["p50_wape"],
+            m1["p90_wape"],
+            m1["corr"],
+            m2["wmape"],
+            m2["p50_wape"],
+            m2["p90_wape"],
+            m2["corr"],
+            throughput,
+        )
+    )
+    print()
