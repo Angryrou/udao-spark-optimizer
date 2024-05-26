@@ -267,7 +267,6 @@ def get_ag_data(
             split_iterators = PickleHandler.load(header, "split_iterators.pkl")
             if not isinstance(split_iterators, Dict):
                 raise TypeError("split_iterators not found or not a desired type")
-            split_iterators = {"test": split_iterators["test"]}
             graph_np_dict = get_graph_embedding(
                 ms,
                 split_iterators,
@@ -276,8 +275,7 @@ def get_ag_data(
                 name=f"graph_np_dict_{bm_target}.pkl",
             )
 
-        for split, index in split_iterators.items():
-            index = index_splits[split]
+        for split, index in index_splits.items():
             df_split = df.loc[index].copy()
             df_split = df_split[ta.get_tabular_columns() + ta.get_objectives()]
             df_split_queries = df.loc[index].copy()[["template", "qid"]]
