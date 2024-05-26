@@ -388,17 +388,8 @@ def get_ag_pred_objs(
     objs_pred = pd.DataFrame(np.vstack(y_pred_list).T, columns=objectives)
     dt_s = dt_ns / 1e9
     throughput = len(data) / 1e3 / dt_s
-    metrics = {}
-    for obj_ind, obj in enumerate(objectives):
-        metrics[obj] = {}
-        y = objs_true[obj].values
-        y_pred = objs_pred[obj].values
-        metrics[obj]["wmape"] = local_wmape(y, y_pred)
-        metrics[obj]["p50_err"] = local_p50_err(y, y_pred)
-        metrics[obj]["p90_err"] = local_p90_err(y, y_pred)
-        metrics[obj]["p50_wape"] = local_p50_wape(y, y_pred)
-        metrics[obj]["p90_wape"] = local_p90_wape(y, y_pred)
-        metrics[obj]["corr"] = float(np.corrcoef(y, y_pred)[0, 1])
+
+    metrics = get_metric_stats(objectives, objs_true, objs_pred)
     PickleHandler.save(
         {
             "objs_true": objs_true,
@@ -413,6 +404,25 @@ def get_ag_pred_objs(
     )
 
     return objs_true, objs_pred, dt_s, throughput, metrics
+
+
+def get_metric_stats(
+    objectives: List[str], objs_true: pd.DataFrame, objs_pred: pd.DataFrame
+) -> Dict[str, Dict[str, float]]:
+    metrics: Dict[str, Dict[str, float]] = {}
+    if len(objs_true) == 0:
+        return metrics
+    for obj_ind, obj in enumerate(objectives):
+        metrics[obj] = {}
+        y = objs_true[obj].to_numpy()
+        y_pred = objs_pred[obj].to_numpy()
+        metrics[obj]["wmape"] = local_wmape(y, y_pred)
+        metrics[obj]["p50_err"] = local_p50_err(y, y_pred)
+        metrics[obj]["p90_err"] = local_p90_err(y, y_pred)
+        metrics[obj]["p50_wape"] = local_p50_wape(y, y_pred)
+        metrics[obj]["p90_wape"] = local_p90_wape(y, y_pred)
+        metrics[obj]["corr"] = float(np.corrcoef(y, y_pred)[0, 1])
+    return metrics
 
 
 def get_mlp_pred_objs(

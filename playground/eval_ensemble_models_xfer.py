@@ -2,10 +2,13 @@ import os.path
 from argparse import ArgumentParser
 from pathlib import Path
 
+import numpy as np
+
 from udao_spark.model.mulitlabel_predictor import MultilabelPredictor  # type: ignore
 from udao_spark.optimizer.utils import get_ag_meta
-from udao_spark.utils.evaluation import get_ag_data, get_ag_pred_objs
+from udao_spark.utils.evaluation import get_ag_data, get_ag_pred_objs, get_metric_stats
 from udao_spark.utils.params import get_ag_parameters
+from udao_trace.utils import PickleHandler
 
 
 def get_parser() -> ArgumentParser:
@@ -78,7 +81,7 @@ if __name__ == "__main__":
         "io_mb": params.ag_model_q_io,
     }
 
-    objs_true, objs_pred, dt_s, throughput, metrics = get_ag_pred_objs(
+    objs_true, objs_pred, dt_s, throughput, metrics_all = get_ag_pred_objs(
         base_dir,
         bm,
         q_type,
@@ -91,25 +94,57 @@ if __name__ == "__main__":
         bm_target=bm_target,
     )
 
-    print(f"metrics: {metrics}, throughput (regr only): {throughput} K/s")
+    print(f"metrics: {metrics_all}, throughput (regr only): {throughput} K/s")
 
-    if q_type.startswith("qs"):
-        m1, m2 = metrics["ana_latency_s"], metrics["io_mb"]
-    else:
-        m1, m2 = metrics["latency_s"], metrics["io_mb"]
-    print("-" * 20)
-    print(
-        "{:.3f} & {:.3f} & {:.3f} & {:.3f} & {:.3f} & "
-        "{:.3f} & {:.3f} & {:.3f} & {:.0f} \\\\".format(
-            m1["wmape"],
-            m1["p50_wape"],
-            m1["p90_wape"],
-            m1["corr"],
-            m2["wmape"],
-            m2["p50_wape"],
-            m2["p90_wape"],
-            m2["corr"],
-            throughput,
-        )
+    header = "/".join(weights_path.split("/")[:4])
+    split_iterators = PickleHandler.load(header, "split_iterators.pkl")
+    if not isinstance(split_iterators, dict):
+        raise ValueError("split_iterators.pkl is not a dictionary")
+    train_iterator = split_iterators["train"]
+    test_iterator = split_iterators["test"]
+    seen_structures = list(
+        train_iterator.query_structure_container.template_plans.keys()
     )
-    print()
+
+    mask = np.array(
+        [
+            True
+            if test_iterator.query_structure_container.key_to_template[appid]
+            in seen_structures
+            else False
+            for appid in test_iterator.keys
+        ]
+    )
+
+    metrics_seen = get_metric_stats(objectives, objs_true[mask], objs_pred[mask])
+    metrics_unseen = get_metric_stats(objectives, objs_true[~mask], objs_pred[~mask])
+
+    for metrics, mtype in zip(
+        [metrics_seen, metrics_unseen, metrics_all],
+        ["seen", "unseen", "all"],
+    ):
+        if len(metrics) == 0:
+            continue
+
+        print(mtype)
+
+        if q_type.startswith("qs"):
+            m1, m2 = metrics["ana_latency_s"], metrics["io_mb"]
+        else:
+            m1, m2 = metrics["latency_s"], metrics["io_mb"]
+        print("-" * 20)
+        print(
+            "{:.3f} & {:.3f} & {:.3f} & {:.3f} & {:.3f} & "
+            "{:.3f} & {:.3f} & {:.3f} & {:.0f} \\\\".format(
+                m1["wmape"],
+                m1["p50_wape"],
+                m1["p90_wape"],
+                m1["corr"],
+                m2["wmape"],
+                m2["p50_wape"],
+                m2["p90_wape"],
+                m2["corr"],
+                throughput,
+            )
+        )
+        print()
