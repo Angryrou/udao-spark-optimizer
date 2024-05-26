@@ -328,7 +328,14 @@ def get_ag_pred_objs(
     ag_sign = "_".join(ag_name_splits[:1] + ag_name_splits[2:])
     ag_model_short = "_".join(f"{k.split('_')[0]}:{v}" for k, v in ag_model.items())
     device = "gpu" if th.cuda.is_available() else "cpu"
-    cache_name = f"{split}_{ag_sign}_{ag_model_short}_objs_and_metrics_{device}.pkl"
+    bm_target = bm_target or bm
+    if bm_target != bm:
+        cache_name = (
+            f"{split}_{ag_sign}_{ag_model_short}_objs_and_metrics_"
+            f"for_{bm_target}_{device}.pkl"
+        )
+    else:
+        cache_name = f"{split}_{ag_sign}_{ag_model_short}_objs_and_metrics_{device}.pkl"
     if not force and os.path.exists(f"{weights_head}/{cache_name}"):
         print(f"found {cache_name}")
         cache = PickleHandler.load(weights_head, cache_name)
