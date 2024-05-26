@@ -157,8 +157,8 @@ def get_graph_embedding(
     split_iterators: Dict[str, QueryPlanIterator],
     index_splits: Dict[str, np.ndarray],
     weights_header: str,
+    name: str = "graph_np_dict.pkl",
 ) -> Dict[str, np.ndarray]:
-    name = "graph_np_dict.pkl"
     try:
         graph_np_dict = PickleHandler.load(weights_header, name)
         print(f"found {weights_header}/{name}")
@@ -201,6 +201,7 @@ def get_ag_data(
     graph_choice: str,
     weights_path: Optional[str],
     if_df: bool = False,
+    bm_target: Optional[str] = None,
 ) -> Dict:
     ta = TypeAdvisor(q_type=q_type)
     extract_params = ExtractParams.from_dict(  # placeholder
@@ -212,7 +213,9 @@ def get_ag_data(
             "debug": debug,
         }
     )
-    pw = PathWatcher(base_dir, bm, debug, extract_params)
+
+    bm_target = bm_target or bm
+    pw = PathWatcher(base_dir, bm_target, debug, extract_params)
     df = ParquetHandler.load(pw.cc_prefix, f"df_{ta.get_q_type_for_cache()}.parquet")
     index_splits = PickleHandler.load(
         pw.cc_prefix, f"index_splits_{ta.get_q_type_for_cache()}.pkl"
@@ -245,9 +248,23 @@ def get_ag_data(
         split_iterators = PickleHandler.load(header, "split_iterators.pkl")
         if not isinstance(split_iterators, Dict):
             raise TypeError("split_iterators not found or not a desired type")
-        graph_np_dict = get_graph_embedding(
-            ms, split_iterators, index_splits, weights_header
-        )
+
+        if bm_target == bm:
+            graph_np_dict = get_graph_embedding(
+                ms,
+                split_iterators,
+                index_splits,
+                weights_header,
+                name="graph_np_dict.pkl",
+            )
+        else:
+            graph_np_dict = get_graph_embedding(
+                ms,
+                split_iterators,
+                index_splits,
+                weights_header,
+                name=f"graph_np_dict_{bm_target}.pkl",
+            )
 
         for split, index in index_splits.items():
             df_split = df.loc[index].copy()
@@ -294,6 +311,7 @@ def get_ag_pred_objs(
     ag_meta: Dict[str, str],
     force: bool,
     ag_model: Dict[str, str],
+    bm_target: Optional[str] = None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, float, float, Dict]:
     weights_path = ag_meta["graph_weights_path"]
     weights_head = os.path.dirname(weights_path)
@@ -319,7 +337,9 @@ def get_ag_pred_objs(
         return objs_true, objs_pred, dt_s, throughput, metrics
 
     print(f"not found {weights_head}/{cache_name}, generating...")
-    ag_data = get_ag_data(base_dir, bm, q_type, debug, graph_choice, weights_path)
+    ag_data = get_ag_data(
+        base_dir, bm, q_type, debug, graph_choice, weights_path, bm_target=bm_target
+    )
     data_dict = {sp: da for sp, da in zip(["train", "val", "test"], ag_data["data"])}
     data = data_dict[split]
     ta, objectives = ag_data["ta"], ag_data["objectives"]
