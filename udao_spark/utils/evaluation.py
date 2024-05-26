@@ -276,7 +276,8 @@ def get_ag_data(
                 name=f"graph_np_dict_{bm_target}.pkl",
             )
 
-        for split, index in index_splits.items():
+        for split, index in split_iterators.items():
+            index = index_splits[split]
             df_split = df.loc[index].copy()
             df_split = df_split[ta.get_tabular_columns() + ta.get_objectives()]
             df_split_queries = df.loc[index].copy()[["template", "qid"]]
