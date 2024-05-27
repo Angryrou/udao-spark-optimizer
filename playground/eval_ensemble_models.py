@@ -93,6 +93,7 @@ if __name__ == "__main__":
         ag_meta=ag_meta,
         force=params.force,
         ag_model=ag_model,
+        bm_target=bm_target,
     )
 
     print(f"metrics: {metrics}, throughput (regr only): {throughput} K/s")
