@@ -15,6 +15,8 @@ def get_params() -> ArgumentParser:
     parser = get_ag_parameters()
     # fmt: off
     parser.add_argument("--additional-training", action="store_true",)
+    parser.add_argument("--bm_gtn_model", type=str, default=None,
+                        help="gtn of the model pretrained.")
     # fmt: on
     return parser
 
@@ -39,9 +41,14 @@ if __name__ == "__main__":
         time_limit,
     )
     weights_path = ag_meta["graph_weights_path"]
-    ag_path = ag_meta["ag_path"] + "new_recording/"
+    bm_target = params.bm_gtn_model or bm
+    ag_path = (
+        ag_meta["ag_path"]
+        + ("" if bm == bm_target else f"_{bm_target}")
+        + "new_recording/"
+    )
 
-    ret = get_ag_data(base_dir, bm, q_type, debug, graph_choice, weights_path)
+    ret = get_ag_data(base_dir, bm, q_type, debug, graph_choice, weights_path)  # type: ignore
     train_data, val_data, test_data = ret["data"]
     ta, pw, objectives = ret["ta"], ret["pw"], ret["objectives"]
     if q_type.startswith("qs_"):

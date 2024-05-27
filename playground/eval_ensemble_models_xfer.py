@@ -119,14 +119,16 @@ if __name__ == "__main__":
     metrics_seen = get_metric_stats(objectives, objs_true[mask], objs_pred[mask])
     metrics_unseen = get_metric_stats(objectives, objs_true[~mask], objs_pred[~mask])
 
+    print("seen structures:", mask.sum())
+    print("unseen structures:", (~mask).sum())
+    print("all:", len(objs_true))
+
     for metrics, mtype in zip(
         [metrics_seen, metrics_unseen, metrics_all],
         ["seen", "unseen", "all"],
     ):
         if len(metrics) == 0:
             continue
-
-        print(mtype)
 
         if q_type.startswith("qs"):
             m1, m2 = metrics["ana_latency_s"], metrics["io_mb"]
