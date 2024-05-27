@@ -94,6 +94,8 @@ if __name__ == "__main__":
         force=params.force,
         ag_model=ag_model,
         bm_target=bm_target,
+        xfer_gtn_only=True,
+        new_recording=params.new_recording,
     )
 
     print(f"metrics: {metrics}, throughput (regr only): {throughput} K/s")
