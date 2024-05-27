@@ -78,8 +78,9 @@ if __name__ == "__main__":
     else:
         raise Exception("run train_ensemble_models.py first")
 
+    lat_obj_name = "ana_latency_s" if q_type.startswith("qs") else "latency_s"
     ag_model = {
-        "latency_s": params.ag_model_q_latency,
+        lat_obj_name: params.ag_model_q_latency,
         "io_mb": params.ag_model_q_io,
     }
 
