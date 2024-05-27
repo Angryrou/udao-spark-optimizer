@@ -28,9 +28,6 @@ def get_parser() -> ArgumentParser:
 if __name__ == "__main__":
     params = get_parser().parse_args()
 
-    if params.q_type != "q_compile":
-        raise ValueError(f"Diagnosing {params.q_type} is not our focus.")
-
     bm, q_type, debug = params.benchmark, params.q_type, params.debug
     hp_choice, graph_choice = params.hp_choice, params.graph_choice
     num_gpus, ag_sign = params.num_gpus, params.ag_sign
