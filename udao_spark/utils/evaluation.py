@@ -321,6 +321,8 @@ def get_ag_pred_objs(
     force: bool,
     ag_model: Dict[str, str],
     bm_target: Optional[str] = None,
+    xfer_gtn_only: bool = False,
+    new_recording: bool = False,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, float, float, Dict]:
     weights_path = ag_meta["graph_weights_path"]
     weights_head = os.path.dirname(weights_path)
@@ -329,13 +331,14 @@ def get_ag_pred_objs(
     ag_model_short = "_".join(f"{k.split('_')[0]}:{v}" for k, v in ag_model.items())
     device = "gpu" if th.cuda.is_available() else "cpu"
     bm_target = bm_target or bm
-    if bm_target != bm:
+    if bm_target != bm and not xfer_gtn_only:
         cache_name = (
             f"{split}_{ag_sign}_{ag_model_short}_objs_and_metrics_"
             f"for_{bm_target}_{device}.pkl"
         )
     else:
         cache_name = f"{split}_{ag_sign}_{ag_model_short}_objs_and_metrics_{device}.pkl"
+
     if not force and os.path.exists(f"{weights_head}/{cache_name}"):
         print(f"found {cache_name}")
         cache = PickleHandler.load(weights_head, cache_name)
@@ -360,6 +363,12 @@ def get_ag_pred_objs(
     data = data_dict[split]
     ta, objectives = ag_data["ta"], ag_data["objectives"]
     ag_path = ag_meta["ag_path"]
+
+    if bm_target != bm and xfer_gtn_only:
+        ag_path += f"_{bm_target}"
+    if new_recording:
+        ag_path += "new_recording"
+
     objectives = ta.get_ag_objectives()
     dt_ns = 0
     y_pred_list = []
