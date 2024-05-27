@@ -19,6 +19,8 @@ def get_parser() -> ArgumentParser:
                         help="Enable forcing running results")
     parser.add_argument("--new_recording", action="store_true",
                         help="Recording the breakdown training times")
+    parser.add_argument("--bm_gtn_model", type=str, default=None,
+                        help="gtn of the model pretrained.")
     # fmt: on
     return parser
 
@@ -47,11 +49,23 @@ if __name__ == "__main__":
         time_limit,
     )
     weights_path = ag_meta["graph_weights_path"]
-    if params.new_recording:
-        ag_meta["ag_path"] = ag_meta["ag_path"] + "new_recording"
-    ag_path = ag_meta["ag_path"] + "/"
+    bm_target = params.bm_gtn_model or bm
+    ag_path = (
+        ag_meta["ag_path"]
+        + ("" if bm == bm_target else f"_{bm_target}")
+        + ("new_recording" if params.new_recording else "")
+        + "/"
+    )
 
-    ret = get_ag_data(base_dir, bm, q_type, debug, graph_choice, weights_path)
+    ret = get_ag_data(
+        base_dir,
+        bm,
+        q_type,
+        debug,
+        graph_choice,
+        weights_path,
+        bm_target=bm_target,
+    )
     train_data, val_data, test_data = ret["data"]
     ta, pw, objectives = ret["ta"], ret["pw"], ret["objectives"]
     if q_type.startswith("qs_"):
