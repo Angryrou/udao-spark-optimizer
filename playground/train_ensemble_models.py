@@ -16,6 +16,8 @@ def get_params() -> ArgumentParser:
     # fmt: off
     parser.add_argument("--recording", action="store_true",
                         help="Record the time for evaluation")
+    parser.add_argument("--bm_gtn_model", type=str, default=None,
+                        help="gtn of the model pretrained.")
     # fmt: on
     return parser
 
@@ -41,12 +43,26 @@ if __name__ == "__main__":
         time_limit,
     )
     weights_path = ag_meta["graph_weights_path"]
-    if not recording:
-        ag_path = ag_meta["ag_path"] + "/"
+    bm_target = params.bm_gtn_model or bm
+    if bm_target != bm:
+        ag_path = ag_meta["ag_path"] + f"_{bm_target}"
     else:
-        ag_path = ag_meta["ag_path"] + "_recording/"
+        ag_path = ag_meta["ag_path"]
 
-    ret = get_ag_data(base_dir, bm, q_type, debug, graph_choice, weights_path)
+    if not recording:
+        ag_path = ag_path + "/"
+    else:
+        ag_path = ag_path + "_recording/"
+
+    ret = get_ag_data(
+        base_dir,
+        bm,
+        q_type,
+        debug,
+        graph_choice,
+        weights_path,
+        bm_target=params.bm_gtn_model,
+    )
     train_data, val_data, test_data = ret["data"]
     ta, pw, objectives = ret["ta"], ret["pw"], ret["objectives"]
     if q_type.startswith("qs_"):

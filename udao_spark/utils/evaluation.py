@@ -157,8 +157,8 @@ def get_graph_embedding(
     split_iterators: Dict[str, QueryPlanIterator],
     index_splits: Dict[str, np.ndarray],
     weights_header: str,
+    name: str = "graph_np_dict.pkl",
 ) -> Dict[str, np.ndarray]:
-    name = "graph_np_dict.pkl"
     try:
         graph_np_dict = PickleHandler.load(weights_header, name)
         print(f"found {weights_header}/{name}")
@@ -201,6 +201,7 @@ def get_ag_data(
     graph_choice: str,
     weights_path: Optional[str],
     if_df: bool = False,
+    bm_target: Optional[str] = None,
 ) -> Dict:
     ta = TypeAdvisor(q_type=q_type)
     extract_params = ExtractParams.from_dict(  # placeholder
@@ -212,10 +213,15 @@ def get_ag_data(
             "debug": debug,
         }
     )
-    pw = PathWatcher(base_dir, bm, debug, extract_params)
-    df = ParquetHandler.load(pw.cc_prefix, f"df_{ta.get_q_type_for_cache()}.parquet")
+
+    bm_target = bm_target or bm
+    pw_model = PathWatcher(base_dir, bm, debug, extract_params)
+    pw_data = PathWatcher(base_dir, bm_target, debug, extract_params)
+    df = ParquetHandler.load(
+        pw_data.cc_prefix, f"df_{ta.get_q_type_for_cache()}.parquet"
+    )
     index_splits = PickleHandler.load(
-        pw.cc_prefix, f"index_splits_{ta.get_q_type_for_cache()}.pkl"
+        pw_data.cc_prefix, f"index_splits_{ta.get_q_type_for_cache()}.pkl"
     )
     if not isinstance(index_splits, Dict):
         raise TypeError(f"index_splits is not a dict: {index_splits}")
@@ -242,12 +248,32 @@ def get_ag_data(
         )
         weights_header = "/".join(weights_path.split("/")[:6])
         ms = ModelServer.from_ckp_path(model_sign, model_params_path, weights_path)
-        split_iterators = PickleHandler.load(header, "split_iterators.pkl")
-        if not isinstance(split_iterators, Dict):
-            raise TypeError("split_iterators not found or not a desired type")
-        graph_np_dict = get_graph_embedding(
-            ms, split_iterators, index_splits, weights_header
-        )
+
+        if bm_target == bm:
+            split_iterators = PickleHandler.load(header, "split_iterators.pkl")
+            if not isinstance(split_iterators, Dict):
+                raise TypeError("split_iterators not found or not a desired type")
+            graph_np_dict = get_graph_embedding(
+                ms,
+                split_iterators,
+                index_splits,
+                weights_header,
+                name="graph_np_dict.pkl",
+            )
+        else:
+            header = header.replace(
+                f"{bm}_{pw_model.data_sign}", f"{bm_target}_{pw_data.data_sign}"
+            )
+            split_iterators = PickleHandler.load(header, "split_iterators.pkl")
+            if not isinstance(split_iterators, Dict):
+                raise TypeError("split_iterators not found or not a desired type")
+            graph_np_dict = get_graph_embedding(
+                ms,
+                split_iterators,
+                index_splits,
+                weights_header,
+                name=f"graph_np_dict_{bm_target}.pkl",
+            )
 
         for split, index in index_splits.items():
             df_split = df.loc[index].copy()
@@ -279,7 +305,7 @@ def get_ag_data(
         "data": data,
         "data_queries": data_queries,
         "ta": ta,
-        "pw": pw,
+        "pw": pw_data,
         "objectives": objectives,
     }
 
@@ -294,6 +320,9 @@ def get_ag_pred_objs(
     ag_meta: Dict[str, str],
     force: bool,
     ag_model: Dict[str, str],
+    bm_target: Optional[str] = None,
+    xfer_gtn_only: bool = False,
+    new_recording: bool = False,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, float, float, Dict]:
     weights_path = ag_meta["graph_weights_path"]
     weights_head = os.path.dirname(weights_path)
@@ -301,7 +330,15 @@ def get_ag_pred_objs(
     ag_sign = "_".join(ag_name_splits[:1] + ag_name_splits[2:])
     ag_model_short = "_".join(f"{k.split('_')[0]}:{v}" for k, v in ag_model.items())
     device = "gpu" if th.cuda.is_available() else "cpu"
-    cache_name = f"{split}_{ag_sign}_{ag_model_short}_objs_and_metrics_{device}.pkl"
+    bm_target = bm_target or bm
+    if bm_target != bm and not xfer_gtn_only:
+        cache_name = (
+            f"{split}_{ag_sign}_{ag_model_short}_objs_and_metrics_"
+            f"for_{bm_target}_{device}.pkl"
+        )
+    else:
+        cache_name = f"{split}_{ag_sign}_{ag_model_short}_objs_and_metrics_{device}.pkl"
+
     if not force and os.path.exists(f"{weights_head}/{cache_name}"):
         print(f"found {cache_name}")
         cache = PickleHandler.load(weights_head, cache_name)
@@ -319,11 +356,19 @@ def get_ag_pred_objs(
         return objs_true, objs_pred, dt_s, throughput, metrics
 
     print(f"not found {weights_head}/{cache_name}, generating...")
-    ag_data = get_ag_data(base_dir, bm, q_type, debug, graph_choice, weights_path)
+    ag_data = get_ag_data(
+        base_dir, bm, q_type, debug, graph_choice, weights_path, bm_target=bm_target
+    )
     data_dict = {sp: da for sp, da in zip(["train", "val", "test"], ag_data["data"])}
     data = data_dict[split]
     ta, objectives = ag_data["ta"], ag_data["objectives"]
     ag_path = ag_meta["ag_path"]
+
+    if bm_target != bm and xfer_gtn_only:
+        ag_path += f"_{bm_target}"
+    if new_recording:
+        ag_path += "new_recording"
+
     objectives = ta.get_ag_objectives()
     dt_ns = 0
     y_pred_list = []
@@ -352,17 +397,8 @@ def get_ag_pred_objs(
     objs_pred = pd.DataFrame(np.vstack(y_pred_list).T, columns=objectives)
     dt_s = dt_ns / 1e9
     throughput = len(data) / 1e3 / dt_s
-    metrics = {}
-    for obj_ind, obj in enumerate(objectives):
-        metrics[obj] = {}
-        y = objs_true[obj].values
-        y_pred = objs_pred[obj].values
-        metrics[obj]["wmape"] = local_wmape(y, y_pred)
-        metrics[obj]["p50_err"] = local_p50_err(y, y_pred)
-        metrics[obj]["p90_err"] = local_p90_err(y, y_pred)
-        metrics[obj]["p50_wape"] = local_p50_wape(y, y_pred)
-        metrics[obj]["p90_wape"] = local_p90_wape(y, y_pred)
-        metrics[obj]["corr"] = float(np.corrcoef(y, y_pred)[0, 1])
+
+    metrics = get_metric_stats(objectives, objs_true, objs_pred)
     PickleHandler.save(
         {
             "objs_true": objs_true,
@@ -379,6 +415,25 @@ def get_ag_pred_objs(
     return objs_true, objs_pred, dt_s, throughput, metrics
 
 
+def get_metric_stats(
+    objectives: List[str], objs_true: pd.DataFrame, objs_pred: pd.DataFrame
+) -> Dict[str, Dict[str, float]]:
+    metrics: Dict[str, Dict[str, float]] = {}
+    if len(objs_true) == 0:
+        return metrics
+    for obj_ind, obj in enumerate(objectives):
+        metrics[obj] = {}
+        y = objs_true[obj].to_numpy()
+        y_pred = objs_pred[obj].to_numpy()
+        metrics[obj]["wmape"] = local_wmape(y, y_pred)
+        metrics[obj]["p50_err"] = local_p50_err(y, y_pred)
+        metrics[obj]["p90_err"] = local_p90_err(y, y_pred)
+        metrics[obj]["p50_wape"] = local_p50_wape(y, y_pred)
+        metrics[obj]["p90_wape"] = local_p90_wape(y, y_pred)
+        metrics[obj]["corr"] = float(np.corrcoef(y, y_pred)[0, 1])
+    return metrics
+
+
 def get_mlp_pred_objs(
     bm: str,
     q_type: QType,
@@ -387,8 +442,11 @@ def get_mlp_pred_objs(
     weights_path: str,
     split: str,
     force: bool,
+    bm_target: Optional[str] = None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, float, float, Dict]:
     ta = TypeAdvisor(q_type=q_type)
+    bm_target = bm_target or bm
+
     weights_head = os.path.dirname(weights_path)
     device = "gpu" if th.cuda.is_available() else "cpu"
     cache_name = f"{split}_mlp_objs_{device}.pkl"
@@ -431,10 +489,13 @@ def get_mlp_pred_objs(
             "debug": debug,
         }
     )
-    pw = PathWatcher(Path(__file__).parent, bm, debug, extract_params)
-    df = ParquetHandler.load(pw.cc_prefix, f"df_{ta.get_q_type_for_cache()}.parquet")
+    pw_model = PathWatcher(Path(__file__).parent, bm, debug, extract_params)
+    pw_data = PathWatcher(Path(__file__).parent, bm_target, debug, extract_params)
+    df = ParquetHandler.load(
+        pw_data.cc_prefix, f"df_{ta.get_q_type_for_cache()}.parquet"
+    )
     index_splits = PickleHandler.load(
-        pw.cc_prefix, f"index_splits_{ta.get_q_type_for_cache()}.pkl"
+        pw_data.cc_prefix, f"index_splits_{ta.get_q_type_for_cache()}.pkl"
     )
     if not isinstance(index_splits, Dict):
         raise TypeError(f"index_splits is not a dict: {index_splits}")
@@ -455,12 +516,30 @@ def get_mlp_pred_objs(
     )
     weights_header = "/".join(weights_path.split("/")[:6])
     ms = ModelServer.from_ckp_path(model_sign, model_params_path, weights_path)
-    split_iterators = PickleHandler.load(header, "split_iterators.pkl")
-    if not isinstance(split_iterators, Dict):
-        raise TypeError("split_iterators not found or not a desired type")
-    graph_np_dict = get_graph_embedding(
-        ms, split_iterators, index_splits, weights_header
-    )
+    if bm_target == bm:
+        split_iterators = PickleHandler.load(header, "split_iterators.pkl")
+        if not isinstance(split_iterators, Dict):
+            raise TypeError("split_iterators not found or not a desired type")
+
+        graph_np_dict = get_graph_embedding(
+            ms, split_iterators, index_splits, weights_header, name="graph_np_dict.pkl"
+        )
+    else:
+        header = header.replace(
+            f"{bm}_{pw_model.data_sign}", f"{bm_target}_{pw_data.data_sign}"
+        )
+        split_iterators = PickleHandler.load(header, "split_iterators.pkl")
+        if not isinstance(split_iterators, Dict):
+            raise TypeError("split_iterators not found or not a desired type")
+        split_iterators = {"test": split_iterators["test"]}
+
+        graph_np_dict = get_graph_embedding(
+            ms,
+            split_iterators,
+            index_splits,
+            weights_header,
+            name=f"graph_np_dict_{bm_target}.pkl",
+        )
     index = index_splits[split]
     iterator = split_iterators[split]
     if not isinstance(iterator, QueryPlanIterator):
