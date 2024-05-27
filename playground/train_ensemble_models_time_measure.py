@@ -48,7 +48,15 @@ if __name__ == "__main__":
         + "new_recording/"
     )
 
-    ret = get_ag_data(base_dir, bm, q_type, debug, graph_choice, weights_path)  # type: ignore
+    ret = get_ag_data(
+        base_dir,
+        bm,
+        q_type,
+        debug,
+        graph_choice,
+        weights_path,
+        bm_target=bm_target,
+    )  # type: ignore
     train_data, val_data, test_data = ret["data"]
     ta, pw, objectives = ret["ta"], ret["pw"], ret["objectives"]
     if q_type.startswith("qs_"):
