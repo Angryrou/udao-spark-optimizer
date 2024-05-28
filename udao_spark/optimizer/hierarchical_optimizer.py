@@ -1666,7 +1666,7 @@ class HierarchicalOptimizer(BaseOptimizer):
                         [2],  # s1 <--
                         [2],  # s2 default
                         [0, 14, 28],  # s3: maxShuffledHashJoinLocalMapThreshold
-                        [1, 5, 28],  # s4: 10/140/280MB autoBroadcastJoinThreshold
+                        [4, 14, 28],  # s4: 10/140/280MB autoBroadcastJoinThreshold
                         [10, 20, 50],  # s5: 80/160/400 sql.shuffle.partitions
                         [2],  # s6 default
                         [50],  # s7: default
@@ -1678,7 +1678,7 @@ class HierarchicalOptimizer(BaseOptimizer):
                         [2],  # s1 <--
                         [2],  # s2 default
                         [0, 14, 28],  # s3: maxShuffledHashJoinLocalMapThreshold
-                        [1, 5, 28],  # s4: 10/50/280MB autoBroadcastJoinThreshold
+                        [4, 14, 28],  # s4: 40/140/280MB autoBroadcastJoinThreshold
                         [10, 20, 50],  # s5: 80/160/400 sql.shuffle.partitions
                         [2],  # s6 default
                         [50],  # s7: default
@@ -1690,7 +1690,7 @@ class HierarchicalOptimizer(BaseOptimizer):
                         [2],  # s1 <--
                         [2],  # s2 default
                         [0, 14, 28],  # s3: maxShuffledHashJoinLocalMapThreshold
-                        [1, 5, 28],  # s4: 10/50/280MB autoBroadcastJoinThreshold
+                        [4, 14, 28],  # s4: 10/50/280MB autoBroadcastJoinThreshold
                         [10, 20, 50],  # s5: 80/160/400 sql.shuffle.partitions
                         [2],  # s6 default
                         [50],  # s7: default
