@@ -2,7 +2,7 @@ bm=$1
 cname=$2
 nreps=$3
 runtime=$4
-configuration_header=${5:-divB_new_grids/on_demand}
+configuration_header=${5:-revision/on_demand}
 port=${6:-12345}
 
 if [ "$bm" = "tpch" ]; then

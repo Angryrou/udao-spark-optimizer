@@ -3,6 +3,7 @@ sample_mode=$2
 nc=$3
 np=$4
 selected=${5:-0}
+subdir=${6:-"revision"} # used to be "divB_new_grids"
 
 # Constructing the base command based on the value of bm
 if [ "$bm" = "tpch" ]; then
@@ -62,16 +63,16 @@ fi
 if [ "$bm" = "tpch" ]; then
   for weights in "0.0_1.0" "0.9_0.1" "0.5_0.5" "0.1_0.9" "1.0_0.0"; do
     scp chenghao_conf_save/tpch100/hmooc%B_${sample_mode}/${fname}_${weights}.json \
-    hex1@node1:~/chenghao/udao-spark-optimizer/playground/evaluations/tpch100/divB_new_grids/on_demand/${sample_mode}_${fname}_${weights}.json
+    hex1@node1:~/chenghao/udao-spark-optimizer/playground/evaluations/tpch100/${subdir}/on_demand/${sample_mode}_${fname}_${weights}.json
     scp chenghao_conf_save/tpch100/pref_to_df_hmooc%B_${sample_mode}_${fname}_${weights}.pkl \
-    hex1@node1:~/chenghao/udao-spark-optimizer/playground/evaluations/tpch100/divB_new_grids
+    hex1@node1:~/chenghao/udao-spark-optimizer/playground/evaluations/tpch100/${subdir}
   done
 elif [ "$bm" = "tpcds" ]; then
   for weights in "0.0_1.0" "0.9_0.1" "0.5_0.5" "0.1_0.9" "1.0_0.0"; do
     scp chenghao_conf_save/tpcds100/hmooc%B_${sample_mode}/${fname}_${weights}.json \
-    hex2@node7:~/chenghao/udao-spark-optimizer/playground/evaluations/tpcds100/divB_new_grids/on_demand/${sample_mode}_${fname}_${weights}.json
+    hex2@node7:~/chenghao/udao-spark-optimizer/playground/evaluations/tpcds100/${subdir}/on_demand/${sample_mode}_${fname}_${weights}.json
     scp chenghao_conf_save/tpcds100/pref_to_df_hmooc%B_${sample_mode}_${fname}_${weights}.pkl \
-    hex2@node7:~/chenghao/udao-spark-optimizer/playground/evaluations/tpcds100/divB_new_grids
+    hex2@node7:~/chenghao/udao-spark-optimizer/playground/evaluations/tpcds100/${subdir}
   done
 else
     echo "Invalid benchmark specified"
