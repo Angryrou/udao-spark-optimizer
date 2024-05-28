@@ -20,7 +20,6 @@ if [ "$bm" = "tpch" ]; then
         --n_c_samples $nc \
         --n_p_samples $np \
         --sample_mode $sample_mode \
-        --save_data \
         --save_data_header \"./output/\" \
         --clf_recall_xhold -1"
 elif [ "$bm" = "tpcds" ]; then
@@ -38,7 +37,6 @@ elif [ "$bm" = "tpcds" ]; then
         --n_c_samples $nc \
         --n_p_samples $np \
         --sample_mode $sample_mode \
-        --save_data \
         --save_data_header \"./output/\" \
         --clf_recall_xhold -1"
 else
