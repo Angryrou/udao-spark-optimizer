@@ -242,7 +242,7 @@ def get_compile_time_optimizer_parameters() -> ArgumentParser:
 
     parser.add_argument("--sample_mode", type=str, default="grid-search",
                         choices=["grid-search", "random", "lhs",
-                                 "grid-adaptive-cut", "grid-adaptive-cut2"],
+                                 "grid-adaptive-cut"],
                         help="Sample type for HMOOC")
     parser.add_argument("--pop_size", type=int, default=100,
                         help="Population size in EVO")
