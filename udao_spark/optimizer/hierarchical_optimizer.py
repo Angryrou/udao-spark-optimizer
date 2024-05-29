@@ -463,7 +463,7 @@ class HierarchicalOptimizer(BaseOptimizer):
                 )
                 theta[s4] = "{}MB".format(
                     max(
-                        40,  # lower bounded by 40MB to avoid missing BHJ for input QSs
+                        25,  # lower bounded by 25MB to avoid missing BHJ for input QSs
                         min(
                             int(
                                 fine_conf["runtime_theta"][f"qs{ji}"]["theta_p"][s4][
