@@ -246,6 +246,11 @@ if __name__ == "__main__":
             ]
             for query_id, po_set_list in po_set_dict.items()
         }
+        torun_3plan_json = {
+            query_id: [conf_list[-1] if len(conf_list) < 3 else conf_list[2]]
+            for query_id, conf_list in torun_json.items()
+        }
+
         torun_json_distinct = {
             query_id: list(set(conf_strs)) for query_id, conf_strs in torun_json.items()
         }
@@ -253,6 +258,11 @@ if __name__ == "__main__":
         JsonHandler.dump_to_file(
             torun_json,
             file=f"{params.conf_save}/{bm}100/{params.moo_algo}_{params.sample_mode}/{fname}.json",
+            indent=2,
+        )
+        JsonHandler.dump_to_file(
+            torun_3plan_json,
+            file=f"{params.conf_save}/{bm}100/{params.moo_algo}_{params.sample_mode}/{fname}_3plans.json",
             indent=2,
         )
         JsonHandler.dump_to_file(
