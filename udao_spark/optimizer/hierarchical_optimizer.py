@@ -463,7 +463,7 @@ class HierarchicalOptimizer(BaseOptimizer):
                 )
                 theta[s4] = "{}MB".format(
                     max(
-                        10,
+                        25,  # lower bounded by 25MB to avoid missing BHJ for input QSs
                         min(
                             int(
                                 fine_conf["runtime_theta"][f"qs{ji}"]["theta_p"][s4][
@@ -1478,18 +1478,19 @@ class HierarchicalOptimizer(BaseOptimizer):
             elif sample_mode == "grid-adaptive-cut":  # cut at cumulative 5\%
                 # k3=[8, 12, 16] & turn on s3 in 81
 
-                # the choices of grid based on the selected importance of the knobs
+                # the choices of grid based on the feature importance score (FIS)
                 # set default to parameters from the low rank to the high rank
                 # that cumulatively sum up to 5% of WMAPE
                 #
                 # k7, k1, k3, k2 (set k2, k4, k6, k5 and k8 to default)
-                # s4, s5, s8, s9, s1 (set s2, s3, s6, s7 to default)
+                # query plan related params: s3, s4
+                # other SQL params with FIS: s5, s8, s9, s1 (set s2, s6, s7 to default)
                 if n_c_samples not in [54, 90, 150]:
                     raise Exception(
                         f"# of theta_c samples {n_c_samples} "
                         f"is not supported for {sample_mode}!"
                     )
-                if n_p_samples not in [27, 81]:
+                if n_p_samples not in [27, 81, 243]:
                     raise Exception(
                         f"# of theta_p samples {n_p_samples} "
                         f"is not supported for {sample_mode}!"
@@ -1533,7 +1534,8 @@ class HierarchicalOptimizer(BaseOptimizer):
                         f"is not supported for {sample_mode}!"
                     )
 
-                # s4, s5, s8, s9, s1 (set s2, s3, s6, s7 to default)
+                # add query plan related params: s4, s3
+                # add other params s5, s8, s9, s1 (set s2, s6, s7 to default)
                 # for some realistic concerns, we reset the range for
                 # s4: [0MB - 280MB] to avoid failures and missing good broadcast
                 # s5: [10 - 50] to avoid bad performance within same resource usage
@@ -1561,11 +1563,18 @@ class HierarchicalOptimizer(BaseOptimizer):
                         [0, 2, 4],  # s8: spark.sql.files.maxPartitionBytes
                         [2],  # s9: default
                     ]
-                else:
-                    raise Exception(
-                        f"# of theta_p samples {n_p_samples} "
-                        f"is not supported for {sample_mode}!"
-                    )
+                elif n_p_samples == 243:  # 3^5 = 243
+                    p_grids = [
+                        [2],  # s1 <--
+                        [2],  # s2 default
+                        [0, 14, 28],  # s3: maxShuffledHashJoinLocalMapThreshold
+                        [0, 14, 28],  # s4: 10/140/280MB autoBroadcastJoinThreshold
+                        [10, 20, 50],  # s5: 80/160/400 sql.shuffle.partitions
+                        [2],  # s6 default
+                        [50],  # s7: default
+                        [0, 2, 4],  # s8: spark.sql.files.maxPartitionBytes
+                        [0, 2, 4],  # s9
+                    ]
             else:
                 raise Exception(
                     f"The sample mode {sample_mode} for theta is not supported!"

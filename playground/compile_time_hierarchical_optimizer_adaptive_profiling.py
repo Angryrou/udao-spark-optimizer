@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 import numpy as np
+import pandas as pd
 from udao.optimization.utils.moo_utils import is_pareto_efficient
 
 from udao_spark.data.extractors.injection_extractor import (
@@ -246,6 +247,11 @@ if __name__ == "__main__":
             ]
             for query_id, po_set_list in po_set_dict.items()
         }
+        torun_3plan_json = {
+            query_id: [conf_list[-1] if len(conf_list) < 3 else conf_list[2]]
+            for query_id, conf_list in torun_json.items()
+        }
+
         torun_json_distinct = {
             query_id: list(set(conf_strs)) for query_id, conf_strs in torun_json.items()
         }
@@ -256,9 +262,27 @@ if __name__ == "__main__":
             indent=2,
         )
         JsonHandler.dump_to_file(
+            torun_3plan_json,
+            file=f"{params.conf_save}/{bm}100/{params.moo_algo}_{params.sample_mode}/{fname}_3plans.json",
+            indent=2,
+        )
+        JsonHandler.dump_to_file(
             torun_json_distinct,
             file=f"{params.conf_save}/{bm}100/{params.moo_algo}_{params.sample_mode}/{fname}_distinct.json",
             indent=2,
+        )
+
+        pref = int(10 * weights[0])
+        pref_dict = {
+            pref: pd.DataFrame.from_dict(torun_3plan_json, orient="index")
+            .reset_index()
+            .rename(columns={"index": "query_id", 0: "conf"})
+        }
+        pred_dict_file = (
+            f"pref_to_df_{params.moo_algo}_{params.sample_mode}_{fname}_3plans.pkl"
+        )
+        PickleHandler.save(
+            pref_dict, f"{params.conf_save}/{bm}100/", pred_dict_file, overwrite=True
         )
 
     JsonHandler.dump_to_file(
