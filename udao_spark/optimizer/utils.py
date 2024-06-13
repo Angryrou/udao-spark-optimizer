@@ -75,7 +75,7 @@ def get_ag_meta(
     debug: bool = False,
 ) -> Dict[str, str]:
     if graph_choice == "none":
-        ag_prefix = get_data_sign(bm, debug)
+        ag_prefix = f"{bm}_{get_data_sign(bm, debug)}"
         others = {}
     else:
         graph_weights_path = get_weights_path_dict(bm, hp_choice, graph_choice, q_type)
