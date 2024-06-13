@@ -234,6 +234,8 @@ def get_ag_data(
             df_split = df.loc[index].copy()
             df_split = df_split[ta.get_tabular_columns() + objectives]
             df_splits[split] = df_split
+            df_split_queries = df.loc[index].copy()[["template", "qid"]]
+            df_splits_queries[split] = df_split_queries
     elif graph_choice in ("avg", "tlstm", "qf", "gtn"):
         model_sign = f"graph_{graph_choice}"
         if (
