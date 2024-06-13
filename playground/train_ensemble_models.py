@@ -29,6 +29,7 @@ if __name__ == "__main__":
     infer_limit_batch_size = params.infer_limit_batch_size
     time_limit = params.ag_time_limit
     base_dir = Path(__file__).parent
+
     ag_meta = get_ag_meta(
         bm,
         hp_choice,
@@ -39,12 +40,12 @@ if __name__ == "__main__":
         infer_limit_batch_size,
         time_limit,
     )
-    weights_path = ag_meta["graph_weights_path"]
     bm_target = params.bm_gtn_model or bm
     if bm_target != bm:
         ag_path = ag_meta["ag_path"] + f"_{bm_target}"
     else:
         ag_path = ag_meta["ag_path"]
+
     ag_path = ag_path + "/"
     if os.path.exists(ag_path):
         predictor = MultilabelPredictor.load(f"{ag_path}")
@@ -57,7 +58,9 @@ if __name__ == "__main__":
             q_type,
             debug,
             graph_choice,
-            weights_path,
+            weights_path=ag_meta["graph_weights_path"]
+            if graph_choice != "none"
+            else None,
             bm_target=params.bm_gtn_model,
         )
         train_data, val_data, test_data = ret["data"]

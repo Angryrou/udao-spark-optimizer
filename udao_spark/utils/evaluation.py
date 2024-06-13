@@ -234,7 +234,7 @@ def get_ag_data(
             df_split = df.loc[index].copy()
             df_split = df_split[ta.get_tabular_columns() + objectives]
             df_splits[split] = df_split
-    elif graph_choice in ("avg", "gtn"):
+    elif graph_choice in ("avg", "tlstm", "qf", "gtn"):
         model_sign = f"graph_{graph_choice}"
         if (
             weights_path is None

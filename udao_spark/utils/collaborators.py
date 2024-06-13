@@ -21,6 +21,14 @@ from .logging import logger
 from .params import ExtractParams, QType
 
 
+def get_data_sign(bm: str, debug: bool) -> str:
+    if bm == "tpch":
+        return f"22x{10 if debug else 2273}"
+    if bm == "tpcds":
+        return f"102x{10 if debug else 490}"
+    raise NoBenchmarkError
+
+
 class PathWatcher:
     def __init__(
         self, base_dir: Path, benchmark: str, debug: bool, extract_params: ExtractParams
@@ -53,12 +61,7 @@ class PathWatcher:
             logger.info(f"found {self.cc_extract_prefix}/{json_name}")
 
     def _get_data_sign(self) -> str:
-        # Read data
-        if self.benchmark == "tpch":
-            return f"22x{10 if self.debug else 2273}"
-        if self.benchmark == "tpcds":
-            return f"102x{10 if self.debug else 490}"
-        raise NoBenchmarkError
+        return get_data_sign(self.benchmark, self.debug)
 
     def get_data_header(self, q_type: str) -> str:
         return f"{self.data_prefix}/{q_type}_{self.data_sign}.csv"

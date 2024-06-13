@@ -13,6 +13,7 @@ from udao.optimization.utils.moo_utils import is_pareto_efficient
 from udao_trace.utils import JsonHandler
 
 from ..model.utils import get_graph_ckp_info
+from ..utils.collaborators import get_data_sign
 from ..utils.logging import logger
 from ..utils.params import QType
 
@@ -71,11 +72,26 @@ def get_ag_meta(
     infer_limit: Optional[float],
     infer_limit_batch_size: Optional[int],
     time_limit: Optional[int],
+    debug: bool = False,
 ) -> Dict[str, str]:
-    graph_weights_path = get_weights_path_dict(bm, hp_choice, graph_choice, q_type)
-    ag_prefix, model_sign, model_params_path, data_processor_path = get_graph_ckp_info(
-        graph_weights_path
-    )
+    if graph_choice == "none":
+        ag_prefix = get_data_sign(bm, debug)
+        others = {}
+    else:
+        graph_weights_path = get_weights_path_dict(bm, hp_choice, graph_choice, q_type)
+        (
+            ag_prefix,
+            model_sign,
+            model_params_path,
+            data_processor_path,
+        ) = get_graph_ckp_info(graph_weights_path)
+        others = {
+            "graph_weights_path": graph_weights_path,
+            "model_sign": model_sign,
+            "model_params_path": model_params_path,
+            "data_processor_path": data_processor_path,
+        }
+
     if infer_limit is None:
         ag_full_name = f"{ag_sign}_{hp_choice}"
     else:
@@ -84,7 +100,6 @@ def get_ag_meta(
         ag_full_name = "{}_{}_infer_limit_{}_batch_size_{}".format(
             ag_sign, hp_choice, infer_limit, infer_limit_batch_size
         )
-
     if time_limit is not None:
         ag_full_name += f"_time_limit_{time_limit}s"
 
@@ -93,11 +108,8 @@ def get_ag_meta(
     )
     return {
         "ag_path": ag_path,
-        "graph_weights_path": graph_weights_path,
-        "model_sign": model_sign,
-        "model_params_path": model_params_path,
-        "data_processor_path": data_processor_path,
         "ag_full_name": ag_full_name,
+        **others,
     }
 
 

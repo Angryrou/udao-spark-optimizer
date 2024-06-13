@@ -195,7 +195,7 @@ def get_ag_parameters() -> ArgumentParser:
     parser.add_argument("--hp_choice", type=str, default="tuned-0215",
                         choices=["tuned-0215"])
     parser.add_argument("--graph_choice", type=str, default="gtn",
-                        choices=["avg", "gtn", "tlstm", "raal", "qppnet", "qf"])
+                        choices=["avg", "gtn", "tlstm", "raal", "qppnet", "qf", "none"])
     parser.add_argument("--ag_sign", type=str, default="medium_quality")
     parser.add_argument("--num_gpus", type=int, default=2,)
     parser.add_argument("--infer_limit", type=float, default=None,
