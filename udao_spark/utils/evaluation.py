@@ -327,7 +327,6 @@ def get_ag_pred_objs(
     ag_model: Dict[str, str],
     bm_target: Optional[str] = None,
     xfer_gtn_only: bool = False,
-    new_recording: bool = False,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, float, float, Dict]:
     weights_path = ag_meta["graph_weights_path"]
     weights_head = os.path.dirname(weights_path)
@@ -371,8 +370,6 @@ def get_ag_pred_objs(
 
     if bm_target != bm and xfer_gtn_only:
         ag_path += f"_{bm_target}"
-    if new_recording:
-        ag_path += "new_recording"
 
     objectives = ta.get_ag_objectives()
     dt_ns = 0
