@@ -26,7 +26,7 @@ from udao_spark.model.utils import (
 )
 from udao_spark.optimizer.atomic_optimizer import AtomicOptimizer
 from udao_spark.optimizer.utils import get_ag_meta
-from udao_spark.utils.collaborators import PathWatcher, TypeAdvisor
+from udao_spark.utils.collaborators import PathWatcher, TypeAdvisor, get_data_sign
 from udao_spark.utils.params import ExtractParams, QType
 from udao_trace.configuration import SparkConf
 from udao_trace.utils import BenchmarkType, ParquetHandler, PickleHandler
@@ -234,8 +234,13 @@ def get_ag_data(
             df_split = df.loc[index].copy()
             df_split = df_split[ta.get_tabular_columns() + objectives]
             df_splits[split] = df_split
-    elif graph_choice in ("avg", "gtn"):
-        model_sign = f"graph_{graph_choice}"
+            df_split_queries = df.loc[index].copy()[["template", "qid"]]
+            df_splits_queries[split] = df_split_queries
+    elif graph_choice in ("avg", "tlstm", "qf", "gtn", "raal"):
+        if graph_choice == "tlstm":
+            model_sign = "tree_lstm"
+        else:
+            model_sign = f"graph_{graph_choice}"
         if (
             weights_path is None
             or not os.path.exists(weights_path)
@@ -322,10 +327,12 @@ def get_ag_pred_objs(
     ag_model: Dict[str, str],
     bm_target: Optional[str] = None,
     xfer_gtn_only: bool = False,
-    new_recording: bool = False,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, float, float, Dict]:
-    weights_path = ag_meta["graph_weights_path"]
-    weights_head = os.path.dirname(weights_path)
+    weights_head = (
+        os.path.dirname(ag_meta["graph_weights_path"])
+        if graph_choice != "none"
+        else f"cache_and_ckp/{bm}_{get_data_sign(bm, debug)}/{q_type}/none"
+    )
     ag_name_splits = ag_meta["ag_full_name"].split("_")
     ag_sign = "_".join(ag_name_splits[:1] + ag_name_splits[2:])
     ag_model_short = "_".join(f"{k.split('_')[0]}:{v}" for k, v in ag_model.items())
@@ -357,7 +364,13 @@ def get_ag_pred_objs(
 
     print(f"not found {weights_head}/{cache_name}, generating...")
     ag_data = get_ag_data(
-        base_dir, bm, q_type, debug, graph_choice, weights_path, bm_target=bm_target
+        base_dir,
+        bm,
+        q_type,
+        debug,
+        graph_choice,
+        ag_meta["graph_weights_path"] if graph_choice != "none" else None,
+        bm_target=bm_target,
     )
     data_dict = {sp: da for sp, da in zip(["train", "val", "test"], ag_data["data"])}
     data = data_dict[split]
@@ -366,8 +379,6 @@ def get_ag_pred_objs(
 
     if bm_target != bm and xfer_gtn_only:
         ag_path += f"_{bm_target}"
-    if new_recording:
-        ag_path += "new_recording"
 
     objectives = ta.get_ag_objectives()
     dt_ns = 0

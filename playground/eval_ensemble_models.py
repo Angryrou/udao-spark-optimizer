@@ -17,8 +17,6 @@ def get_parser() -> ArgumentParser:
                         help="specific model name for AG for Q_R IO")
     parser.add_argument("--force", action="store_true",
                         help="Enable forcing running results")
-    parser.add_argument("--new_recording", action="store_true",
-                        help="Recording the breakdown training times")
     parser.add_argument("--bm_gtn_model", type=str, default=None,
                         help="gtn of the model pretrained.")
     # fmt: on
@@ -45,14 +43,8 @@ if __name__ == "__main__":
         infer_limit_batch_size,
         time_limit,
     )
-    weights_path = ag_meta["graph_weights_path"]
     bm_target = params.bm_gtn_model or bm
-    ag_path = (
-        ag_meta["ag_path"]
-        + ("" if bm == bm_target else f"_{bm_target}")
-        + ("new_recording" if params.new_recording else "")
-        + "/"
-    )
+    ag_path = ag_meta["ag_path"] + ("" if bm == bm_target else f"_{bm_target}") + "/"
 
     ret = get_ag_data(
         base_dir,
@@ -60,7 +52,7 @@ if __name__ == "__main__":
         q_type,
         debug,
         graph_choice,
-        weights_path,
+        weights_path=ag_meta["graph_weights_path"] if graph_choice != "none" else None,
         bm_target=bm_target,
     )
     train_data, val_data, test_data = ret["data"]
@@ -96,7 +88,6 @@ if __name__ == "__main__":
         ag_model=ag_model,
         bm_target=bm_target,
         xfer_gtn_only=True,
-        new_recording=params.new_recording,
     )
 
     print(f"metrics: {metrics}, throughput (regr only): {throughput} K/s")
