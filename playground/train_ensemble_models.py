@@ -61,7 +61,7 @@ if __name__ == "__main__":
             weights_path=ag_meta["graph_weights_path"]
             if graph_choice != "none"
             else None,
-            bm_target=params.bm_gtn_model,
+            bm_target=bm_target,
         )
         train_data, val_data, test_data = ret["data"]
         ta, pw, objectives = ret["ta"], ret["pw"], ret["objectives"]

@@ -43,7 +43,6 @@ if __name__ == "__main__":
         infer_limit_batch_size,
         time_limit,
     )
-    weights_path = ag_meta["graph_weights_path"]
     bm_target = params.bm_gtn_model or bm
     ag_path = ag_meta["ag_path"] + ("" if bm == bm_target else f"_{bm_target}") + "/"
 
@@ -53,7 +52,7 @@ if __name__ == "__main__":
         q_type,
         debug,
         graph_choice,
-        weights_path,
+        weights_path=ag_meta["graph_weights_path"] if graph_choice != "none" else None,
         bm_target=bm_target,
     )
     train_data, val_data, test_data = ret["data"]
