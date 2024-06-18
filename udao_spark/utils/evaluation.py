@@ -327,6 +327,7 @@ def get_ag_pred_objs(
     ag_model: Dict[str, str],
     bm_target: Optional[str] = None,
     xfer_gtn_only: bool = False,
+    tpl_plus: bool = False,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, float, float, Dict]:
     weights_head = (
         os.path.dirname(ag_meta["graph_weights_path"])
@@ -336,6 +337,8 @@ def get_ag_pred_objs(
     ag_name_splits = ag_meta["ag_full_name"].split("_")
     ag_sign = "_".join(ag_name_splits[:1] + ag_name_splits[2:])
     ag_model_short = "_".join(f"{k.split('_')[0]}:{v}" for k, v in ag_model.items())
+    if tpl_plus:
+        ag_model_short += "_tpl_plus"
     device = "gpu" if th.cuda.is_available() else "cpu"
     bm_target = bm_target or bm
     if bm_target != bm and not xfer_gtn_only:
@@ -372,13 +375,26 @@ def get_ag_pred_objs(
         ag_meta["graph_weights_path"] if graph_choice != "none" else None,
         bm_target=bm_target,
     )
-    data_dict = {sp: da for sp, da in zip(["train", "val", "test"], ag_data["data"])}
-    data = data_dict[split]
     ta, objectives = ag_data["ta"], ag_data["objectives"]
     ag_path = ag_meta["ag_path"]
 
     if bm_target != bm and xfer_gtn_only:
         ag_path += f"_{bm_target}"
+
+    if tpl_plus:
+        ag_path += "_plus_tpl"
+        data_dict = {
+            sp: da.join(daq[["template"]].astype("str"))
+            for sp, da, daq in zip(
+                ["train", "val", "test"], ag_data["data"], ag_data["data_queries"]
+            )
+        }
+        data = data_dict[split]
+    else:
+        data_dict = {
+            sp: da for sp, da in zip(["train", "val", "test"], ag_data["data"])
+        }
+        data = data_dict[split]
 
     objectives = ta.get_ag_objectives()
     dt_ns = 0
