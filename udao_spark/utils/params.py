@@ -60,6 +60,8 @@ def get_base_parser() -> ArgumentParser:
                         help="Enable debug mode")
     parser.add_argument("--seed", type=int, default=42,
                         help="Random seed")
+    parser.add_argument("--fold", type=int, default=None,
+                        help="Fold number, from 0 to 9")
     # fmt: on
     return parser
 

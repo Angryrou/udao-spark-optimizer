@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import numpy as np
 
@@ -31,16 +31,26 @@ def get_data_sign(bm: str, debug: bool) -> str:
 
 class PathWatcher:
     def __init__(
-        self, base_dir: Path, benchmark: str, debug: bool, extract_params: ExtractParams
+        self,
+        base_dir: Path,
+        benchmark: str,
+        debug: bool,
+        extract_params: ExtractParams,
+        fold: Optional[int] = None,
     ):
         self.base_dir = base_dir
         self.benchmark = benchmark
         self.debug = debug
+        self.fold = fold
 
         data_sign = self._get_data_sign()
         data_prefix = f"{str(base_dir)}/data/{benchmark}"
         cc_prefix = f"{str(base_dir)}/cache_and_ckp/{benchmark}_{data_sign}"
         cc_extract_prefix = f"{cc_prefix}/{extract_params.hash()}"
+        if fold is not None:
+            if fold not in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]:
+                raise ValueError(f"fold must be in [1, 2, ..., 10], got {fold}")
+            cc_extract_prefix += f"-{fold}"
         self.data_sign = data_sign
         self.data_prefix = data_prefix
         self.cc_prefix = cc_prefix

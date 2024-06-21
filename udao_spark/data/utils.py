@@ -1,10 +1,11 @@
 from itertools import chain
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 import torch as th
+from sklearn.model_selection import train_test_split
 from udao.data import BaseIterator
 from udao.data.handler.data_handler import DataHandler
 from udao.data.utils.utils import DatasetType, train_test_val_split_on_column
@@ -190,6 +191,78 @@ def checkpoint_model_structure(pw: PathWatcher, model_params: UdaoParams) -> str
     return ckp_header
 
 
+def train_test_split_leave_out_fold(
+    df: pd.DataFrame,
+    groupby_col: str,
+    fold: int,
+    n_tids_per_fold: int,
+    test_frac: float,
+    is_validation_set: bool,
+    random_state: Optional[int] = None,
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    non_test_df, test_df = train_test_split(
+        df,
+        test_size=test_frac,
+        stratify=df[groupby_col],
+        random_state=random_state,
+    )
+
+    unique_tids = df[groupby_col].unique()
+    np.random.seed(random_state)
+    if is_validation_set:
+        test_tids = np.random.choice(unique_tids, n_tids_per_fold, replace=False)
+    else:
+        shuffled_tids = np.random.choice(unique_tids, len(unique_tids), replace=False)
+        test_tids = shuffled_tids[(fold - 1) * n_tids_per_fold : fold * n_tids_per_fold]
+
+    test_df_additional = non_test_df[non_test_df[groupby_col].isin(test_tids)]
+    non_test_df = non_test_df[~non_test_df[groupby_col].isin(test_tids)]
+    test_df = pd.concat([test_df, test_df_additional])
+
+    return non_test_df, test_df
+
+
+def train_test_val_split_on_column_leave_out_fold(
+    df: pd.DataFrame,
+    groupby_col: str,
+    fold: int,
+    n_folds: int,
+    val_frac: float,
+    test_frac: float,
+    random_state: Optional[int] = None,
+) -> Dict[DatasetType, pd.DataFrame]:
+    if n_folds != 10:
+        raise ValueError(f"n_folds must be 10, got {n_folds}")
+    if fold not in range(1, 11):
+        raise ValueError(f"fold must be in [1, 2, ..., 10], got {fold}")
+
+    n_tids_per_fold = len(df[groupby_col].unique()) // n_folds
+    non_test_df, test_df = train_test_split_leave_out_fold(
+        df,
+        groupby_col=groupby_col,
+        fold=fold,
+        n_tids_per_fold=n_tids_per_fold,
+        test_frac=test_frac,
+        is_validation_set=False,
+        random_state=random_state,
+    )
+    train_df, val_df = train_test_split_leave_out_fold(
+        non_test_df,
+        groupby_col=groupby_col,
+        fold=fold,
+        n_tids_per_fold=n_tids_per_fold,
+        test_frac=val_frac / (1 - test_frac),
+        is_validation_set=True,
+        random_state=random_state,
+    )
+
+    return {
+        "train": train_df,
+        "val": val_df,
+        "test": test_df,
+    }
+
+
 def magic_setup(pw: PathWatcher, seed: int) -> None:
     """magic set to make sure
     1. data has been properly processed and effectively saved.
@@ -204,29 +277,48 @@ def magic_setup(pw: PathWatcher, seed: int) -> None:
     debug = pw.debug
 
     # Prepare data
-    sc = SparkConf(str(pw.base_dir / "assets/spark_configuration_aqe_on.json"))
-    df_q = prepare_data(df_q_raw, benchmark=benchmark, sc=sc, q_type="q")
-    df_qs = prepare_data(df_qs_raw, benchmark=benchmark, sc=sc, q_type="qs")
-    df_q_compile = df_q[df_q["lqp_id"] == 0].copy()  # for compile-time df
-    df_rare = df_q_compile.groupby("tid").filter(lambda x: len(x) < 5)
-    if df_rare.shape[0] > 0:
-        logger.warning(f"Drop rare templates: {df_rare['tid'].unique()}")
-        df_q_compile = df_q_compile.groupby("tid").filter(lambda x: len(x) >= 5)
-    else:
-        logger.info("No rare templates")
-    # Compute the index for df_q_compile, df_q and df_qs
-    save_and_log_df(df_q_compile, ["appid"], pw, "df_q_compile")
-    save_and_log_df(df_q, ["appid", "lqp_id"], pw, "df_q_all")
-    save_and_log_df(df_qs, ["appid", "qs_id"], pw, "df_qs")
+    try:
+        df_q_compile = ParquetHandler.load(pw.cc_prefix, "df_q_compile.parquet")
+        df_q = ParquetHandler.load(pw.cc_prefix, "df_q.parquet")
+        df_qs = ParquetHandler.load(pw.cc_prefix, "df_qs.parquet")
+        logger.info("Loaded df_q_compile, df_q, df_qs from cache")
+    except Exception:
+        sc = SparkConf(str(pw.base_dir / "assets/spark_configuration_aqe_on.json"))
+        df_q = prepare_data(df_q_raw, benchmark=benchmark, sc=sc, q_type="q")
+        df_qs = prepare_data(df_qs_raw, benchmark=benchmark, sc=sc, q_type="qs")
+        df_q_compile = df_q[df_q["lqp_id"] == 0].copy()  # for compile-time df
+        df_rare = df_q_compile.groupby("tid").filter(lambda x: len(x) < 5)
+        if df_rare.shape[0] > 0:
+            logger.warning(f"Drop rare templates: {df_rare['tid'].unique()}")
+            df_q_compile = df_q_compile.groupby("tid").filter(lambda x: len(x) >= 5)
+        else:
+            logger.info("No rare templates")
+        # Compute the index for df_q_compile, df_q and df_qs
+        save_and_log_df(df_q_compile, ["appid"], pw, "df_q_compile")
+        save_and_log_df(df_q, ["appid", "lqp_id"], pw, "df_q_all")
+        save_and_log_df(df_qs, ["appid", "qs_id"], pw, "df_qs")
+        logger.info("Saved and loaded df_q_compile, df_q, df_qs from cache")
 
     # Split data for df_q_compile
-    df_splits_q_compile = train_test_val_split_on_column(
-        df=df_q_compile,
-        groupby_col="tid",
-        val_frac=0.2 if debug else 0.1,
-        test_frac=0.2 if debug else 0.1,
-        random_state=seed,
-    )
+    if pw.fold is None:
+        df_splits_q_compile = train_test_val_split_on_column(
+            df=df_q_compile,
+            groupby_col="tid",
+            val_frac=0.2 if debug else 0.1,
+            test_frac=0.2 if debug else 0.1,
+            random_state=seed,
+        )
+    else:
+        df_splits_q_compile = train_test_val_split_on_column_leave_out_fold(
+            df=df_q_compile,
+            groupby_col="tid",
+            fold=pw.fold,
+            n_folds=10,
+            val_frac=0.2 if debug else 0.1,
+            test_frac=0.2 if debug else 0.1,
+            random_state=seed,
+        )
+
     index_splits_q_compile = {
         split: df.index.to_list() for split, df in df_splits_q_compile.items()
     }
@@ -239,17 +331,29 @@ def magic_setup(pw: PathWatcher, seed: int) -> None:
         for split, appid_list in index_splits_q_compile.items()
     }
     # Save the index_splits
-    save_and_log_index(index_splits_q_compile, pw, "index_splits_q_compile.pkl")
-    save_and_log_index(index_splits_q, pw, "index_splits_q_all.pkl")
-    save_and_log_index(index_splits_qs, pw, "index_splits_qs.pkl")
+    if pw.fold is None:
+        save_and_log_index(index_splits_q_compile, pw, "index_splits_q_compile.pkl")
+        save_and_log_index(index_splits_q, pw, "index_splits_q_all.pkl")
+        save_and_log_index(index_splits_qs, pw, "index_splits_qs.pkl")
+    else:
+        save_and_log_index(
+            index_splits_q_compile, pw, f"index_splits_q_compile-{pw.fold}.pkl"
+        )
+        save_and_log_index(index_splits_q, pw, f"index_splits_q_all-{pw.fold}.pkl")
+        save_and_log_index(index_splits_qs, pw, f"index_splits_qs-{pw.fold}.pkl")
 
 
 # Data Split Index
 def extract_index_splits(
     pw: PathWatcher, seed: int, q_type: str
 ) -> Tuple[pd.DataFrame, Dict[DatasetType, List[str]]]:
+    index_splits_name = (
+        f"index_splits_{q_type}.pkl"
+        if pw.fold is None
+        else f"index_splits_{q_type}-{pw.fold}.pkl"
+    )
     if (
-        not Path(f"{pw.cc_prefix}/index_splits_{q_type}.pkl").exists()
+        not Path(f"{pw.cc_prefix}/{index_splits_name}").exists()
         or not Path(f"{pw.cc_prefix}/df_{q_type}.parquet").exists()
     ):
         logger.info(
@@ -259,15 +363,15 @@ def extract_index_splits(
         magic_setup(pw, seed)
     else:
         logger.info(f"found {pw.cc_prefix}/df_{q_type}.pkl, loading...")
-        logger.info(f"found {pw.cc_prefix}/index_splits_{q_type}.pkl, loading...")
+        logger.info(f"found {pw.cc_prefix}/{index_splits_name}, loading...")
 
-    if not Path(f"{pw.cc_prefix}/index_splits_{q_type}.pkl").exists():
-        raise FileNotFoundError(f"{pw.cc_prefix}/index_splits_{q_type}.pkl not found")
+    if not Path(f"{pw.cc_prefix}/{index_splits_name}").exists():
+        raise FileNotFoundError(f"{pw.cc_prefix}/{index_splits_name} not found")
     if not Path(f"{pw.cc_prefix}/df_{q_type}.parquet").exists():
         raise FileNotFoundError(f"{pw.cc_prefix}/df_{q_type}.parquet not found")
 
     df = ParquetHandler.load(pw.cc_prefix, f"df_{q_type}.parquet")
-    index_splits = PickleHandler.load(pw.cc_prefix, f"index_splits_{q_type}.pkl")
+    index_splits = PickleHandler.load(pw.cc_prefix, index_splits_name)
     if not isinstance(index_splits, Dict):
         raise TypeError(f"index_splits is not a dict: {index_splits}")
     return df, index_splits
