@@ -72,6 +72,7 @@ def get_ag_meta(
     infer_limit: Optional[float],
     infer_limit_batch_size: Optional[int],
     time_limit: Optional[int],
+    fold: Optional[int],
     debug: bool = False,
 ) -> Dict[str, str]:
     if graph_choice == "none":
@@ -102,6 +103,9 @@ def get_ag_meta(
         )
     if time_limit is not None:
         ag_full_name += f"_time_limit_{time_limit}s"
+
+    if fold is not None:
+        ag_full_name += f"-{fold}"
 
     ag_path = "AutogluonModels/{}/{}/{}/{}".format(
         ag_prefix, q_type, graph_choice, ag_full_name

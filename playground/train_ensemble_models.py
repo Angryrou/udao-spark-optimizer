@@ -39,6 +39,7 @@ if __name__ == "__main__":
         infer_limit,
         infer_limit_batch_size,
         time_limit,
+        fold=params.fold,
     )
     bm_target = params.bm_gtn_model or bm
     if bm_target != bm:

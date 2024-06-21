@@ -42,6 +42,7 @@ if __name__ == "__main__":
         infer_limit,
         infer_limit_batch_size,
         time_limit,
+        fold=params.fold,
     )
     bm_target = params.bm_gtn_model or bm
     ag_path = ag_meta["ag_path"] + ("" if bm == bm_target else f"_{bm_target}") + "/"

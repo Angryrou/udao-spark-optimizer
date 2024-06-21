@@ -35,6 +35,7 @@ def data_preparation(
         params.infer_limit,
         params.infer_limit_batch_size,
         params.ag_time_limit,
+        params.fold,
     )
     weights_path = ag_meta["graph_weights_path"]
     ret = get_ag_data(

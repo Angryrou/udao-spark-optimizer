@@ -51,6 +51,7 @@ if __name__ == "__main__":
         infer_limit,
         infer_limit_batch_size,
         time_limit,
+        fold=params.fold,
     )
     weights_path = ag_meta["graph_weights_path"]
     if params.new_recording:

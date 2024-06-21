@@ -45,6 +45,7 @@ if __name__ == "__main__":
         infer_limit,
         infer_limit_batch_size,
         time_limit,
+        params.fold,
     )
     ag_data = get_ag_data(
         base_dir, bm, q_type, False, graph_choice, None, fold=params.fold
