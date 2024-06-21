@@ -221,9 +221,12 @@ def get_ag_data(
     df = ParquetHandler.load(
         pw_data.cc_prefix, f"df_{ta.get_q_type_for_cache()}.parquet"
     )
-    index_splits = PickleHandler.load(
-        pw_data.cc_prefix, f"index_splits_{ta.get_q_type_for_cache()}.pkl"
+    index_splits_name = (
+        f"index_splits_{ta.get_q_type_for_cache()}.pkl"
+        if fold is None
+        else f"index_splits_{ta.get_q_type_for_cache()}-{fold}.pkl"
     )
+    index_splits = PickleHandler.load(pw_data.cc_prefix, index_splits_name)
     if not isinstance(index_splits, Dict):
         raise TypeError(f"index_splits is not a dict: {index_splits}")
     objectives = ta.get_objectives()

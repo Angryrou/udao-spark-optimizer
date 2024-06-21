@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 
 import torch as th
@@ -77,6 +78,7 @@ if __name__ == "__main__":
     logger.info(f"Objectives: {objectives}")
 
     ckp_header = checkpoint_model_structure(pw=pw, model_params=model_params)
+    start_time = time.perf_counter_ns()
     trainer, module, ckp_learning_header = get_tuned_trainer(
         ckp_header,
         model,
@@ -87,6 +89,7 @@ if __name__ == "__main__":
         num_workers=0 if params.debug else params.num_workers,
         debug=params.debug,
     )
+    train_time_secs = (time.perf_counter_ns() - start_time) / 1e9
     test_results = trainer.test(
         model=module,
         dataloaders=split_iterators["test"].get_dataloader(
@@ -103,6 +106,7 @@ if __name__ == "__main__":
             "learning_params": learning_params.__dict__,
             "tabular_columns": tabular_columns,
             "objectives": objectives,
+            "training_time_s": train_time_secs,
         },
         f"{ckp_learning_header}/test_results.json",
         indent=2,
