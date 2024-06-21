@@ -51,9 +51,12 @@ def get_cloud_cost_w_io(
 
 
 def get_weights_path_dict(
-    bm: str, hp_choice: str, graph_choice: str, q_type: QType
+    bm: str, hp_choice: str, graph_choice: str, q_type: QType, fold: Optional[int]
 ) -> str:
-    weights_cache = JsonHandler.load_json("assets/mlp_configs.json")
+    json_file = (
+        "assets/mlp_configs.json" if fold is None else f"assets/mlp_configs-{fold}.json"
+    )
+    weights_cache = JsonHandler.load_json(json_file)
     try:
         weights_path = weights_cache[bm][hp_choice][graph_choice][q_type]
     except KeyError:
@@ -79,7 +82,9 @@ def get_ag_meta(
         ag_prefix = f"{bm}_{get_data_sign(bm, debug)}"
         others = {}
     else:
-        graph_weights_path = get_weights_path_dict(bm, hp_choice, graph_choice, q_type)
+        graph_weights_path = get_weights_path_dict(
+            bm, hp_choice, graph_choice, q_type, fold
+        )
         (
             ag_prefix,
             model_sign,
