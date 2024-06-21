@@ -41,7 +41,11 @@ if __name__ == "__main__":
         }
     )
     pw = PathWatcher(
-        Path(__file__).parent, params.benchmark, params.debug, extract_params
+        Path(__file__).parent,
+        params.benchmark,
+        params.debug,
+        extract_params,
+        params.fold,
     )
     split_iterators = get_split_iterators(pw=pw, ta=ta, tensor_dtypes=tensor_dtypes)
     train_iterator = cast(QueryPlanIterator, split_iterators["train"])

@@ -36,7 +36,7 @@ class PathWatcher:
         benchmark: str,
         debug: bool,
         extract_params: ExtractParams,
-        fold: Optional[int] = None,
+        fold: Optional[int],
     ):
         self.base_dir = base_dir
         self.benchmark = benchmark

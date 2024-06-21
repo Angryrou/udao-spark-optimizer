@@ -53,7 +53,9 @@ if __name__ == "__main__":
         infer_limit_batch_size,
         time_limit,
     )
-    ag_data = get_ag_data(base_dir, bm, q_type, False, graph_choice, None)
+    ag_data = get_ag_data(
+        base_dir, bm, q_type, False, graph_choice, None, fold=params.fold
+    )
     data_dict = {
         sp: da.join(daq[["template"]].astype("str"))
         for sp, da, daq in zip(
@@ -106,6 +108,7 @@ if __name__ == "__main__":
             graph_choice,
             split="test",
             ag_meta=ag_meta,
+            fold=params.fold,
             force=params.force,
             ag_model=ag_model,
             bm_target=bm_target,

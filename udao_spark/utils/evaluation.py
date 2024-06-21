@@ -200,6 +200,7 @@ def get_ag_data(
     debug: bool,
     graph_choice: str,
     weights_path: Optional[str],
+    fold: Optional[int],
     if_df: bool = False,
     bm_target: Optional[str] = None,
 ) -> Dict:
@@ -215,8 +216,8 @@ def get_ag_data(
     )
 
     bm_target = bm_target or bm
-    pw_model = PathWatcher(base_dir, bm, debug, extract_params)
-    pw_data = PathWatcher(base_dir, bm_target, debug, extract_params)
+    pw_model = PathWatcher(base_dir, bm, debug, extract_params, fold)
+    pw_data = PathWatcher(base_dir, bm_target, debug, extract_params, fold)
     df = ParquetHandler.load(
         pw_data.cc_prefix, f"df_{ta.get_q_type_for_cache()}.parquet"
     )
@@ -323,6 +324,7 @@ def get_ag_pred_objs(
     graph_choice: str,
     split: str,
     ag_meta: Dict[str, str],
+    fold: Optional[int],
     force: bool,
     ag_model: Dict[str, str],
     bm_target: Optional[str] = None,
@@ -373,6 +375,7 @@ def get_ag_pred_objs(
         debug,
         graph_choice,
         ag_meta["graph_weights_path"] if graph_choice != "none" else None,
+        fold=fold,
         bm_target=bm_target,
     )
     ta, objectives = ag_data["ta"], ag_data["objectives"]
@@ -467,6 +470,7 @@ def get_mlp_pred_objs(
     debug: bool,
     graph_choice: str,
     weights_path: str,
+    fold: Optional[int],
     split: str,
     force: bool,
     bm_target: Optional[str] = None,
@@ -516,8 +520,8 @@ def get_mlp_pred_objs(
             "debug": debug,
         }
     )
-    pw_model = PathWatcher(Path(__file__).parent, bm, debug, extract_params)
-    pw_data = PathWatcher(Path(__file__).parent, bm_target, debug, extract_params)
+    pw_model = PathWatcher(Path(__file__).parent, bm, debug, extract_params, fold)
+    pw_data = PathWatcher(Path(__file__).parent, bm_target, debug, extract_params, fold)
     df = ParquetHandler.load(
         pw_data.cc_prefix, f"df_{ta.get_q_type_for_cache()}.parquet"
     )

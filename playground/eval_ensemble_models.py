@@ -53,6 +53,7 @@ if __name__ == "__main__":
         debug,
         graph_choice,
         weights_path=ag_meta["graph_weights_path"] if graph_choice != "none" else None,
+        fold=params.fold,
         bm_target=bm_target,
     )
     train_data, val_data, test_data = ret["data"]
@@ -84,6 +85,7 @@ if __name__ == "__main__":
         graph_choice,
         split="test",
         ag_meta=ag_meta,
+        fold=params.fold,
         force=params.force,
         ag_model=ag_model,
         bm_target=bm_target,
