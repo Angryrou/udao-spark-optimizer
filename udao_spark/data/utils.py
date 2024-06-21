@@ -279,10 +279,11 @@ def magic_setup(pw: PathWatcher, seed: int) -> None:
     # Prepare data
     try:
         df_q_compile = ParquetHandler.load(pw.cc_prefix, "df_q_compile.parquet")
-        df_q = ParquetHandler.load(pw.cc_prefix, "df_q.parquet")
+        df_q = ParquetHandler.load(pw.cc_prefix, "df_q_all.parquet")
         df_qs = ParquetHandler.load(pw.cc_prefix, "df_qs.parquet")
         logger.info("Loaded df_q_compile, df_q, df_qs from cache")
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Failed to load df_q_compile, df_q, df_qs from cache: {e}")
         sc = SparkConf(str(pw.base_dir / "assets/spark_configuration_aqe_on.json"))
         df_q = prepare_data(df_q_raw, benchmark=benchmark, sc=sc, q_type="q")
         df_qs = prepare_data(df_qs_raw, benchmark=benchmark, sc=sc, q_type="qs")
@@ -357,7 +358,7 @@ def extract_index_splits(
         or not Path(f"{pw.cc_prefix}/df_{q_type}.parquet").exists()
     ):
         logger.info(
-            f"not found index_splits_{q_type}.pkl or df_{q_type}.parquet "
+            f"not found {index_splits_name} or df_{q_type}.parquet "
             f"under {pw.cc_prefix}, start magic setup..."
         )
         magic_setup(pw, seed)
