@@ -15,16 +15,17 @@ import numpy as np
 import pandas as pd
 import pytorch_warmup as warmup
 import torch as th
+import udao
 from autogluon.core.metrics import make_scorer
 from lightning import Trainer
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.loggers import TensorBoardLogger
-from torchmetrics import WeightedMeanAbsolutePercentageError
+from torchmetrics import Metric, WeightedMeanAbsolutePercentageError
 from udao.data import BaseIterator, QueryPlanIterator
 from udao.data.iterators.query_plan_iterator import QueryPlanInput
 from udao.data.utils.query_plan import QueryPlanStructure
 from udao.data.utils.utils import DatasetType
-from udao.model import MLP, GraphAverager, GraphTransformer, UdaoModel, UdaoModule
+from udao.model import MLP, GraphAverager, GraphTransformer, UdaoModel
 from udao.model.embedders.layers.multi_head_attention import AttentionLayerName
 from udao.model.module import LearningParams
 from udao.model.utils.losses import WMAPELoss
@@ -39,6 +40,27 @@ from ..utils.params import QType, UdaoParams
 from .embedders.qppnet import QPPNet
 from .embedders.tlstm import TreeLSTM
 from .regressors.qppnet_out import QPPNetOut
+
+
+class UdaoModule(udao.model.UdaoModule):
+    def on_validation_epoch_end(self) -> None:
+        val_loss = 0.0
+        for objective in self.objectives:
+            metric = cast(Metric, self.metrics[objective])
+            output = metric.compute()
+            for k, v in output.items():
+                if k == f"{objective}_WeightedMeanAbsolutePercentageError":
+                    val_loss += self.loss_weights[objective] * float(v)
+
+        self.log(
+            "val_loss",
+            val_loss,
+            on_step=False,
+            on_epoch=True,
+            prog_bar=True,
+            logger=True,
+        )
+        self._shared_epoch_end("val")
 
 
 @dataclass
@@ -459,6 +481,9 @@ def get_tuned_trainer(
     )
     filename_suffix = "-".join(
         [
+            "val_loss={val_loss:.3f}",
+        ]
+        + [
             f"val_{obj}_WMAPE={{val_{obj}_WeightedMeanAbsolutePercentageError:.3f}}"
             for obj in objectives
         ]
@@ -467,6 +492,7 @@ def get_tuned_trainer(
     if not debug and params.epochs <= 30:
         every_n_train_steps = 30
     checkpoint_callback = ModelCheckpoint(
+        monitor="val_loss",
         dirpath=ckp_learning_header,
         filename="{epoch}-" + filename_suffix,
         auto_insert_metric_name=False,
@@ -492,8 +518,18 @@ def get_tuned_trainer(
             shuffle=False,
         ),
     )
+    best_model_path = checkpoint_callback.best_model_path
+    logger.info(f"Best model path: {best_model_path}")
+    best_module = UdaoModule.load_from_checkpoint(
+        best_model_path,
+        model=model,
+        objectives=objectives,
+        loss=WMAPELoss(),
+        metrics=[WeightedMeanAbsolutePercentageError],
+        map_location=get_default_device(),
+    )
     checkpoint_learning_params(ckp_learning_header, params)
-    return trainer, module, ckp_learning_header
+    return trainer, best_module, ckp_learning_header
 
 
 def get_graph_ckp_info(weights_path: str) -> Tuple[str, str, str, str]:
