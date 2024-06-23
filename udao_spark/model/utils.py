@@ -481,10 +481,10 @@ def get_tuned_trainer(
     )
     filename_suffix = "-".join(
         [
-            "val_loss={val_loss:.3f}",
+            "val_loss={val_loss:.5f}",
         ]
         + [
-            f"val_{obj}_WMAPE={{val_{obj}_WeightedMeanAbsolutePercentageError:.3f}}"
+            f"val_{obj}_WMAPE={{val_{obj}_WeightedMeanAbsolutePercentageError:.5f}}"
             for obj in objectives
         ]
     )
