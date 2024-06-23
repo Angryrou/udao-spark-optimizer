@@ -499,6 +499,7 @@ def get_tuned_trainer(
         accelerator=device,
         max_epochs=params.epochs,
         logger=tb_logger,
+        log_every_n_steps=min(len(split_iterators["train"]), 50),
         callbacks=[scheduler, checkpoint_callback],
     )
     trainer.fit(
