@@ -95,7 +95,6 @@ if __name__ == "__main__":
         learning_params,
         device,
         num_workers=0 if params.debug else params.num_workers,
-        debug=params.debug,
     )
     train_time_secs = (time.perf_counter_ns() - start_time) / 1e9
     test_results = trainer.test(

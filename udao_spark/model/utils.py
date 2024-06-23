@@ -443,7 +443,6 @@ def get_tuned_trainer(
     params: MyLearningParams,
     device: str,
     num_workers: int = 0,
-    debug: bool = False,
 ) -> Tuple[Trainer, UdaoModule, str]:
     ckp_learning_header = f"{ckp_header}/{params.hash()}"
     ckp_weight_path = weights_found(ckp_learning_header)
@@ -481,22 +480,19 @@ def get_tuned_trainer(
     )
     filename_suffix = "-".join(
         [
-            "val_loss={val_loss:.5f}",
+            "val_loss={val_loss:.4f}",
         ]
         + [
-            f"val_{obj}_WMAPE={{val_{obj}_WeightedMeanAbsolutePercentageError:.5f}}"
+            f"val_{obj}_WMAPE={{val_{obj}_WeightedMeanAbsolutePercentageError:.4f}}"
             for obj in objectives
         ]
     )
-    every_n_train_steps: Optional[int] = None
-    if not debug and params.epochs <= 30:
-        every_n_train_steps = 30
     checkpoint_callback = ModelCheckpoint(
         monitor="val_loss",
         dirpath=ckp_learning_header,
         filename="{epoch}-" + filename_suffix,
         auto_insert_metric_name=False,
-        every_n_train_steps=every_n_train_steps,
+        verbose=True,
     )
     scheduler = UdaoLRScheduler(setup_cosine_annealing_lr, warmup.UntunedLinearWarmup)
     trainer = pl.Trainer(
@@ -862,8 +858,8 @@ def calibrate_negative_predictions(
 
 def local_wmape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     sum_abs_error = np.abs(y_pred - y_true).sum()
-    sum_scale = np.abs(y_true).sum()
-    return sum_abs_error / np.max([sum_scale, 1.17e-06])
+    sum_scale = np.clip(np.abs(y_true).sum(), a_min=1.17e-06, a_max=None)
+    return sum_abs_error / sum_scale
 
 
 wmape = make_scorer(
