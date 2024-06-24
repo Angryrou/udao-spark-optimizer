@@ -13,7 +13,11 @@ def get_parser() -> ArgumentParser:
     parser = get_base_parser()
     # fmt: off
     parser.add_argument("--hp_choice", type=str, default="tuned-0215",
-                        choices=["tuned-0215"])
+                        choices=[
+                            "tuned-0215", "0624-fold-1", "0624-fold-2", "0624-fold-3",
+                            "0624-fold-4", "0624-fold-5", "0624-fold-6", "0624-fold-7",
+                            "0624-fold-8", "0624-fold-9", "0624-fold-10"
+                        ])
     # fmt: on
     return parser
 
