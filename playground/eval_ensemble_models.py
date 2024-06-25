@@ -1,9 +1,11 @@
 import os.path
 from argparse import ArgumentParser
 from pathlib import Path
+from typing import Dict
 
 from udao_spark.model.mulitlabel_predictor import MultilabelPredictor  # type: ignore
-from udao_spark.optimizer.utils import get_ag_meta
+from udao_spark.optimizer.utils import get_ag_meta, get_lb_dict
+from udao_spark.utils.collaborators import get_data_sign
 from udao_spark.utils.evaluation import get_ag_data, get_ag_pred_objs
 from udao_spark.utils.params import get_ag_parameters
 
@@ -19,8 +21,26 @@ def get_parser() -> ArgumentParser:
                         help="Enable forcing running results")
     parser.add_argument("--bm_gtn_model", type=str, default=None,
                         help="gtn of the model pretrained.")
+    parser.add_argument("--optimal", action="store_true",)
+    parser.add_argument("--plus-tpl", action="store_true",)
     # fmt: on
     return parser
+
+
+def find_best_model(meta: Dict, obj: str) -> str:
+    lb_dict = get_lb_dict(
+        ag_meta=meta["ag_meta"],
+        ag_data=meta["ag_data"],
+        weights_head=meta["weights_head"],
+        lb_cache_name=meta["lb_cache_name"],
+        plus_tpl=meta["plus_tpl"],
+        q_type=meta["q_type"],
+        split="val",
+    )
+    lb = lb_dict[obj]
+    max_score_val_index = lb["score_test"].idxmax()
+    model_name = lb.loc[max_score_val_index, "model"]
+    return str(model_name)
 
 
 if __name__ == "__main__":
@@ -47,7 +67,7 @@ if __name__ == "__main__":
     bm_target = params.bm_gtn_model or bm
     ag_path = ag_meta["ag_path"] + ("" if bm == bm_target else f"_{bm_target}") + "/"
 
-    ret = get_ag_data(
+    ag_data = get_ag_data(
         base_dir,
         bm,
         q_type,
@@ -57,8 +77,8 @@ if __name__ == "__main__":
         fold=params.fold,
         bm_target=bm_target,
     )
-    train_data, val_data, test_data = ret["data"]
-    ta, pw, objectives = ret["ta"], ret["pw"], ret["objectives"]
+    train_data, val_data, test_data = ag_data["data"]
+    ta, pw, objectives = ag_data["ta"], ag_data["pw"], ag_data["objectives"]
     if q_type.startswith("qs_"):
         objectives = list(filter(lambda x: x != "latency_s", objectives))
         train_data.drop(columns=["latency_s"], inplace=True)
@@ -73,10 +93,41 @@ if __name__ == "__main__":
         raise Exception("run train_ensemble_models.py first")
 
     lat_obj_name = "ana_latency_s" if q_type.startswith("qs") else "latency_s"
-    ag_model = {
-        lat_obj_name: params.ag_model_q_latency,
-        "io_mb": params.ag_model_q_io,
-    }
+    split = "test"
+
+    if params.optimal:
+        weights_head = (
+            os.path.dirname(ag_meta["graph_weights_path"])
+            if graph_choice != "none"
+            else f"cache_and_ckp/{bm}_{get_data_sign(bm, False)}/{q_type}/none"
+        )
+        mysign = ag_sign
+        if infer_limit is not None:
+            mysign += f"-{infer_limit}-{infer_limit_batch_size}"
+        if time_limit is not None:
+            mysign += f"-{time_limit}"
+        if params.plus_tpl:
+            mysign += "-plus_tpl"
+        lb_cache_name = f"lb_{bm}_{q_type}_{split}_{mysign}.pkl"
+
+        meta = {
+            "ag_meta": ag_meta,
+            "ag_data": ag_data,
+            "weights_head": weights_head,
+            "lb_cache_name": lb_cache_name,
+            "plus_tpl": params.plus_tpl,
+            "q_type": q_type,
+            "split": split,
+        }
+        ag_model = {
+            lat_obj_name: find_best_model(meta, "lat"),
+            "io_mb": find_best_model(meta, "io"),
+        }
+    else:
+        ag_model = {
+            lat_obj_name: params.ag_model_q_latency,
+            "io_mb": params.ag_model_q_io,
+        }
 
     objs_true, objs_pred, dt_s, throughput, metrics = get_ag_pred_objs(
         base_dir,
@@ -84,7 +135,7 @@ if __name__ == "__main__":
         q_type,
         debug,
         graph_choice,
-        split="test",
+        split=split,
         ag_meta=ag_meta,
         fold=params.fold,
         force=params.force,
