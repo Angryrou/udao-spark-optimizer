@@ -224,6 +224,8 @@ def get_lb_dict_from_scratch(
         mysign += f"-{time_limit}"
     if plus_tpl:
         mysign += "-plus_tpl"
+    if fold is not None:
+        mysign += f"-{fold}"
     lb_cache_name = f"lb_{bm}_{q_type}_{split}_{mysign}.pkl"
     try:
         lb_dict = PickleHandler.load(weights_head, lb_cache_name)
