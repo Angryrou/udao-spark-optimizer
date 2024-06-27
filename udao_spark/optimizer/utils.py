@@ -199,6 +199,7 @@ def get_lb_dict_from_scratch(
     graph_choice: str = "gtn",
     plus_tpl: bool = False,
     fold: Optional[int] = None,
+    verbose: bool = False,
 ) -> Dict[str, pd.DataFrame]:
     ag_meta = get_ag_meta(
         bm,
@@ -231,7 +232,8 @@ def get_lb_dict_from_scratch(
         lb_dict = PickleHandler.load(weights_head, lb_cache_name)
         if not isinstance(lb_dict, Dict):
             raise Exception(f"lb_dict is not a dict: {lb_dict}")
-        print(f"found {lb_cache_name}")
+        if verbose:
+            print(f"found {lb_cache_name}")
         return lb_dict
     except Exception as e:
         logger.warning(e)
