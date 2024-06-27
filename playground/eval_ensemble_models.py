@@ -35,9 +35,12 @@ def find_best_model(meta: Dict, obj: str) -> str:
         lb_cache_name=meta["lb_cache_name"],
         plus_tpl=meta["plus_tpl"],
         q_type=meta["q_type"],
-        split="val",
+        split=meta["split"],
     )
+
     lb = lb_dict[obj]
+    lb = lb
+
     max_score_val_index = lb["score_test"].idxmax()
     model_name = lb.loc[max_score_val_index, "model"]
     return str(model_name)
@@ -93,7 +96,6 @@ if __name__ == "__main__":
         raise Exception("run train_ensemble_models.py first")
 
     lat_obj_name = "ana_latency_s" if q_type.startswith("qs") else "latency_s"
-    split = "test"
 
     if params.optimal:
         weights_head = (
@@ -110,21 +112,24 @@ if __name__ == "__main__":
             mysign += "-plus_tpl"
         if params.fold is not None:
             mysign += f"-{params.fold}"
-        lb_cache_name = f"lb_{bm}_{q_type}_{split}_{mysign}.pkl"
 
-        meta = {
-            "ag_meta": ag_meta,
-            "ag_data": ag_data,
-            "weights_head": weights_head,
-            "lb_cache_name": lb_cache_name,
-            "plus_tpl": params.plus_tpl,
-            "q_type": q_type,
-            "split": split,
-        }
-        ag_model = {
-            lat_obj_name: find_best_model(meta, "lat"),
-            "io_mb": find_best_model(meta, "io"),
-        }
+        ag_model_dict = {}
+        for split in ["val", "test"]:
+            lb_cache_name = f"lb_{bm}_{q_type}_{split}_{mysign}.pkl"
+            meta = {
+                "ag_meta": ag_meta,
+                "ag_data": ag_data,
+                "weights_head": weights_head,
+                "lb_cache_name": lb_cache_name,
+                "plus_tpl": params.plus_tpl,
+                "q_type": q_type,
+                "split": split,
+            }
+            ag_model_dict[split] = {
+                lat_obj_name: find_best_model(meta, "lat"),
+                "io_mb": find_best_model(meta, "io"),
+            }
+        ag_model = ag_model_dict["val"]
     else:
         ag_model = {
             lat_obj_name: params.ag_model_q_latency,
@@ -137,7 +142,7 @@ if __name__ == "__main__":
         q_type,
         debug,
         graph_choice,
-        split=split,
+        split="test",
         ag_meta=ag_meta,
         fold=params.fold,
         force=params.force,
