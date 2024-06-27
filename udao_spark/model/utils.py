@@ -35,8 +35,10 @@ from udao.utils.interfaces import UdaoEmbedItemShape
 
 from udao_trace.utils import JsonHandler, PickleHandler
 
+from ..data.utils import checkpoint_model_structure
+from ..utils.collaborators import PathWatcher, TypeAdvisor
 from ..utils.logging import logger
-from ..utils.params import QType, UdaoParams
+from ..utils.params import ExtractParams, QType, UdaoParams
 from .embedders.qppnet import QPPNet
 from .embedders.tlstm import TreeLSTM
 from .regressors.qppnet_out import QPPNetOut
@@ -262,6 +264,71 @@ def get_graph_transformer_mlp(params: GraphTransformerMLPParams) -> UdaoModel:
     return model
 
 
+def train_and_dump(
+    ta: TypeAdvisor,
+    pw: PathWatcher,
+    model: UdaoModel,
+    split_iterators: Dict[DatasetType, BaseIterator],
+    extract_params: ExtractParams,
+    model_params: UdaoParams,
+    learning_params: MyLearningParams,
+    params: Namespace,
+    device: str,
+) -> None:
+    # prepare the model structure path
+    tabular_columns = ta.get_tabular_columns()
+    objectives = ta.get_objectives()
+    logger.info(f"Tabular columns: {tabular_columns}")
+    logger.info(f"Objectives: {objectives}")
+
+    ckp_header = checkpoint_model_structure(pw=pw, model_params=model_params)
+    start_time = time.perf_counter_ns()
+    trainer, module, ckp_learning_header, found = get_tuned_trainer(
+        ckp_header,
+        model,
+        split_iterators,
+        objectives,
+        learning_params,
+        device,
+        num_workers=0 if params.debug else params.num_workers,
+    )
+
+    if not found:
+        train_time_secs = (time.perf_counter_ns() - start_time) / 1e9
+        test_results = trainer.test(
+            model=module,
+            dataloaders=split_iterators["test"].get_dataloader(
+                batch_size=learning_params.batch_size,
+                num_workers=0 if params.debug else params.num_workers,
+                shuffle=False,
+            ),
+        )
+        JsonHandler.dump_to_file(
+            {
+                "test_results": test_results,
+                "extract_params": extract_params.__dict__,
+                "model_params": model_params.to_dict(),
+                "learning_params": learning_params.__dict__,
+                "tabular_columns": tabular_columns,
+                "objectives": objectives,
+                "training_time_s": train_time_secs,
+            },
+            f"{ckp_learning_header}/test_results.json",
+            indent=2,
+        )
+        print(test_results)
+        save_mlp_training_results(
+            module=module,
+            split_iterators=split_iterators,
+            params=params,
+            ckp_learning_header=ckp_learning_header,
+            test_results=test_results[0],
+            device=device,
+        )
+    else:
+        print("model found and loadable at", ckp_learning_header)
+
+
 @dataclass
 class TreeLSTMParams(UdaoParams):
     iterator_shape: UdaoEmbedItemShape
@@ -443,7 +510,7 @@ def get_tuned_trainer(
     params: MyLearningParams,
     device: str,
     num_workers: int = 0,
-) -> Tuple[Trainer, UdaoModule, str]:
+) -> Tuple[Trainer, UdaoModule, str, bool]:
     ckp_learning_header = f"{ckp_header}/{params.hash()}"
     ckp_weight_path = weights_found(ckp_learning_header)
 
@@ -459,7 +526,7 @@ def get_tuned_trainer(
             map_location=get_default_device(),
         )
         trainer = pl.Trainer(accelerator=device, logger=tb_logger)
-        return trainer, module, ckp_learning_header
+        return trainer, module, ckp_learning_header, True
     logger.info("Model weights not found, training...")
 
     loss_weights: Optional[Dict[str, float]] = None
@@ -526,7 +593,7 @@ def get_tuned_trainer(
         map_location=get_default_device(),
     )
     checkpoint_learning_params(ckp_learning_header, params)
-    return trainer, best_module, ckp_learning_header
+    return trainer, best_module, ckp_learning_header, False
 
 
 def get_graph_ckp_info(weights_path: str) -> Tuple[str, str, str, str]:
