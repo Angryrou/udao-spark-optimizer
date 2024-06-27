@@ -108,6 +108,8 @@ if __name__ == "__main__":
             mysign += f"-{time_limit}"
         if params.plus_tpl:
             mysign += "-plus_tpl"
+        if params.fold is not None:
+            mysign += f"-{params.fold}"
         lb_cache_name = f"lb_{bm}_{q_type}_{split}_{mysign}.pkl"
 
         meta = {
