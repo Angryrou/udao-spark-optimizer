@@ -218,6 +218,7 @@ def get_ag_pred_objs(
     bm_target: Optional[str] = None,
     xfer_gtn_only: bool = False,
     tpl_plus: bool = False,
+    verbose: bool = False,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, float, float, Dict]:
     weights_head = (
         os.path.dirname(ag_meta["graph_weights_path"])
@@ -240,7 +241,8 @@ def get_ag_pred_objs(
         cache_name = f"{split}_{ag_sign}_{ag_model_short}_objs_and_metrics_{device}.pkl"
 
     if not force and os.path.exists(f"{weights_head}/{cache_name}"):
-        print(f"found {cache_name}")
+        if verbose:
+            print(f"found {cache_name}")
         cache = PickleHandler.load(weights_head, cache_name)
         if not isinstance(cache, Dict):
             raise TypeError(f"mlp_cache is not a dict: {cache}")
