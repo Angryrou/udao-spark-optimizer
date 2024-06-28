@@ -38,12 +38,11 @@ def find_best_model(meta: Dict, obj: str) -> str:
         split=meta["split"],
     )
 
-    lb = lb_dict[obj]
-    lb = lb
-
-    max_score_val_index = lb["score_val"].idxmax()
-    model_name = lb.loc[max_score_val_index, "model"]
-    return str(model_name)
+    return (
+        lb_dict[obj]
+        .sort_values(["score_val", "model"], ascending=[False, True])
+        .model[0]
+    )
 
 
 if __name__ == "__main__":
