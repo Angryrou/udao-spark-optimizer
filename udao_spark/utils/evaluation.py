@@ -217,7 +217,7 @@ def get_ag_pred_objs(
     ag_model: Dict[str, str],
     bm_target: Optional[str] = None,
     xfer_gtn_only: bool = False,
-    tpl_plus: bool = False,
+    plus_tpl: bool = False,
     verbose: bool = False,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, float, float, Dict]:
     weights_head = (
@@ -228,8 +228,8 @@ def get_ag_pred_objs(
     ag_name_splits = ag_meta["ag_full_name"].split("_")
     ag_sign = "_".join(ag_name_splits[:1] + ag_name_splits[2:])
     ag_model_short = "_".join(f"{k.split('_')[0]}:{v}" for k, v in ag_model.items())
-    if tpl_plus:
-        ag_model_short += "_tpl_plus"
+    if plus_tpl:
+        ag_model_short += "_plus_tpl"
     device = "gpu" if th.cuda.is_available() else "cpu"
     bm_target = bm_target or bm
     if bm_target != bm and not xfer_gtn_only:
@@ -274,7 +274,7 @@ def get_ag_pred_objs(
     if bm_target != bm and xfer_gtn_only:
         ag_path += f"_{bm_target}"
 
-    if tpl_plus:
+    if plus_tpl:
         ag_path += "_plus_tpl"
         data_dict = {
             sp: da.join(daq[["template"]].astype("str"))
