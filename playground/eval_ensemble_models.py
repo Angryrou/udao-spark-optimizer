@@ -41,7 +41,7 @@ def find_best_model(meta: Dict, obj: str) -> str:
     lb = lb_dict[obj]
     lb = lb
 
-    max_score_val_index = lb["score_test"].idxmax()
+    max_score_val_index = lb["score_val"].idxmax()
     model_name = lb.loc[max_score_val_index, "model"]
     return str(model_name)
 
@@ -129,7 +129,7 @@ if __name__ == "__main__":
                 lat_obj_name: find_best_model(meta, "lat"),
                 "io_mb": find_best_model(meta, "io"),
             }
-        ag_model = ag_model_dict["val"]
+        ag_model = ag_model_dict["test"]
     else:
         ag_model = {
             lat_obj_name: params.ag_model_q_latency,
