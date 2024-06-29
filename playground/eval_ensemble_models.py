@@ -41,7 +41,8 @@ def find_best_model(meta: Dict, obj: str) -> str:
     return (
         lb_dict[obj]
         .sort_values(["score_val", "model"], ascending=[False, True])
-        .model[0]
+        .head(1)
+        .model.values[0]
     )
 
 
