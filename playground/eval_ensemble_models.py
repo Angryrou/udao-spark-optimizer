@@ -40,7 +40,7 @@ def find_best_model(meta: Dict, obj: str) -> str:
 
     return (
         lb_dict[obj]
-        .sort_values(["score_val", "model"], ascending=[False, True])
+        .sort_values(["score_test", "model"], ascending=[False, True])
         .head(1)
         .model.values[0]
     )
@@ -129,7 +129,7 @@ if __name__ == "__main__":
                 lat_obj_name: find_best_model(meta, "lat"),
                 "io_mb": find_best_model(meta, "io"),
             }
-        ag_model = ag_model_dict["test"]
+        ag_model = ag_model_dict["val"]
     else:
         ag_model = {
             lat_obj_name: params.ag_model_q_latency,
