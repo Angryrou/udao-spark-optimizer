@@ -40,7 +40,7 @@ def find_best_model(meta: Dict, obj: str) -> str:
 
     return (
         lb_dict[obj]
-        .sort_values(["score_test", "model"], ascending=[False, True])
+        .sort_values(["score_val", "model"], ascending=[False, True])
         .head(1)
         .model.values[0]
     )
