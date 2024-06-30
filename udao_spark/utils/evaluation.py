@@ -9,10 +9,12 @@ import torch as th
 from autogluon.core import TabularDataset
 from autogluon.tabular import TabularPredictor
 from udao.data import QueryPlanIterator
+from udao.data.handler.data_processor import DataProcessor
 from udao.optimization.utils.moo_utils import get_default_device
 
 from udao_spark.model.model_server import ModelServer
 from udao_spark.model.utils import (
+    add_dist_to_graphs,
     calibrate_negative_predictions,
     local_p50_err,
     local_p50_wape,
@@ -147,6 +149,18 @@ def get_ag_data(
             split_iterators = PickleHandler.load(header, "split_iterators.pkl")
             if not isinstance(split_iterators, Dict):
                 raise TypeError("split_iterators not found or not a desired type")
+
+            if graph_choice == "qf":
+                dp = PickleHandler.load(header, "data_processor.pkl")
+                if not isinstance(dp, DataProcessor):
+                    raise TypeError(f"Expected DataProcessor, got {type(dp)}")
+                template_plans = dp.feature_extractors["query_structure"].template_plans
+                new_template_plans, max_dist = add_dist_to_graphs(template_plans)
+                for k, v in split_iterators.items():
+                    split_iterators[
+                        k
+                    ].query_structure_container.template_plans = new_template_plans
+
             graph_np_dict = get_graph_embedding(
                 ms,
                 split_iterators,
