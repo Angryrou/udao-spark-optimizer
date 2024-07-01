@@ -191,44 +191,11 @@ def checkpoint_model_structure(pw: PathWatcher, model_params: UdaoParams) -> str
     return ckp_header
 
 
-def train_test_split_leave_out_fold(
-    df: pd.DataFrame,
-    groupby_col: str,
-    fold: int,
-    n_tids_per_fold: int,
-    test_frac: float,
-    is_validation_set: bool,
-    random_state: Optional[int] = None,
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    non_test_df, test_df = train_test_split(
-        df,
-        test_size=test_frac,
-        stratify=df[groupby_col],
-        random_state=random_state,
-    )
-
-    unique_tids = df[groupby_col].unique()
-    np.random.seed(random_state)
-    if is_validation_set:
-        test_tids = np.random.choice(unique_tids, n_tids_per_fold, replace=False)
-    else:
-        shuffled_tids = np.random.choice(unique_tids, len(unique_tids), replace=False)
-        test_tids = shuffled_tids[(fold - 1) * n_tids_per_fold : fold * n_tids_per_fold]
-
-    test_df_additional = non_test_df[non_test_df[groupby_col].isin(test_tids)]
-    non_test_df = non_test_df[~non_test_df[groupby_col].isin(test_tids)]
-    test_df = pd.concat([test_df, test_df_additional])
-
-    return non_test_df, test_df
-
-
 def train_test_val_split_on_column_leave_out_fold(
     df: pd.DataFrame,
     groupby_col: str,
     fold: int,
     n_folds: int,
-    val_frac: float,
-    test_frac: float,
     random_state: Optional[int] = None,
 ) -> Dict[DatasetType, pd.DataFrame]:
     if n_folds != 10:
@@ -237,24 +204,24 @@ def train_test_val_split_on_column_leave_out_fold(
         raise ValueError(f"fold must be in [1, 2, ..., 10], got {fold}")
 
     n_tids_per_fold = len(df[groupby_col].unique()) // n_folds
-    non_test_df, test_df = train_test_split_leave_out_fold(
-        df,
-        groupby_col=groupby_col,
-        fold=fold,
-        n_tids_per_fold=n_tids_per_fold,
-        test_frac=test_frac,
-        is_validation_set=False,
-        random_state=random_state,
+    unique_tids = df[groupby_col].unique()
+    np.random.seed(random_state)
+    np.random.shuffle(unique_tids)
+    if 0 < fold < 10:
+        test_tids = unique_tids[(fold - 1) * n_tids_per_fold : fold * n_tids_per_fold]
+    elif fold == 10:
+        test_tids = unique_tids[(fold - 1) * n_tids_per_fold :]
+    else:
+        raise ValueError(f"fold must be in [1, 2, ..., 10], got {fold}")
+
+    trainval_tids = unique_tids[~np.isin(unique_tids, test_tids)]
+    train_tids, val_tids = train_test_split(
+        trainval_tids, test_size=n_tids_per_fold, random_state=random_state
     )
-    train_df, val_df = train_test_split_leave_out_fold(
-        non_test_df,
-        groupby_col=groupby_col,
-        fold=fold,
-        n_tids_per_fold=n_tids_per_fold,
-        test_frac=val_frac / (1 - test_frac),
-        is_validation_set=True,
-        random_state=random_state,
-    )
+
+    train_df = df[df[groupby_col].isin(train_tids)]
+    val_df = df[df[groupby_col].isin(val_tids)]
+    test_df = df[df[groupby_col].isin(test_tids)]
 
     return {
         "train": train_df,
@@ -315,8 +282,9 @@ def magic_setup(pw: PathWatcher, seed: int) -> None:
             groupby_col="tid",
             fold=pw.fold,
             n_folds=10,
-            val_frac=0.2 if debug else 0.1,
-            test_frac=0.2 if debug else 0.1,
+            # hard-coded to be 0.1 because we have in total of 10 folds.
+            # val_frac=0.2 if debug else 0.1,
+            # test_frac=0.2 if debug else 0.1,
             random_state=seed,
         )
 
