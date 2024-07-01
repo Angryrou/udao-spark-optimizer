@@ -55,7 +55,10 @@ def q_compile_setup(base_dir: Path, params: Namespace) -> Dict[str, Any]:
     hp_choice, graph_choice = params.hp_choice, params.graph_choice
     ag_sign = params.ag_sign
     il, bs, tl = params.infer_limit, params.infer_limit_batch_size, params.ag_time_limit
-    ag_meta = get_ag_meta(bm, hp_choice, graph_choice, q_type, ag_sign, il, bs, tl)
+    fold = params.fold
+    ag_meta = get_ag_meta(
+        bm, hp_choice, graph_choice, q_type, ag_sign, il, bs, tl, fold
+    )
     ag_model = {
         "latency_s": params.ag_model_q_latency,
         "io_mb": params.ag_model_q_io,

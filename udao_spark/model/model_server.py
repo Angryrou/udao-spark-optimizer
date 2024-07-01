@@ -7,7 +7,7 @@ import torch as th
 from autogluon.core import TabularDataset
 from autogluon.tabular import TabularPredictor
 from torchmetrics import WeightedMeanAbsolutePercentageError
-from udao.model import UdaoModel, UdaoModule
+from udao.model import UdaoModel
 from udao.model.utils.losses import WMAPELoss
 from udao.optimization.utils.moo_utils import get_default_device
 
@@ -21,6 +21,7 @@ from .utils import (
     GraphAverageMLPParams,
     GraphTransformerMLPParams,
     TreeLSTMParams,
+    UdaoModule,
     calibrate_negative_predictions,
     get_graph_avg_mlp,
     get_graph_transformer_mlp,

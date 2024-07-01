@@ -1,6 +1,5 @@
 import os
 import time
-from argparse import Namespace
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -10,13 +9,12 @@ import torch as th
 from autogluon.core import TabularDataset
 from autogluon.tabular import TabularPredictor
 from udao.data import QueryPlanIterator
+from udao.data.handler.data_processor import DataProcessor
 from udao.optimization.utils.moo_utils import get_default_device
 
-from udao_spark.data.extractors.injection_extractor import (
-    get_non_decision_inputs_for_q_compile,
-)
-from udao_spark.model.model_server import AGServer, ModelServer
+from udao_spark.model.model_server import ModelServer
 from udao_spark.model.utils import (
+    add_dist_to_graphs,
     calibrate_negative_predictions,
     local_p50_err,
     local_p50_wape,
@@ -24,13 +22,9 @@ from udao_spark.model.utils import (
     local_p90_wape,
     local_wmape,
 )
-from udao_spark.optimizer.atomic_optimizer import AtomicOptimizer
-from udao_spark.optimizer.utils import get_ag_meta
 from udao_spark.utils.collaborators import PathWatcher, TypeAdvisor, get_data_sign
 from udao_spark.utils.params import ExtractParams, QType
-from udao_trace.configuration import SparkConf
-from udao_trace.utils import BenchmarkType, ParquetHandler, PickleHandler
-from udao_trace.workload import Benchmark
+from udao_trace.utils import ParquetHandler, PickleHandler
 
 
 def extract_non_decision_df(non_decision_input_dict: Dict) -> pd.DataFrame:
@@ -43,113 +37,6 @@ def extract_non_decision_df(non_decision_input_dict: Dict) -> pd.DataFrame:
     df.set_index("id", inplace=True, drop=False)
     df.sort_index(inplace=True)
     return df
-
-
-def get_non_decision_inputs(
-    base_dir: Path,
-    params: Namespace,
-    decision_vars: List[str],
-    cache_file: str = "non_decision_df_03-07.parquet",
-) -> Tuple[pd.DataFrame, AtomicOptimizer]:
-    # prepare parameters
-    bm, q_type = params.benchmark, params.q_type
-    hp_choice, graph_choice = params.hp_choice, params.graph_choice
-    ag_sign = params.ag_sign
-    il, bs, tl = params.infer_limit, params.infer_limit_batch_size, params.ag_time_limit
-    ag_meta = get_ag_meta(bm, hp_choice, graph_choice, q_type, ag_sign, il, bs, tl)
-    ag_full_name = ag_meta["ag_full_name"]
-    cache_header = (
-        f"robustness_eval/violation/{bm}/{q_type}/{graph_choice}/{ag_full_name}"
-    )
-    spark_conf = SparkConf(str(base_dir / "assets/spark_configuration_aqe_on.json"))
-    # use functions in HierarchicalOptimizer to extract the non-decision inputs
-    atomic_optimizer = AtomicOptimizer(
-        bm=bm,
-        model_sign=ag_meta["model_sign"],
-        graph_model_params_path=ag_meta["model_params_path"],
-        graph_weights_path=ag_meta["graph_weights_path"],
-        q_type=q_type,
-        data_processor_path=ag_meta["data_processor_path"],
-        spark_conf=spark_conf,
-        decision_variables=decision_vars,
-        ag_path=ag_meta["ag_path"],
-        clf_json_path=None
-        if params.disable_failure_clf
-        else str(base_dir / f"assets/{bm}_valid_clf_meta.json"),
-        clf_recall_xhold=params.clf_recall_xhold,
-        verbose=False,
-    )
-
-    try:
-        df = ParquetHandler.load(cache_header, cache_file)
-        atomic_optimizer.ag_ms = AGServer.from_ckp_path(
-            model_sign=ag_meta["model_sign"],
-            graph_model_params_path=ag_meta["model_params_path"],
-            graph_weights_path=ag_meta["graph_weights_path"],
-            q_type=q_type,
-            ag_path=ag_meta["ag_path"],
-            clf_json_path=str(base_dir / f"assets/{bm}_valid_clf_meta.json"),
-            clf_recall_xhold=params.clf_recall_xhold,
-        )
-        print("found cached non_decision_df...")
-        return df, atomic_optimizer
-    except FileNotFoundError:
-        print("no cached non_decision_df found, generating...")
-    except Exception as e:
-        print(f"error loading cached non_decision_df: {e}")
-        raise e
-
-    # prepare the traces
-    sample_header = str(base_dir / "assets/query_plan_samples")
-    if bm == "tpch":
-        benchmark = Benchmark(BenchmarkType.TPCH, params.scale_factor)
-        raw_traces = [
-            f"{sample_header}/{bm}/{bm}100_{q}-1_1,1g,16,16,48m,200,true,0.6,"
-            f"64MB,0.2,0MB,10MB,200,256MB,5,128MB,4MB,0.2,1024KB"
-            f"_application_1701736595646_{2557 + i}.json"
-            for i, q in enumerate(benchmark.templates)
-        ]
-    elif bm == "tpcds":
-        benchmark = Benchmark(BenchmarkType.TPCDS, params.scale_factor)
-        raw_traces = [
-            f"{sample_header}/{bm}/{bm}100_{q}-1_1,1g,16,16,48m,200,true,0.6,"
-            f"64MB,0.2,0MB,10MB,200,256MB,5,128MB,4MB,0.2,1024KB"
-            f"_application_1701737506122_{3283 + i}.json"
-            for i, q in enumerate(benchmark.templates)
-        ]
-    else:
-        raise ValueError(f"benchmark {bm} is not supported")
-    for trace in raw_traces:
-        print(trace)
-        if not Path(trace).exists():
-            print(f"{trace} does not exist")
-            raise FileNotFoundError(f"{trace} does not exist")
-
-    non_decision_input_dict = {
-        f"q-{i + 1}": get_non_decision_inputs_for_q_compile(trace)
-        for i, trace in enumerate(raw_traces)
-    }
-    non_decision_df = extract_non_decision_df(non_decision_input_dict)
-    (
-        graph_embeddings,
-        non_decision_tabular_features,
-        dt,
-    ) = atomic_optimizer.extract_non_decision_embeddings_from_df(
-        non_decision_df, ercilla=False
-    )
-    graph_embeddings = graph_embeddings.detach().cpu()
-    df = non_decision_df.copy()
-    ge_dim = graph_embeddings.shape[1]
-    ge_cols = [f"ge_{i}" for i in range(ge_dim)]
-    df[ge_cols] = graph_embeddings.numpy()
-    ta = TypeAdvisor(q_type=q_type)
-    df = df[ge_cols + ta.get_tabular_non_decision_columns()].copy()
-    df["query_id"] = [f"{i + 1}-1" for i in range(22)]
-    df.set_index("query_id", inplace=True, drop=True)
-    os.makedirs(cache_header, exist_ok=True)
-    ParquetHandler.save(df, cache_header, cache_file)
-    print("non_decision_df saved...")
-    return df, atomic_optimizer
 
 
 def get_graph_embedding(
@@ -200,6 +87,7 @@ def get_ag_data(
     debug: bool,
     graph_choice: str,
     weights_path: Optional[str],
+    fold: Optional[int],
     if_df: bool = False,
     bm_target: Optional[str] = None,
 ) -> Dict:
@@ -215,14 +103,17 @@ def get_ag_data(
     )
 
     bm_target = bm_target or bm
-    pw_model = PathWatcher(base_dir, bm, debug, extract_params)
-    pw_data = PathWatcher(base_dir, bm_target, debug, extract_params)
+    pw_model = PathWatcher(base_dir, bm, debug, extract_params, fold)
+    pw_data = PathWatcher(base_dir, bm_target, debug, extract_params, fold)
     df = ParquetHandler.load(
         pw_data.cc_prefix, f"df_{ta.get_q_type_for_cache()}.parquet"
     )
-    index_splits = PickleHandler.load(
-        pw_data.cc_prefix, f"index_splits_{ta.get_q_type_for_cache()}.pkl"
+    index_splits_name = (
+        f"index_splits_{ta.get_q_type_for_cache()}.pkl"
+        if fold is None
+        else f"index_splits_{ta.get_q_type_for_cache()}-{fold}.pkl"
     )
+    index_splits = PickleHandler.load(pw_data.cc_prefix, index_splits_name)
     if not isinstance(index_splits, Dict):
         raise TypeError(f"index_splits is not a dict: {index_splits}")
     objectives = ta.get_objectives()
@@ -258,6 +149,18 @@ def get_ag_data(
             split_iterators = PickleHandler.load(header, "split_iterators.pkl")
             if not isinstance(split_iterators, Dict):
                 raise TypeError("split_iterators not found or not a desired type")
+
+            if graph_choice == "qf":
+                dp = PickleHandler.load(header, "data_processor.pkl")
+                if not isinstance(dp, DataProcessor):
+                    raise TypeError(f"Expected DataProcessor, got {type(dp)}")
+                template_plans = dp.feature_extractors["query_structure"].template_plans
+                new_template_plans, max_dist = add_dist_to_graphs(template_plans)
+                for k, v in split_iterators.items():
+                    split_iterators[
+                        k
+                    ].query_structure_container.template_plans = new_template_plans
+
             graph_np_dict = get_graph_embedding(
                 ms,
                 split_iterators,
@@ -323,11 +226,13 @@ def get_ag_pred_objs(
     graph_choice: str,
     split: str,
     ag_meta: Dict[str, str],
+    fold: Optional[int],
     force: bool,
     ag_model: Dict[str, str],
     bm_target: Optional[str] = None,
     xfer_gtn_only: bool = False,
-    tpl_plus: bool = False,
+    plus_tpl: bool = False,
+    verbose: bool = False,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, float, float, Dict]:
     weights_head = (
         os.path.dirname(ag_meta["graph_weights_path"])
@@ -337,8 +242,8 @@ def get_ag_pred_objs(
     ag_name_splits = ag_meta["ag_full_name"].split("_")
     ag_sign = "_".join(ag_name_splits[:1] + ag_name_splits[2:])
     ag_model_short = "_".join(f"{k.split('_')[0]}:{v}" for k, v in ag_model.items())
-    if tpl_plus:
-        ag_model_short += "_tpl_plus"
+    if plus_tpl:
+        ag_model_short += "_plus_tpl"
     device = "gpu" if th.cuda.is_available() else "cpu"
     bm_target = bm_target or bm
     if bm_target != bm and not xfer_gtn_only:
@@ -350,7 +255,8 @@ def get_ag_pred_objs(
         cache_name = f"{split}_{ag_sign}_{ag_model_short}_objs_and_metrics_{device}.pkl"
 
     if not force and os.path.exists(f"{weights_head}/{cache_name}"):
-        print(f"found {cache_name}")
+        if verbose:
+            print(f"found {cache_name}")
         cache = PickleHandler.load(weights_head, cache_name)
         if not isinstance(cache, Dict):
             raise TypeError(f"mlp_cache is not a dict: {cache}")
@@ -373,6 +279,7 @@ def get_ag_pred_objs(
         debug,
         graph_choice,
         ag_meta["graph_weights_path"] if graph_choice != "none" else None,
+        fold=fold,
         bm_target=bm_target,
     )
     ta, objectives = ag_data["ta"], ag_data["objectives"]
@@ -381,7 +288,7 @@ def get_ag_pred_objs(
     if bm_target != bm and xfer_gtn_only:
         ag_path += f"_{bm_target}"
 
-    if tpl_plus:
+    if plus_tpl:
         ag_path += "_plus_tpl"
         data_dict = {
             sp: da.join(daq[["template"]].astype("str"))
@@ -467,6 +374,7 @@ def get_mlp_pred_objs(
     debug: bool,
     graph_choice: str,
     weights_path: str,
+    fold: Optional[int],
     split: str,
     force: bool,
     bm_target: Optional[str] = None,
@@ -516,8 +424,8 @@ def get_mlp_pred_objs(
             "debug": debug,
         }
     )
-    pw_model = PathWatcher(Path(__file__).parent, bm, debug, extract_params)
-    pw_data = PathWatcher(Path(__file__).parent, bm_target, debug, extract_params)
+    pw_model = PathWatcher(Path(__file__).parent, bm, debug, extract_params, fold)
+    pw_data = PathWatcher(Path(__file__).parent, bm_target, debug, extract_params, fold)
     df = ParquetHandler.load(
         pw_data.cc_prefix, f"df_{ta.get_q_type_for_cache()}.parquet"
     )

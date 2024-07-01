@@ -32,6 +32,7 @@ if __name__ == "__main__":
             infer_limit_dict[q_type],
             infer_limit_batch_size_dict[q_type],
             time_limit_dict[q_type],
+            params.fold,
         )
         for q_type in [R_Q, R_QS]
     }
