@@ -15,8 +15,7 @@ def load_data(folder: Path, filename: str) -> pd.DataFrame:
     Returns:
         pd.DataFrame: Query dataset.
     """
-    df = ParquetHandler.load(folder, filename)
-    return df
-
+    query_dataframe = ParquetHandler.load(folder, filename)
+    return query_dataframe
 
 
