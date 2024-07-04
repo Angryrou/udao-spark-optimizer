@@ -15,16 +15,17 @@ import numpy as np
 import pandas as pd
 import pytorch_warmup as warmup
 import torch as th
+import udao
 from autogluon.core.metrics import make_scorer
 from lightning import Trainer
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.loggers import TensorBoardLogger
-from torchmetrics import WeightedMeanAbsolutePercentageError
+from torchmetrics import Metric, WeightedMeanAbsolutePercentageError
 from udao.data import BaseIterator, QueryPlanIterator
 from udao.data.iterators.query_plan_iterator import QueryPlanInput
 from udao.data.utils.query_plan import QueryPlanStructure
 from udao.data.utils.utils import DatasetType
-from udao.model import MLP, GraphAverager, GraphTransformer, UdaoModel, UdaoModule
+from udao.model import MLP, GraphAverager, GraphTransformer, UdaoModel
 from udao.model.embedders.layers.multi_head_attention import AttentionLayerName
 from udao.model.module import LearningParams
 from udao.model.utils.losses import WMAPELoss
@@ -34,11 +35,34 @@ from udao.utils.interfaces import UdaoEmbedItemShape
 
 from udao_trace.utils import JsonHandler, PickleHandler
 
+from ..data.utils import checkpoint_model_structure
+from ..utils.collaborators import PathWatcher, TypeAdvisor
 from ..utils.logging import logger
-from ..utils.params import QType, UdaoParams
+from ..utils.params import ExtractParams, QType, UdaoParams
 from .embedders.qppnet import QPPNet
 from .embedders.tlstm import TreeLSTM
 from .regressors.qppnet_out import QPPNetOut
+
+
+class UdaoModule(udao.model.UdaoModule):
+    def on_validation_epoch_end(self) -> None:
+        val_loss = 0.0
+        for objective in self.objectives:
+            metric = cast(Metric, self.metrics[objective])
+            output = metric.compute()
+            for k, v in output.items():
+                if k == f"{objective}_WeightedMeanAbsolutePercentageError":
+                    val_loss += self.loss_weights[objective] * float(v)
+
+        self.log(
+            "val_loss",
+            val_loss,
+            on_step=False,
+            on_epoch=True,
+            prog_bar=True,
+            logger=True,
+        )
+        self._shared_epoch_end("val")
 
 
 @dataclass
@@ -240,6 +264,71 @@ def get_graph_transformer_mlp(params: GraphTransformerMLPParams) -> UdaoModel:
     return model
 
 
+def train_and_dump(
+    ta: TypeAdvisor,
+    pw: PathWatcher,
+    model: UdaoModel,
+    split_iterators: Dict[DatasetType, BaseIterator],
+    extract_params: ExtractParams,
+    model_params: UdaoParams,
+    learning_params: MyLearningParams,
+    params: Namespace,
+    device: str,
+) -> None:
+    # prepare the model structure path
+    tabular_columns = ta.get_tabular_columns()
+    objectives = ta.get_objectives()
+    logger.info(f"Tabular columns: {tabular_columns}")
+    logger.info(f"Objectives: {objectives}")
+
+    ckp_header = checkpoint_model_structure(pw=pw, model_params=model_params)
+    start_time = time.perf_counter_ns()
+    trainer, module, ckp_learning_header, found = get_tuned_trainer(
+        ckp_header,
+        model,
+        split_iterators,
+        objectives,
+        learning_params,
+        device,
+        num_workers=0 if params.debug else params.num_workers,
+    )
+
+    if not found:
+        train_time_secs = (time.perf_counter_ns() - start_time) / 1e9
+        test_results = trainer.test(
+            model=module,
+            dataloaders=split_iterators["test"].get_dataloader(
+                batch_size=learning_params.batch_size,
+                num_workers=0 if params.debug else params.num_workers,
+                shuffle=False,
+            ),
+        )
+        JsonHandler.dump_to_file(
+            {
+                "test_results": test_results,
+                "extract_params": extract_params.__dict__,
+                "model_params": model_params.to_dict(),
+                "learning_params": learning_params.__dict__,
+                "tabular_columns": tabular_columns,
+                "objectives": objectives,
+                "training_time_s": train_time_secs,
+            },
+            f"{ckp_learning_header}/test_results.json",
+            indent=2,
+        )
+        print(test_results)
+        save_mlp_training_results(
+            module=module,
+            split_iterators=split_iterators,
+            params=params,
+            ckp_learning_header=ckp_learning_header,
+            test_results=test_results[0],
+            device=device,
+        )
+    else:
+        print("model found and loadable at", ckp_learning_header)
+
+
 @dataclass
 class TreeLSTMParams(UdaoParams):
     iterator_shape: UdaoEmbedItemShape
@@ -421,8 +510,7 @@ def get_tuned_trainer(
     params: MyLearningParams,
     device: str,
     num_workers: int = 0,
-    debug: bool = False,
-) -> Tuple[Trainer, UdaoModule, str]:
+) -> Tuple[Trainer, UdaoModule, str, bool]:
     ckp_learning_header = f"{ckp_header}/{params.hash()}"
     ckp_weight_path = weights_found(ckp_learning_header)
 
@@ -438,7 +526,7 @@ def get_tuned_trainer(
             map_location=get_default_device(),
         )
         trainer = pl.Trainer(accelerator=device, logger=tb_logger)
-        return trainer, module, ckp_learning_header
+        return trainer, module, ckp_learning_header, True
     logger.info("Model weights not found, training...")
 
     loss_weights: Optional[Dict[str, float]] = None
@@ -459,24 +547,26 @@ def get_tuned_trainer(
     )
     filename_suffix = "-".join(
         [
-            f"val_{obj}_WMAPE={{val_{obj}_WeightedMeanAbsolutePercentageError:.3f}}"
+            "val_loss={val_loss:.4f}",
+        ]
+        + [
+            f"val_{obj}_WMAPE={{val_{obj}_WeightedMeanAbsolutePercentageError:.4f}}"
             for obj in objectives
         ]
     )
-    every_n_train_steps: Optional[int] = None
-    if not debug and params.epochs <= 30:
-        every_n_train_steps = 30
     checkpoint_callback = ModelCheckpoint(
+        monitor="val_loss",
         dirpath=ckp_learning_header,
         filename="{epoch}-" + filename_suffix,
         auto_insert_metric_name=False,
-        every_n_train_steps=every_n_train_steps,
+        verbose=True,
     )
     scheduler = UdaoLRScheduler(setup_cosine_annealing_lr, warmup.UntunedLinearWarmup)
     trainer = pl.Trainer(
         accelerator=device,
         max_epochs=params.epochs,
         logger=tb_logger,
+        log_every_n_steps=min(len(split_iterators["train"]) // params.batch_size, 50),
         callbacks=[scheduler, checkpoint_callback],
     )
     trainer.fit(
@@ -492,8 +582,18 @@ def get_tuned_trainer(
             shuffle=False,
         ),
     )
+    best_model_path = checkpoint_callback.best_model_path
+    logger.info(f"Best model path: {best_model_path}")
+    best_module = UdaoModule.load_from_checkpoint(
+        best_model_path,
+        model=model,
+        objectives=objectives,
+        loss=WMAPELoss(),
+        metrics=[WeightedMeanAbsolutePercentageError],
+        map_location=get_default_device(),
+    )
     checkpoint_learning_params(ckp_learning_header, params)
-    return trainer, module, ckp_learning_header
+    return trainer, best_module, ckp_learning_header, False
 
 
 def get_graph_ckp_info(weights_path: str) -> Tuple[str, str, str, str]:
@@ -826,8 +926,8 @@ def calibrate_negative_predictions(
 
 def local_wmape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     sum_abs_error = np.abs(y_pred - y_true).sum()
-    sum_scale = np.abs(y_true).sum()
-    return sum_abs_error / np.max([sum_scale, 1.17e-06])
+    sum_scale = np.clip(np.abs(y_true).sum(), a_min=1.17e-06, a_max=None)
+    return sum_abs_error / sum_scale
 
 
 wmape = make_scorer(

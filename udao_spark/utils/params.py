@@ -60,6 +60,8 @@ def get_base_parser() -> ArgumentParser:
                         help="Enable debug mode")
     parser.add_argument("--seed", type=int, default=42,
                         help="Random seed")
+    parser.add_argument("--fold", type=int, default=None,
+                        help="Fold number, from 0 to 9")
     # fmt: on
     return parser
 
@@ -193,7 +195,12 @@ def get_ag_parameters() -> ArgumentParser:
     parser = get_base_parser()
     # fmt: off
     parser.add_argument("--hp_choice", type=str, default="tuned-0215",
-                        choices=["tuned-0215"])
+                        choices=[
+                            "tuned-0215", "tuned-0624",
+                            "0624-fold-1", "0624-fold-2", "0624-fold-3", "0624-fold-4",
+                            "0624-fold-5", "0624-fold-6", "0624-fold-7", "0624-fold-8",
+                            "0624-fold-9", "0624-fold-10"
+                        ])
     parser.add_argument("--graph_choice", type=str, default="gtn",
                         choices=["avg", "gtn", "tlstm", "raal", "qppnet", "qf", "none"])
     parser.add_argument("--ag_sign", type=str, default="medium_quality")

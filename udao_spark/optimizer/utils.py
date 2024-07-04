@@ -2,18 +2,21 @@ import json
 import os
 import time
 from functools import wraps
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
 import torch as th
+from autogluon.tabular import TabularPredictor
 from udao.optimization.concepts.utils import InputParameters, InputVariables
 from udao.optimization.utils.moo_utils import is_pareto_efficient
 
-from udao_trace.utils import JsonHandler
+from udao_trace.utils import JsonHandler, PickleHandler
 
 from ..model.utils import get_graph_ckp_info
 from ..utils.collaborators import get_data_sign
+from ..utils.evaluation import get_ag_data
 from ..utils.logging import logger
 from ..utils.params import QType
 
@@ -53,7 +56,8 @@ def get_cloud_cost_w_io(
 def get_weights_path_dict(
     bm: str, hp_choice: str, graph_choice: str, q_type: QType
 ) -> str:
-    weights_cache = JsonHandler.load_json("assets/mlp_configs.json")
+    json_file = "assets/mlp_configs.json"
+    weights_cache = JsonHandler.load_json(json_file)
     try:
         weights_path = weights_cache[bm][hp_choice][graph_choice][q_type]
     except KeyError:
@@ -72,6 +76,7 @@ def get_ag_meta(
     infer_limit: Optional[float],
     infer_limit_batch_size: Optional[int],
     time_limit: Optional[int],
+    fold: Optional[int],
     debug: bool = False,
 ) -> Dict[str, str]:
     if graph_choice == "none":
@@ -103,6 +108,9 @@ def get_ag_meta(
     if time_limit is not None:
         ag_full_name += f"_time_limit_{time_limit}s"
 
+    if fold is not None:
+        ag_full_name += f"-{fold}"
+
     ag_path = "AutogluonModels/{}/{}/{}/{}".format(
         ag_prefix, q_type, graph_choice, ag_full_name
     )
@@ -111,6 +119,153 @@ def get_ag_meta(
         "ag_full_name": ag_full_name,
         **others,
     }
+
+
+def get_predictors(
+    ag_meta: Dict[str, str],
+    ag_data: Dict,
+    plus_tpl: bool,
+    q_type: QType,
+) -> Tuple[Dict[str, TabularPredictor], Dict[str, pd.DataFrame]]:
+    if plus_tpl:
+        data_dict = {
+            sp: da.join(daq[["template"]].astype("str"))
+            for sp, da, daq in zip(
+                ["train", "val", "test"], ag_data["data"], ag_data["data_queries"]
+            )
+        }
+        ag_path = ag_meta["ag_path"]
+        ag_path += "_plus_tpl"
+    else:
+        data_dict = {
+            sp: da for sp, da in zip(["train", "val", "test"], ag_data["data"])
+        }
+        ag_path = ag_meta["ag_path"]
+
+    obj = "ana_latency_s" if q_type.startswith("qs") else "latency_s"
+    lat_predictor = TabularPredictor.load(f"{ag_path}/Predictor_{obj}")
+
+    obj = "io_mb"
+    io_predictor = TabularPredictor.load(f"{ag_path}/Predictor_{obj}")
+    return {"lat_predictor": lat_predictor, "io_predictor": io_predictor}, data_dict
+
+
+def get_lb_dict(
+    ag_meta: Dict[str, str],
+    ag_data: Dict,
+    weights_head: str,
+    lb_cache_name: str,
+    plus_tpl: bool,
+    q_type: QType,
+    split: str,
+) -> Dict[str, pd.DataFrame]:
+    try:
+        lb_dict = PickleHandler.load(weights_head, lb_cache_name)
+        if not isinstance(lb_dict, Dict):
+            raise Exception(f"lb_dict is not a dict: {lb_dict}")
+        print(f"found {lb_cache_name}")
+        return lb_dict
+    except Exception as e:
+        logger.warning(e)
+        print(f"not found {lb_cache_name}, start creating...")
+        qs_meta, data_dict = get_predictors(
+            ag_meta=ag_meta,
+            ag_data=ag_data,
+            plus_tpl=plus_tpl,
+            q_type=q_type,
+        )
+        lat_predictor, io_predictor = qs_meta["lat_predictor"], qs_meta["io_predictor"]
+        lat_predictor.persist()
+        io_predictor.persist()
+        lb_lat = lat_predictor.leaderboard(data_dict[split])
+        lb_io = io_predictor.leaderboard(data_dict[split])
+        lat_predictor.unpersist()
+        io_predictor.unpersist()
+        lb_dict = {"lat": lb_lat, "io": lb_io}
+        PickleHandler.save(lb_dict, weights_head, lb_cache_name)
+    return lb_dict
+
+
+def get_lb_dict_from_scratch(
+    base_dir: Path,
+    bm: str,
+    q_type: QType,
+    ag_sign: str,
+    infer_limit: Optional[float],
+    infer_limit_batch_size: Optional[int],
+    time_limit: Optional[int],
+    split: str = "test",
+    hp_choice: str = "tuned-0215",
+    graph_choice: str = "gtn",
+    plus_tpl: bool = False,
+    fold: Optional[int] = None,
+    verbose: bool = False,
+) -> Dict[str, pd.DataFrame]:
+    ag_meta = get_ag_meta(
+        bm,
+        hp_choice,
+        graph_choice,
+        q_type,
+        ag_sign,
+        infer_limit,
+        infer_limit_batch_size,
+        time_limit,
+        fold,
+    )
+    weights_head = (
+        os.path.dirname(ag_meta["graph_weights_path"])
+        if graph_choice != "none"
+        else f"cache_and_ckp/{bm}_{get_data_sign(bm, False)}/{q_type}/none"
+    )
+
+    mysign = ag_sign
+    if infer_limit is not None:
+        mysign += f"-{infer_limit}-{infer_limit_batch_size}"
+    if time_limit is not None:
+        mysign += f"-{time_limit}"
+    if plus_tpl:
+        mysign += "-plus_tpl"
+    if fold is not None:
+        mysign += f"-{fold}"
+    lb_cache_name = f"lb_{bm}_{q_type}_{split}_{mysign}.pkl"
+    try:
+        lb_dict = PickleHandler.load(weights_head, lb_cache_name)
+        if not isinstance(lb_dict, Dict):
+            raise Exception(f"lb_dict is not a dict: {lb_dict}")
+        if verbose:
+            print(f"found {lb_cache_name}")
+        return lb_dict
+    except Exception as e:
+        logger.warning(e)
+        print(f"not found {lb_cache_name}, start creating...")
+
+        ag_data = get_ag_data(
+            base_dir,
+            bm,
+            q_type,
+            debug=False,
+            graph_choice=graph_choice,
+            weights_path=ag_meta["graph_weights_path"]
+            if graph_choice != "none"
+            else None,
+            fold=fold,
+        )
+        qs_meta, data_dict = get_predictors(
+            ag_meta=ag_meta,
+            ag_data=ag_data,
+            plus_tpl=plus_tpl,
+            q_type=q_type,
+        )
+        lat_predictor, io_predictor = qs_meta["lat_predictor"], qs_meta["io_predictor"]
+        lat_predictor.persist()
+        io_predictor.persist()
+        lb_lat = lat_predictor.leaderboard(data_dict[split])
+        lb_io = io_predictor.leaderboard(data_dict[split])
+        lat_predictor.unpersist()
+        io_predictor.unpersist()
+        lb_dict = {"lat": lb_lat, "io": lb_io}
+        PickleHandler.save(lb_dict, weights_head, lb_cache_name)
+    return lb_dict
 
 
 def save_results(path: str, results: np.ndarray, mode: str = "data") -> None:

@@ -51,6 +51,7 @@ if __name__ == "__main__":
         infer_limit,
         infer_limit_batch_size,
         time_limit,
+        fold=params.fold,
     )
     weights_path = ag_meta["graph_weights_path"]
     if params.new_recording:
@@ -58,7 +59,14 @@ if __name__ == "__main__":
     ag_path = ag_meta["ag_path"] + "/"
 
     ret = get_ag_data(
-        base_dir, bm, q_type, debug, graph_choice, weights_path, bm_target=bm_target
+        base_dir,
+        bm,
+        q_type,
+        debug,
+        graph_choice,
+        weights_path,
+        fold=params.fold,
+        bm_target=bm_target,
     )
     train_data, val_data, test_data = ret["data"]
     ta, pw, objectives = ret["ta"], ret["pw"], ret["objectives"]
@@ -89,6 +97,7 @@ if __name__ == "__main__":
         graph_choice,
         split="test",
         ag_meta=ag_meta,
+        fold=params.fold,
         force=params.force,
         ag_model=ag_model,
         bm_target=bm_target,
