@@ -114,7 +114,7 @@ if __name__ == "__main__":
             ag_model=ag_model,
             bm_target=bm_target,
             xfer_gtn_only=True,
-            tpl_plus=True,
+            plus_tpl=True,
         )
         print(f"metrics: {metrics}, throughput (regr only): {throughput} K/s")
 

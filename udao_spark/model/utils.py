@@ -677,6 +677,47 @@ def add_dist_to_graphs(
     return dgl_dict, max_dist
 
 
+def add_height_to_graph(g: dgl.DGLGraph) -> dgl.DGLGraph:
+    # Convert DGL graph to NetworkX graph for easier topological sorting
+    nx_g = dgl.to_networkx(g).reverse()
+
+    # Perform topological sort
+    topological_order = list(nx.topological_sort(nx_g))  # type: ignore
+
+    # Initialize a dictionary to store heights of nodes
+    heights = {node: 0 for node in topological_order}
+
+    # Calculate heights
+    for node in topological_order:
+        # The height of a node is 1 + the maximum height of its successors
+        max_height = 0
+        for successor in g.successors(node).tolist():
+            max_height = max(max_height, heights[successor])
+        heights[node] = max_height + 1
+
+    # Add height information to node features
+    # According to the QF paper, height starts from 0
+    height_tensor = th.tensor(
+        [heights[node] - 1 for node in range(g.number_of_nodes())], dtype=th.int32
+    )
+    g.ndata["height"] = height_tensor
+
+    return g
+
+
+def add_height_encoding(
+    dgl_dict: Dict[int, QueryPlanStructure]
+) -> Dict[int, QueryPlanStructure]:
+    new_g_dict = {}
+    for i, query in dgl_dict.items():
+        new_g_dict[i] = add_height_to_graph(query.graph)
+
+    for i, new_g in new_g_dict.items():
+        dgl_dict[i].graph = new_g
+
+    return dgl_dict
+
+
 def save_mlp_training_results_one_batch(
     trainer: Trainer,
     module: UdaoModule,

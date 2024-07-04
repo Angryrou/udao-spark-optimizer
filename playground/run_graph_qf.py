@@ -1,10 +1,7 @@
 from pathlib import Path
-from typing import cast
 
 import torch as th
-from udao.data import QueryPlanIterator
 from udao.data.handler.data_processor import DataProcessor
-from udao.data.utils.query_plan import random_flip_positional_encoding
 from udao.model.utils.utils import set_deterministic_torch
 from udao.utils.logging import logger
 
@@ -13,6 +10,7 @@ from udao_spark.model.utils import (
     GraphTransformerMLPParams,
     MyLearningParams,
     add_dist_to_graphs,
+    add_height_encoding,
     get_graph_transformer_mlp,
     train_and_dump,
 )
@@ -50,14 +48,18 @@ if __name__ == "__main__":
         params.fold,
     )
     split_iterators = get_split_iterators(pw=pw, ta=ta, tensor_dtypes=tensor_dtypes)
-    train_iterator = cast(QueryPlanIterator, split_iterators["train"])
-    split_iterators["train"].set_augmentations(
-        [train_iterator.make_graph_augmentation(random_flip_positional_encoding)]
-    )
+    # Note
+    # use height encoding instead of Laplacian encoding for QueryFormer
+    # train_iterator = cast(QueryPlanIterator, split_iterators["train"])
+    # split_iterators["train"].set_augmentations(
+    #     [train_iterator.make_graph_augmentation(random_flip_positional_encoding)]
+    # )
+
     dp = PickleHandler.load(pw.cc_extract_prefix, "data_processor.pkl")
     if not isinstance(dp, DataProcessor):
         raise TypeError(f"Expected DataProcessor, got {type(dp)}")
     template_plans = dp.feature_extractors["query_structure"].template_plans
+    template_plans = add_height_encoding(template_plans)
     new_template_plans, max_dist = add_dist_to_graphs(template_plans)
     for k, v in split_iterators.items():
         split_iterators[k].query_structure_container.template_plans = new_template_plans
