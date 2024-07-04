@@ -63,6 +63,7 @@ class GraphTransformer(BaseGraphEmbedder):
                 raise ValueError("max_dist is required for QF")
             max_dist = net_params.max_dist
             self.attention_bias = nn.Parameter(th.zeros(max_dist))
+            self.height_embedding = nn.Embedding(max_dist, net_params.hidden_dim)
 
         elif self.attention_layer_name == "RAAL":
             if net_params.non_siblings_map is None:
@@ -102,10 +103,15 @@ class GraphTransformer(BaseGraphEmbedder):
         )
 
     def _embed(self, g: dgl.DGLGraph, h: th.Tensor) -> th.Tensor:
-        h_lap_pos_enc = g.ndata["pos_enc"]
         h = self.embedding_h(h)
-        h_lap_pos_enc = self.embedding_lap_pos_enc(h_lap_pos_enc)
-        h = h + h_lap_pos_enc
+        if self.attention_layer_name == "QF":
+            h_height = self.height_embedding(g.ndata["height"])
+            h = h + h_height
+        elif self.attention_layer_name in ["RAAL", "GTN"]:
+            h_lap_pos_enc = self.embedding_lap_pos_enc(g.ndata["pos_enc"])
+            h = h + h_lap_pos_enc
+        else:
+            raise ValueError(self.attention_layer_name)
 
         for layer in self.layers:
             h = layer.forward(g, h)
