@@ -13,7 +13,6 @@ from udao.data.handler.data_processor import DataProcessor
 from udao.data.iterators.query_plan_iterator import QueryPlanInput
 from udao.data.predicate_embedders.utils import prepare_operation
 from udao.data.utils.query_plan import add_positional_encoding
-from udao.model import GraphTransformer
 from udao.model.embedders.layers.multi_head_attention import RAALMultiHeadAttentionLayer
 from udao.optimization.utils.moo_utils import Point, get_default_device
 
@@ -23,6 +22,7 @@ from udao_trace.utils import PickleHandler
 from ..data.extractors.query_structure_extractor import (
     extract_query_plan_features_from_serialized_json,
 )
+from ..model.embedders.graph_transformer import GraphTransformer
 from ..model.model_server import AGServer
 from ..model.utils import add_dist_to_graph, get_non_siblings, get_non_siblings_map
 from ..utils.constants import THETA_C, THETA_COMPILE, THETA_P, THETA_S

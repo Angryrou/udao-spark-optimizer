@@ -25,7 +25,7 @@ from udao.data import BaseIterator, QueryPlanIterator
 from udao.data.iterators.query_plan_iterator import QueryPlanInput
 from udao.data.utils.query_plan import QueryPlanStructure
 from udao.data.utils.utils import DatasetType
-from udao.model import MLP, GraphAverager, GraphTransformer, UdaoModel
+from udao.model import MLP, GraphAverager, UdaoModel
 from udao.model.embedders.layers.multi_head_attention import AttentionLayerName
 from udao.model.module import LearningParams
 from udao.model.utils.losses import WMAPELoss
@@ -39,6 +39,7 @@ from ..data.utils import checkpoint_model_structure
 from ..utils.collaborators import PathWatcher, TypeAdvisor
 from ..utils.logging import logger
 from ..utils.params import ExtractParams, QType, UdaoParams
+from .embedders.graph_transformer import GraphTransformer
 from .embedders.qppnet import QPPNet
 from .embedders.tlstm import TreeLSTM
 from .regressors.qppnet_out import QPPNetOut
