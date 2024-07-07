@@ -1,8 +1,11 @@
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional, Tuple
 
 from sklearn.model_selection import train_test_split
-from udao_trace.utils.handler import ParquetHandler
+from udao_spark.utils.collaborators import TypeAdvisor
+from udao_trace.utils.handler import JsonHandler, ParquetHandler
+
+from udao.data.utils.query_plan import QueryPlanOperationFeatures, QueryPlanStructure
 
 import numpy as np
 import pandas as pd
@@ -90,3 +93,9 @@ def train_test_val_split_on_template_leave_out_fold(
         "val": val_df,
         "test": test_df
     }
+if __name__ == "__main__":
+    # TODO(glachaud): this is some temporary place to store information while I work with the code.
+    ta = TypeAdvisor(q_type="q_compile")
+    cache_folder = Path("cache_and_ckp/tpcds_perso")
+    cache_file = "df_q_compile.parquet"
+    query_df = load_data(cache_folder, cache_file)
