@@ -143,6 +143,32 @@ def get_tree_lstm_params() -> ArgumentParser:
     return parser
 
 
+def get_tree_cnn_params() -> ArgumentParser:
+    parser = _get_graph_base_parser()
+    # fmt: off
+    # Embedder parameters
+    parser.add_argument("--output_size", type=int, default=64,
+                        help="Embedder output size")
+    parser.add_argument("--tcnn_hidden_dim", type=int, default=256,
+                        help="Hidden dimension of the TreeConv")
+    parser.add_argument("--readout", type=str, default="max",
+                        choices=["mean", "max", "sum"],
+                        help="Readout function")
+    parser.add_argument("--type_embedding_dim", type=int, default=8,
+                        help="Type embedding dimension")
+    parser.add_argument("--embedding_normalizer", type=str, default=None,
+                        help="Embedding normalizer")
+    # Regressor parameters
+    parser.add_argument("--n_layers", type=int, default=2,
+                        help="Number of layers in the regressor")
+    parser.add_argument("--hidden_dim", type=int, default=32,
+                        help="Hidden dimension of the regressor")
+    parser.add_argument("--dropout", type=float, default=0.1,
+                        help="Dropout rate")
+    # fmt: on
+    return parser
+
+
 def get_qppnet_params() -> ArgumentParser:
     parser = _get_graph_base_parser()
     # fmt: off
