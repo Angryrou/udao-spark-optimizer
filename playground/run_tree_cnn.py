@@ -15,12 +15,12 @@ from udao_spark.model.utils import (
     train_and_dump,
 )
 from udao_spark.utils.collaborators import PathWatcher, TypeAdvisor
-from udao_spark.utils.params import ExtractParams, get_qppnet_params
+from udao_spark.utils.params import ExtractParams, get_tree_cnn_params
 from udao_trace.utils import PickleHandler
 
 logger.setLevel("INFO")
 if __name__ == "__main__":
-    params = get_qppnet_params().parse_args()
+    params = get_tree_cnn_params().parse_args()
     set_deterministic_torch(params.seed)
     if params.benchmark == "tpcds":
         th.set_float32_matmul_precision("medium")  # type: ignore

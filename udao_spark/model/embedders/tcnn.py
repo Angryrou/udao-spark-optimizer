@@ -48,7 +48,11 @@ class TreeConvUnit(nn.Module):
         return {"new_h": new_h}
 
     def forward(self, g: dgl.DGLGraph) -> dgl.DGLGraph:
-        g.update_all(self.message_func, self.reduce_func, self.apply_node_func)
+        dgl.prop_nodes_topo(
+            g, self.message_func, self.reduce_func, apply_node_func=self.apply_node_func
+        )
+        g.ndata["h"] = g.ndata["new_h"]
+        del g.ndata["new_h"]
         return g
 
 
@@ -57,7 +61,7 @@ class TreeLayerNorm(nn.Module):
         super(TreeLayerNorm, self).__init__()
 
     def forward(self, g: dgl.DGLGraph) -> dgl.DGLGraph:
-        g.ndata["new_h"] = nn.LayerNorm(g.ndata["new_h"].shape[1])(g.ndata["new_h"])
+        g.ndata["h"] = nn.LayerNorm(g.ndata["h"].shape[1])(g.ndata["h"])
         return g
 
 
@@ -67,7 +71,7 @@ class TreeActivation(nn.Module):
         self.activation = activation
 
     def forward(self, g: dgl.DGLGraph) -> dgl.DGLGraph:
-        g.ndata["new_h"] = self.activation(g.ndata["new_h"])
+        g.ndata["h"] = self.activation(g.ndata["h"])
         return g
 
 
@@ -78,11 +82,11 @@ class DynamicPooling(nn.Module):
 
     def forward(self, g: dgl.DGLGraph) -> th.Tensor:
         if self.readout == "sum":
-            hg = dgl.sum_nodes(g, "new_h")
+            hg = dgl.sum_nodes(g, "h")
         elif self.readout == "max":
-            hg = dgl.max_nodes(g, "new_h")
+            hg = dgl.max_nodes(g, "h")
         elif self.readout == "mean":
-            hg = dgl.mean_nodes(g, "new_h")
+            hg = dgl.mean_nodes(g, "h")
         elif self.readout == "terminal":
             if g.device == th.device("cpu"):
                 out_op_inds_np = np.where(g.out_degrees().numpy() == 0)[0]
@@ -91,7 +95,7 @@ class DynamicPooling(nn.Module):
                     0
                 ]
             out_op_inds = th.tensor(out_op_inds_np, dtype=th.int32, device=g.device)
-            hg = th.index_select(g.ndata["new_h"], 0, out_op_inds)
+            hg = th.index_select(g.ndata["h"], 0, out_op_inds)
         else:
             raise NotImplementedError
         return hg
