@@ -41,6 +41,7 @@ from ..utils.logging import logger
 from ..utils.params import ExtractParams, QType, UdaoParams
 from .embedders.graph_transformer import GraphTransformer
 from .embedders.qppnet import QPPNet
+from .embedders.tcnn import TreeCNN
 from .embedders.tlstm import TreeLSTM
 from .regressors.qppnet_out import QPPNetOut
 
@@ -395,6 +396,85 @@ def get_tree_lstm_mlp(params: TreeLSTMParams) -> UdaoModel:
             "output_size": params.output_size,  # 128
             "hidden_dim": params.lstm_hidden_dim,  #
             "dropout": params.lstm_dropout,  # 0.0
+            "readout": params.readout,  # "mean"
+            "op_groups": params.op_groups,  # ["type", "cbo", "op_enc"]
+            "type_embedding_dim": params.type_embedding_dim,  # 8
+            "embedding_normalizer": params.embedding_normalizer,  # None
+        },
+        regressor_params={
+            "n_layers": params.n_layers,  # 3
+            "hidden_dim": params.hidden_dim,  # 512
+            "dropout": params.dropout,  # 0.1
+        },
+    )
+    return model
+
+
+@dataclass
+class TreeCNNParams(UdaoParams):
+    iterator_shape: UdaoEmbedItemShape
+    op_groups: List[str]
+    output_size: int = 64
+    tcnn_hidden_dim: int = 256
+    readout: str = "max"
+    type_embedding_dim: int = 8
+    embedding_normalizer: Optional[str] = None
+    # MLP
+    n_layers: int = 2
+    hidden_dim: int = 32
+    dropout: float = 0.1
+
+    @classmethod
+    def from_dict(cls, data_dict: Dict[str, Any]) -> "TreeCNNParams":
+        if "iterator_shape" not in data_dict:
+            raise ValueError("iterator_shape not found in data_dict")
+        if not isinstance(data_dict["iterator_shape"], UdaoEmbedItemShape):
+            iterator_shape_dict = data_dict["iterator_shape"]
+            data_dict["iterator_shape"] = UdaoEmbedItemShape(
+                embedding_input_shape=iterator_shape_dict["embedding_input_shape"],
+                feature_names=iterator_shape_dict["feature_names"],
+                output_names=iterator_shape_dict["output_names"],
+            )
+        return cls(**data_dict)
+
+    def to_dict(self) -> Dict[str, object]:
+        return {
+            k: v if not isinstance(v, UdaoEmbedItemShape) else v.__dict__
+            for k, v in self.__dict__.items()
+            if v is not None
+        }
+
+    def hash(self) -> str:
+        attributes_tuple = str(
+            (
+                str(self.iterator_shape),
+                tuple(self.op_groups),
+                self.output_size,
+                self.tcnn_hidden_dim,
+                self.readout,
+                self.type_embedding_dim,
+                self.embedding_normalizer,
+            )
+        ).encode("utf-8")
+        sha256_hash = hashlib.sha256(attributes_tuple)
+        hex12 = sha256_hash.hexdigest()[:12]
+        return "tree_cnn_" + hex12
+
+
+def get_tree_cnn_mlp(params: TreeCNNParams) -> UdaoModel:
+    if (
+        params.readout != "max"
+        or params.output_size != 64
+        or params.tcnn_hidden_dim != 256
+    ):
+        raise ValueError("does not respect the original paper")
+    model = UdaoModel.from_config(
+        embedder_cls=TreeCNN,
+        regressor_cls=MLP,
+        iterator_shape=params.iterator_shape,
+        embedder_params={
+            "output_size": params.output_size,  # 64
+            "hidden_dim": params.tcnn_hidden_dim,  # 256
             "readout": params.readout,  # "mean"
             "op_groups": params.op_groups,  # ["type", "cbo", "op_enc"]
             "type_embedding_dim": params.type_embedding_dim,  # 8
