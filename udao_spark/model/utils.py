@@ -454,6 +454,9 @@ class TreeCNNParams(UdaoParams):
                 self.readout,
                 self.type_embedding_dim,
                 self.embedding_normalizer,
+                self.n_layers,
+                self.hidden_dim,
+                self.dropout,
             )
         ).encode("utf-8")
         sha256_hash = hashlib.sha256(attributes_tuple)
