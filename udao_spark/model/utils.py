@@ -178,6 +178,7 @@ class GraphTransformerMLPParams(UdaoParams):
     attention_layer_name: AttentionLayerName = "GTN"
     # For QF (QueryFormer)
     max_dist: Optional[int] = None
+    max_height: Optional[int] = None
     # For RAAL
     non_siblings_map: Optional[Dict[int, Dict[int, List[int]]]] = None
     # MLP
@@ -207,6 +208,11 @@ class GraphTransformerMLPParams(UdaoParams):
                 and "max_dist" not in data_dict
             ):
                 raise ValueError("max_dist not found for QF")
+            if (
+                data_dict["attention_layer_name"] == "QF"
+                and "max_height" not in data_dict
+            ):
+                raise ValueError("max_height not found for QF")
         return cls(**data_dict)
 
     def to_dict(self) -> Dict[str, object]:
@@ -255,6 +261,7 @@ def get_graph_transformer_mlp(params: GraphTransformerMLPParams) -> UdaoModel:
             "embedding_normalizer": params.embedding_normalizer,  # None
             "attention_layer_name": params.attention_layer_name,  # "GTN"
             "max_dist": params.max_dist,  # None
+            "max_height": params.max_height,  # None
             "non_siblings_map": params.non_siblings_map,  # None
         },
         regressor_params={
