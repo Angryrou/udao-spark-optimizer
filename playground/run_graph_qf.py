@@ -60,6 +60,9 @@ if __name__ == "__main__":
         raise TypeError(f"Expected DataProcessor, got {type(dp)}")
     template_plans = dp.feature_extractors["query_structure"].template_plans
     template_plans = add_height_encoding(template_plans)
+    max_height = max(
+        [g.graph.ndata["height"].max() for g in template_plans.values()]
+    ).item()
     new_template_plans, max_dist = add_dist_to_graphs(template_plans)
     for k, v in split_iterators.items():
         split_iterators[k].query_structure_container.template_plans = new_template_plans
@@ -80,6 +83,7 @@ if __name__ == "__main__":
             "dropout": params.dropout,
             "attention_layer_name": "QF",
             "max_dist": max_dist,
+            "max_height": max_height,
         }
     )
     learning_params = MyLearningParams.from_dict(

@@ -32,6 +32,8 @@ class GraphTransformer(BaseGraphEmbedder):
         to form the graph embedding."""
         max_dist: Optional[int] = None
         """Maximum distance for QF attention."""
+        max_height: Optional[int] = None
+        """Maximum height for QF attention."""
         non_siblings_map: Optional[Dict[int, Dict[int, List[int]]]] = None
         """Non-siblings map for RAAL attention.
         For each type of graph, maps the edge id to
@@ -61,9 +63,12 @@ class GraphTransformer(BaseGraphEmbedder):
         if self.attention_layer_name == "QF":
             if net_params.max_dist is None:
                 raise ValueError("max_dist is required for QF")
+            if net_params.max_height is None:
+                raise ValueError("max_height is required for QF")
             max_dist = net_params.max_dist
+            max_height = net_params.max_height
             self.attention_bias = nn.Parameter(th.zeros(max_dist))
-            self.height_embedding = nn.Embedding(max_dist, net_params.hidden_dim)
+            self.height_embedding = nn.Embedding(max_height + 1, net_params.hidden_dim)
 
         elif self.attention_layer_name == "RAAL":
             if net_params.non_siblings_map is None:
