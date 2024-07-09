@@ -21,6 +21,7 @@ from udao_spark.model.utils import (
     get_graph_transformer_mlp,
     get_tuned_trainer,
     save_mlp_training_results,
+    train_and_dump,
 )
 from udao_spark.utils.collaborators import PathWatcher, TypeAdvisor
 from udao_spark.utils.params import ExtractParams, get_graph_transformer_params
@@ -59,6 +60,7 @@ def main(
     n_layers: int,
     hidden_dim: int,
     dropout: float,
+    fold: Annotated[Optional[int], typer.Argument()] = None,
     embedding_normalizer: Annotated[Optional[str], typer.Argument()] = None,
     op_groups: list[str] = typer.Argument(default=None, callback=argument_list_callback)
 ):
@@ -87,6 +89,7 @@ def main(
         n_layers (int): Number of layers in the regressor
         hidden_dim (int): Hidden dimension of the regressor
         dropout (float): Dropout rate of the regressor
+        fold (int): Fold number (from 0 to 9)
         embedding_normalizer (str): Embedding normalizer
         op_groups (list[str]): List of operation groups (node encodings)
         """
@@ -109,7 +112,7 @@ def main(
         }
     )
     pw = PathWatcher(
-        Path(__file__).parent, benchmark, debug, extract_params
+        Path(__file__).parent, benchmark, debug, extract_params, fold
     )
     split_iterators = get_split_iterators(pw=pw, ta=ta, tensor_dtypes=tensor_dtypes)
     train_iterator = cast(QueryPlanIterator, split_iterators["train"])
@@ -143,55 +146,23 @@ def main(
     )
 
     model = get_graph_transformer_mlp(model_params)
-    tabular_columns = ta.get_tabular_columns()
-    objectives = ta.get_objectives()
-    logger.info(f"Tabular columns: {tabular_columns}")
-    logger.info(f"Objectives: {objectives}")
-
-    ckp_header = checkpoint_model_structure(pw=pw, model_params=model_params)
-    trainer, module, ckp_learning_header = get_tuned_trainer(
-        ckp_header,
-        model,
-        split_iterators,
-        objectives,
-        learning_params,
-        device,
-        num_workers=0 if debug else num_workers,
-        debug=debug,
-    )
-    test_results = trainer.test(
-        model=module,
-        dataloaders=split_iterators["test"].get_dataloader(
-            batch_size=batch_size,
-            num_workers=0 if debug else num_workers,
-            shuffle=False,
-        ),
-    )
-    JsonHandler.dump_to_file(
-        {
-            "test_results": test_results,
-            "extract_params": extract_params.__dict__,
-            "model_params": model_params.to_dict(),
-            "learning_params": learning_params.__dict__,
-            "tabular_columns": tabular_columns,
-            "objectives": objectives,
-        },
-        f"{ckp_learning_header}/test_results.json",
-        indent=2,
-    )
-    # TODO(glachaud): temporary fix
-    print(test_results)
+    
+    # TODO (glachaud): temporary fix before the refactor is completed.
     params = {"debug": debug, "num_workers": num_workers}
-
-    obj_df = save_mlp_training_results(
-        module=module,
+    
+    train_and_dump(
+        ta=ta,
+        pw=pw,
+        model=model,
         split_iterators=split_iterators,
+        extract_params=extract_params,
+        model_params=model_params,
+        learning_params=learning_params,
         params=params,
-        ckp_learning_header=ckp_learning_header,
-        test_results=test_results[0],
         device=device,
     )
     
     
+logger.setLevel("INFO")
 if __name__ == "__main__":
     app()
