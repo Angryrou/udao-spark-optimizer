@@ -1,6 +1,6 @@
 """Script to train and evalute a graph embedder + regressor model on a query benchmark."""
 from pathlib import Path
-from typing import cast
+from typing import Optional, cast
 
 import typer
 
@@ -59,7 +59,7 @@ def main(
     n_layers: int,
     hidden_dim: int,
     dropout: float,
-    embedding_normalizer: Annotated[str, typer.Option()] = None,
+    embedding_normalizer: Annotated[Optional[str], typer.Argument()] = None,
     op_groups: list[str] = typer.Argument(default=None, callback=argument_list_callback)
 ):
     """Train and evaluate a graph embedder + regressor model on a query benchmark.
