@@ -74,6 +74,7 @@ class MyLearningParams(UdaoParams):
     init_lr: float = 1e-1
     min_lr: float = 1e-5
     weight_decay: float = 1e-2
+    loss_weights: Optional[List[float]] = None
 
     @classmethod
     def from_dict(cls, data_dict: Dict[str, Any]) -> "MyLearningParams":
@@ -92,7 +93,11 @@ class MyLearningParams(UdaoParams):
         ).encode("utf-8")
         sha256_hash = hashlib.sha256(attributes_tuple)
         hex12 = sha256_hash.hexdigest()[:12]
-        return "learning_" + hex12
+        if self.loss_weights is not None:
+            loss_weights_str = "_".join(f"{v:g}" for v in self.loss_weights)
+            return f"learning_{hex12}_{loss_weights_str}"
+        else:
+            return "learning_" + hex12
 
 
 @dataclass
@@ -623,6 +628,9 @@ def get_tuned_trainer(
     loss_weights: Optional[Dict[str, float]] = None
     if isinstance(model.embedder, QPPNet):
         loss_weights = {obj: 1.0 if obj == "latency_s" else 0.0 for obj in objectives}
+    else:
+        if params.loss_weights is not None:
+            loss_weights = {obj: w for obj, w in zip(objectives, params.loss_weights)}
 
     module = UdaoModule(
         model,
