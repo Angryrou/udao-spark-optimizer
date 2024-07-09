@@ -9,6 +9,8 @@ from udao.data import QueryPlanIterator
 from udao.data.utils.query_plan import random_flip_positional_encoding
 from udao.model.utils.utils import set_deterministic_torch
 from udao.utils.logging import logger
+
+from typing_extensions import Annotated
 from typer_config import use_yaml_config
 from typer_config.callbacks import argument_list_callback
 
@@ -54,10 +56,10 @@ def main(
     gtn_n_heads: int,
     readout: str,
     type_embedding_dim: int,
-    embedding_normalizer: str,
     n_layers: int,
     hidden_dim: int,
     dropout: float,
+    embedding_normalizer: Annotated[str, typer.Option()] = None,
     op_groups: list[str] = typer.Argument(default=None, callback=argument_list_callback)
 ):
     """Train and evaluate a graph embedder + regressor model on a query benchmark.
@@ -82,10 +84,10 @@ def main(
         gtn_n_heads (int): Number of heads in the GTN
         readout (str): Readout function ("mean", "max", or "sum")
         type_embedding_dim (int): Type embedding dimension
-        embedding_normalizer (str): Embedding normalizer
         n_layers (int): Number of layers in the regressor
         hidden_dim (int): Hidden dimension of the regressor
         dropout (float): Dropout rate of the regressor
+        embedding_normalizer (str): Embedding normalizer
         op_groups (list[str]): List of operation groups (node encodings)
         """
     set_deterministic_torch(seed)
