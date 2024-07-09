@@ -14,15 +14,15 @@ weight_decay: 1e-2
 epochs: 2
 batch_size: 512
 num_workers: 15
-op_groups: ["type", "cbo", "op_enc"]
+op_groups: [type, cbo, op_enc]
 
 # graph transformer config
 output_size: 32
 pos_encoding_dim: 8
 gtn_n_layers: 2
+gtn_n_heads: 2
 readout: "mean"
 type_embedding_dim: 8
-embedding_normalizer: None
 n_layers: 2
 hidden_dim: 32
 dropout: 0.1
