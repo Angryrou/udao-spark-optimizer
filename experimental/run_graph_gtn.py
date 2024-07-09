@@ -89,7 +89,7 @@ def main(
         n_layers (int): Number of layers in the regressor
         hidden_dim (int): Hidden dimension of the regressor
         dropout (float): Dropout rate of the regressor
-        fold (int): Fold number (from 0 to 9)
+        fold (int): Fold number (from 1 to 10)
         embedding_normalizer (str): Embedding normalizer
         op_groups (list[str]): List of operation groups (node encodings)
         """
