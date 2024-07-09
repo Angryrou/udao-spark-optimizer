@@ -10,6 +10,7 @@ from udao.data.utils.query_plan import random_flip_positional_encoding
 from udao.model.utils.utils import set_deterministic_torch
 from udao.utils.logging import logger
 from typer_config import use_yaml_config
+from typer_config.callbacks import argument_list_callback
 
 from udao_spark.data.utils import checkpoint_model_structure, get_split_iterators
 from udao_spark.model.utils import (
@@ -29,6 +30,8 @@ logger.setLevel("INFO")
 
 
 # TODO(glachaud): refactoring in progress
+# op_groups was put last because of an issue with lists in typer_config
+# see https://maxb2.github.io/typer-config/latest/known_issues/ for details.
 @app.command()
 @use_yaml_config(default_value="configs/default_config.yaml")
 def main(
@@ -45,7 +48,6 @@ def main(
     epochs: int,
     batch_size: int,
     num_workers: int,
-    op_groups: list[str],
     output_size: int,
     pos_encoding_dim: int,
     gtn_n_layers: int,
@@ -54,7 +56,8 @@ def main(
     embedding_normalizer: str,
     n_layers: int,
     hidden_dim: int,
-    dropout: float
+    dropout: float,
+    op_groups: list[str] = typer.Argument(default=None, callback=argument_list_callback)
 ):
     """Train and evaluate a graph embedder + regressor model on a query benchmark.
 
