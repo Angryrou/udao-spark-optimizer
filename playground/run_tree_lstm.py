@@ -6,17 +6,15 @@ from udao.data import QueryPlanIterator
 from udao.model.utils.utils import set_deterministic_torch
 from udao.utils.logging import logger
 
-from udao_spark.data.utils import checkpoint_model_structure, get_split_iterators
+from udao_spark.data.utils import get_split_iterators
 from udao_spark.model.utils import (
     MyLearningParams,
     TreeLSTMParams,
     get_tree_lstm_mlp,
-    get_tuned_trainer,
-    save_mlp_training_results,
+    train_and_dump,
 )
 from udao_spark.utils.collaborators import PathWatcher, TypeAdvisor
 from udao_spark.utils.params import ExtractParams, get_tree_lstm_params
-from udao_trace.utils import JsonHandler
 
 logger.setLevel("INFO")
 if __name__ == "__main__":
@@ -41,7 +39,11 @@ if __name__ == "__main__":
         }
     )
     pw = PathWatcher(
-        Path(__file__).parent, params.benchmark, params.debug, extract_params
+        Path(__file__).parent,
+        params.benchmark,
+        params.debug,
+        extract_params,
+        params.fold,
     )
     split_iterators = get_split_iterators(pw=pw, ta=ta, tensor_dtypes=tensor_dtypes)
     train_iterator = cast(QueryPlanIterator, split_iterators["train"])
@@ -73,49 +75,15 @@ if __name__ == "__main__":
     )
 
     model = get_tree_lstm_mlp(model_params)
-    # prepare the model structure path
-    tabular_columns = ta.get_tabular_columns()
-    objectives = ta.get_objectives()
-    logger.info(f"Tabular columns: {tabular_columns}")
-    logger.info(f"Objectives: {objectives}")
 
-    ckp_header = checkpoint_model_structure(pw=pw, model_params=model_params)
-    trainer, module, ckp_learning_header = get_tuned_trainer(
-        ckp_header,
-        model,
-        split_iterators,
-        objectives,
-        learning_params,
-        device,
-        num_workers=0 if params.debug else params.num_workers,
-        debug=params.debug,
-    )
-    test_results = trainer.test(
-        model=module,
-        dataloaders=split_iterators["test"].get_dataloader(
-            batch_size=params.batch_size,
-            num_workers=0 if params.debug else params.num_workers,
-            shuffle=False,
-        ),
-    )
-    JsonHandler.dump_to_file(
-        {
-            "test_results": test_results,
-            "extract_params": extract_params.__dict__,
-            "model_params": model_params.to_dict(),
-            "learning_params": learning_params.__dict__,
-            "tabular_columns": tabular_columns,
-            "objectives": objectives,
-        },
-        f"{ckp_learning_header}/test_results.json",
-        indent=2,
-    )
-    print(test_results)
-    obj_df = save_mlp_training_results(
-        module=module,
+    train_and_dump(
+        ta=ta,
+        pw=pw,
+        model=model,
         split_iterators=split_iterators,
+        extract_params=extract_params,
+        model_params=model_params,
+        learning_params=learning_params,
         params=params,
-        ckp_learning_header=ckp_learning_header,
-        test_results=test_results[0],
         device=device,
     )

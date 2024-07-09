@@ -48,6 +48,7 @@ if __name__ == "__main__":
         infer_limit,
         infer_limit_batch_size,
         params.ag_time_limit,
+        params.fold,
     )
 
     # Initialize HierarchicalOptimizer and Model

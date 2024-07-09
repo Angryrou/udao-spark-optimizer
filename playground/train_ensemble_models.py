@@ -39,6 +39,7 @@ if __name__ == "__main__":
         infer_limit,
         infer_limit_batch_size,
         time_limit,
+        fold=params.fold,
     )
     bm_target = params.bm_gtn_model or bm
     if bm_target != bm:
@@ -61,6 +62,7 @@ if __name__ == "__main__":
             weights_path=ag_meta["graph_weights_path"]
             if graph_choice != "none"
             else None,
+            fold=params.fold,
             bm_target=bm_target,
         )
         train_data, val_data, test_data = ret["data"]

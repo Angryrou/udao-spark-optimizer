@@ -15,16 +15,17 @@ import numpy as np
 import pandas as pd
 import pytorch_warmup as warmup
 import torch as th
+import udao
 from autogluon.core.metrics import make_scorer
 from lightning import Trainer
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.loggers import TensorBoardLogger
-from torchmetrics import WeightedMeanAbsolutePercentageError
+from torchmetrics import Metric, WeightedMeanAbsolutePercentageError
 from udao.data import BaseIterator, QueryPlanIterator
 from udao.data.iterators.query_plan_iterator import QueryPlanInput
 from udao.data.utils.query_plan import QueryPlanStructure
 from udao.data.utils.utils import DatasetType
-from udao.model import MLP, GraphAverager, GraphTransformer, UdaoModel, UdaoModule
+from udao.model import MLP, GraphAverager, UdaoModel
 from udao.model.embedders.layers.multi_head_attention import AttentionLayerName
 from udao.model.module import LearningParams
 from udao.model.utils.losses import WMAPELoss
@@ -34,11 +35,36 @@ from udao.utils.interfaces import UdaoEmbedItemShape
 
 from udao_trace.utils import JsonHandler, PickleHandler
 
+from ..data.utils import checkpoint_model_structure
+from ..utils.collaborators import PathWatcher, TypeAdvisor
 from ..utils.logging import logger
-from ..utils.params import QType, UdaoParams
+from ..utils.params import ExtractParams, QType, UdaoParams
+from .embedders.graph_transformer import GraphTransformer
 from .embedders.qppnet import QPPNet
+from .embedders.tcnn import TreeCNN
 from .embedders.tlstm import TreeLSTM
 from .regressors.qppnet_out import QPPNetOut
+
+
+class UdaoModule(udao.model.UdaoModule):
+    def on_validation_epoch_end(self) -> None:
+        val_loss = 0.0
+        for objective in self.objectives:
+            metric = cast(Metric, self.metrics[objective])
+            output = metric.compute()
+            for k, v in output.items():
+                if k == f"{objective}_WeightedMeanAbsolutePercentageError":
+                    val_loss += self.loss_weights[objective] * float(v)
+
+        self.log(
+            "val_loss",
+            val_loss,
+            on_step=False,
+            on_epoch=True,
+            prog_bar=True,
+            logger=True,
+        )
+        self._shared_epoch_end("val")
 
 
 @dataclass
@@ -152,6 +178,7 @@ class GraphTransformerMLPParams(UdaoParams):
     attention_layer_name: AttentionLayerName = "GTN"
     # For QF (QueryFormer)
     max_dist: Optional[int] = None
+    max_height: Optional[int] = None
     # For RAAL
     non_siblings_map: Optional[Dict[int, Dict[int, List[int]]]] = None
     # MLP
@@ -181,6 +208,11 @@ class GraphTransformerMLPParams(UdaoParams):
                 and "max_dist" not in data_dict
             ):
                 raise ValueError("max_dist not found for QF")
+            if (
+                data_dict["attention_layer_name"] == "QF"
+                and "max_height" not in data_dict
+            ):
+                raise ValueError("max_height not found for QF")
         return cls(**data_dict)
 
     def to_dict(self) -> Dict[str, object]:
@@ -229,6 +261,7 @@ def get_graph_transformer_mlp(params: GraphTransformerMLPParams) -> UdaoModel:
             "embedding_normalizer": params.embedding_normalizer,  # None
             "attention_layer_name": params.attention_layer_name,  # "GTN"
             "max_dist": params.max_dist,  # None
+            "max_height": params.max_height,  # None
             "non_siblings_map": params.non_siblings_map,  # None
         },
         regressor_params={
@@ -238,6 +271,71 @@ def get_graph_transformer_mlp(params: GraphTransformerMLPParams) -> UdaoModel:
         },
     )
     return model
+
+
+def train_and_dump(
+    ta: TypeAdvisor,
+    pw: PathWatcher,
+    model: UdaoModel,
+    split_iterators: Dict[DatasetType, BaseIterator],
+    extract_params: ExtractParams,
+    model_params: UdaoParams,
+    learning_params: MyLearningParams,
+    params: Namespace,
+    device: str,
+) -> None:
+    # prepare the model structure path
+    tabular_columns = ta.get_tabular_columns()
+    objectives = ta.get_objectives()
+    logger.info(f"Tabular columns: {tabular_columns}")
+    logger.info(f"Objectives: {objectives}")
+
+    ckp_header = checkpoint_model_structure(pw=pw, model_params=model_params)
+    start_time = time.perf_counter_ns()
+    trainer, module, ckp_learning_header, found = get_tuned_trainer(
+        ckp_header,
+        model,
+        split_iterators,
+        objectives,
+        learning_params,
+        device,
+        num_workers=0 if params.debug else params.num_workers,
+    )
+
+    if not found:
+        train_time_secs = (time.perf_counter_ns() - start_time) / 1e9
+        test_results = trainer.test(
+            model=module,
+            dataloaders=split_iterators["test"].get_dataloader(
+                batch_size=learning_params.batch_size,
+                num_workers=0 if params.debug else params.num_workers,
+                shuffle=False,
+            ),
+        )
+        JsonHandler.dump_to_file(
+            {
+                "test_results": test_results,
+                "extract_params": extract_params.__dict__,
+                "model_params": model_params.to_dict(),
+                "learning_params": learning_params.__dict__,
+                "tabular_columns": tabular_columns,
+                "objectives": objectives,
+                "training_time_s": train_time_secs,
+            },
+            f"{ckp_learning_header}/test_results.json",
+            indent=2,
+        )
+        print(test_results)
+        save_mlp_training_results(
+            module=module,
+            split_iterators=split_iterators,
+            params=params,
+            ckp_learning_header=ckp_learning_header,
+            test_results=test_results[0],
+            device=device,
+        )
+    else:
+        print("model found and loadable at", ckp_learning_header)
 
 
 @dataclass
@@ -305,6 +403,88 @@ def get_tree_lstm_mlp(params: TreeLSTMParams) -> UdaoModel:
             "output_size": params.output_size,  # 128
             "hidden_dim": params.lstm_hidden_dim,  #
             "dropout": params.lstm_dropout,  # 0.0
+            "readout": params.readout,  # "mean"
+            "op_groups": params.op_groups,  # ["type", "cbo", "op_enc"]
+            "type_embedding_dim": params.type_embedding_dim,  # 8
+            "embedding_normalizer": params.embedding_normalizer,  # None
+        },
+        regressor_params={
+            "n_layers": params.n_layers,  # 3
+            "hidden_dim": params.hidden_dim,  # 512
+            "dropout": params.dropout,  # 0.1
+        },
+    )
+    return model
+
+
+@dataclass
+class TreeCNNParams(UdaoParams):
+    iterator_shape: UdaoEmbedItemShape
+    op_groups: List[str]
+    output_size: int = 64
+    tcnn_hidden_dim: int = 256
+    readout: str = "max"
+    type_embedding_dim: int = 8
+    embedding_normalizer: Optional[str] = None
+    # MLP
+    n_layers: int = 2
+    hidden_dim: int = 32
+    dropout: float = 0.1
+
+    @classmethod
+    def from_dict(cls, data_dict: Dict[str, Any]) -> "TreeCNNParams":
+        if "iterator_shape" not in data_dict:
+            raise ValueError("iterator_shape not found in data_dict")
+        if not isinstance(data_dict["iterator_shape"], UdaoEmbedItemShape):
+            iterator_shape_dict = data_dict["iterator_shape"]
+            data_dict["iterator_shape"] = UdaoEmbedItemShape(
+                embedding_input_shape=iterator_shape_dict["embedding_input_shape"],
+                feature_names=iterator_shape_dict["feature_names"],
+                output_names=iterator_shape_dict["output_names"],
+            )
+        return cls(**data_dict)
+
+    def to_dict(self) -> Dict[str, object]:
+        return {
+            k: v if not isinstance(v, UdaoEmbedItemShape) else v.__dict__
+            for k, v in self.__dict__.items()
+            if v is not None
+        }
+
+    def hash(self) -> str:
+        attributes_tuple = str(
+            (
+                str(self.iterator_shape),
+                tuple(self.op_groups),
+                self.output_size,
+                self.tcnn_hidden_dim,
+                self.readout,
+                self.type_embedding_dim,
+                self.embedding_normalizer,
+                self.n_layers,
+                self.hidden_dim,
+                self.dropout,
+            )
+        ).encode("utf-8")
+        sha256_hash = hashlib.sha256(attributes_tuple)
+        hex12 = sha256_hash.hexdigest()[:12]
+        return "tree_cnn_" + hex12
+
+
+def get_tree_cnn_mlp(params: TreeCNNParams) -> UdaoModel:
+    if (
+        params.readout != "max"
+        or params.output_size != 64
+        or params.tcnn_hidden_dim != 256
+    ):
+        raise ValueError("does not respect the original paper")
+    model = UdaoModel.from_config(
+        embedder_cls=TreeCNN,
+        regressor_cls=MLP,
+        iterator_shape=params.iterator_shape,
+        embedder_params={
+            "output_size": params.output_size,  # 64
+            "hidden_dim": params.tcnn_hidden_dim,  # 256
             "readout": params.readout,  # "mean"
             "op_groups": params.op_groups,  # ["type", "cbo", "op_enc"]
             "type_embedding_dim": params.type_embedding_dim,  # 8
@@ -421,8 +601,7 @@ def get_tuned_trainer(
     params: MyLearningParams,
     device: str,
     num_workers: int = 0,
-    debug: bool = False,
-) -> Tuple[Trainer, UdaoModule, str]:
+) -> Tuple[Trainer, UdaoModule, str, bool]:
     ckp_learning_header = f"{ckp_header}/{params.hash()}"
     ckp_weight_path = weights_found(ckp_learning_header)
 
@@ -438,7 +617,7 @@ def get_tuned_trainer(
             map_location=get_default_device(),
         )
         trainer = pl.Trainer(accelerator=device, logger=tb_logger)
-        return trainer, module, ckp_learning_header
+        return trainer, module, ckp_learning_header, True
     logger.info("Model weights not found, training...")
 
     loss_weights: Optional[Dict[str, float]] = None
@@ -459,24 +638,26 @@ def get_tuned_trainer(
     )
     filename_suffix = "-".join(
         [
-            f"val_{obj}_WMAPE={{val_{obj}_WeightedMeanAbsolutePercentageError:.3f}}"
+            "val_loss={val_loss:.4f}",
+        ]
+        + [
+            f"val_{obj}_WMAPE={{val_{obj}_WeightedMeanAbsolutePercentageError:.4f}}"
             for obj in objectives
         ]
     )
-    every_n_train_steps: Optional[int] = None
-    if not debug and params.epochs <= 30:
-        every_n_train_steps = 30
     checkpoint_callback = ModelCheckpoint(
+        monitor="val_loss",
         dirpath=ckp_learning_header,
         filename="{epoch}-" + filename_suffix,
         auto_insert_metric_name=False,
-        every_n_train_steps=every_n_train_steps,
+        verbose=True,
     )
     scheduler = UdaoLRScheduler(setup_cosine_annealing_lr, warmup.UntunedLinearWarmup)
     trainer = pl.Trainer(
         accelerator=device,
         max_epochs=params.epochs,
         logger=tb_logger,
+        log_every_n_steps=min(len(split_iterators["train"]) // params.batch_size, 50),
         callbacks=[scheduler, checkpoint_callback],
     )
     trainer.fit(
@@ -492,8 +673,18 @@ def get_tuned_trainer(
             shuffle=False,
         ),
     )
+    best_model_path = checkpoint_callback.best_model_path
+    logger.info(f"Best model path: {best_model_path}")
+    best_module = UdaoModule.load_from_checkpoint(
+        best_model_path,
+        model=model,
+        objectives=objectives,
+        loss=WMAPELoss(),
+        metrics=[WeightedMeanAbsolutePercentageError],
+        map_location=get_default_device(),
+    )
     checkpoint_learning_params(ckp_learning_header, params)
-    return trainer, module, ckp_learning_header
+    return trainer, best_module, ckp_learning_header, False
 
 
 def get_graph_ckp_info(weights_path: str) -> Tuple[str, str, str, str]:
@@ -575,6 +766,47 @@ def add_dist_to_graphs(
 
     max_dist = max([v.edata["dist"].max().item() for v in new_g_dict.values()])
     return dgl_dict, max_dist
+
+
+def add_height_to_graph(g: dgl.DGLGraph) -> dgl.DGLGraph:
+    # Convert DGL graph to NetworkX graph for easier topological sorting
+    nx_g = dgl.to_networkx(g).reverse()
+
+    # Perform topological sort
+    topological_order = list(nx.topological_sort(nx_g))  # type: ignore
+
+    # Initialize a dictionary to store heights of nodes
+    heights = {node: 0 for node in topological_order}
+
+    # Calculate heights
+    for node in topological_order:
+        # The height of a node is 1 + the maximum height of its successors
+        max_height = 0
+        for successor in g.successors(node).tolist():
+            max_height = max(max_height, heights[successor])
+        heights[node] = max_height + 1
+
+    # Add height information to node features
+    # According to the QF paper, height starts from 0
+    height_tensor = th.tensor(
+        [heights[node] - 1 for node in range(g.number_of_nodes())], dtype=th.int32
+    )
+    g.ndata["height"] = height_tensor
+
+    return g
+
+
+def add_height_encoding(
+    dgl_dict: Dict[int, QueryPlanStructure]
+) -> Dict[int, QueryPlanStructure]:
+    new_g_dict = {}
+    for i, query in dgl_dict.items():
+        new_g_dict[i] = add_height_to_graph(query.graph)
+
+    for i, new_g in new_g_dict.items():
+        dgl_dict[i].graph = new_g
+
+    return dgl_dict
 
 
 def save_mlp_training_results_one_batch(
@@ -826,8 +1058,8 @@ def calibrate_negative_predictions(
 
 def local_wmape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     sum_abs_error = np.abs(y_pred - y_true).sum()
-    sum_scale = np.abs(y_true).sum()
-    return sum_abs_error / np.max([sum_scale, 1.17e-06])
+    sum_scale = np.clip(np.abs(y_true).sum(), a_min=1.17e-06, a_max=None)
+    return sum_abs_error / sum_scale
 
 
 wmape = make_scorer(

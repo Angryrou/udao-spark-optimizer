@@ -60,6 +60,8 @@ def get_base_parser() -> ArgumentParser:
                         help="Enable debug mode")
     parser.add_argument("--seed", type=int, default=42,
                         help="Random seed")
+    parser.add_argument("--fold", type=int, default=None,
+                        help="Fold number, from 0 to 9")
     # fmt: on
     return parser
 
@@ -141,6 +143,32 @@ def get_tree_lstm_params() -> ArgumentParser:
     return parser
 
 
+def get_tree_cnn_params() -> ArgumentParser:
+    parser = _get_graph_base_parser()
+    # fmt: off
+    # Embedder parameters
+    parser.add_argument("--output_size", type=int, default=64,
+                        help="Embedder output size")
+    parser.add_argument("--tcnn_hidden_dim", type=int, default=256,
+                        help="Hidden dimension of the TreeConv")
+    parser.add_argument("--readout", type=str, default="max",
+                        choices=["mean", "max", "sum"],
+                        help="Readout function")
+    parser.add_argument("--type_embedding_dim", type=int, default=8,
+                        help="Type embedding dimension")
+    parser.add_argument("--embedding_normalizer", type=str, default=None,
+                        help="Embedding normalizer")
+    # Regressor parameters
+    parser.add_argument("--n_layers", type=int, default=2,
+                        help="Number of layers in the regressor")
+    parser.add_argument("--hidden_dim", type=int, default=32,
+                        help="Hidden dimension of the regressor")
+    parser.add_argument("--dropout", type=float, default=0.1,
+                        help="Dropout rate")
+    # fmt: on
+    return parser
+
+
 def get_qppnet_params() -> ArgumentParser:
     parser = _get_graph_base_parser()
     # fmt: off
@@ -193,7 +221,12 @@ def get_ag_parameters() -> ArgumentParser:
     parser = get_base_parser()
     # fmt: off
     parser.add_argument("--hp_choice", type=str, default="tuned-0215",
-                        choices=["tuned-0215"])
+                        choices=[
+                            "tuned-0215", "tuned-0624",
+                            "0624-fold-1", "0624-fold-2", "0624-fold-3", "0624-fold-4",
+                            "0624-fold-5", "0624-fold-6", "0624-fold-7", "0624-fold-8",
+                            "0624-fold-9", "0624-fold-10"
+                        ])
     parser.add_argument("--graph_choice", type=str, default="gtn",
                         choices=["avg", "gtn", "tlstm", "raal", "qppnet", "qf", "none"])
     parser.add_argument("--ag_sign", type=str, default="medium_quality")
