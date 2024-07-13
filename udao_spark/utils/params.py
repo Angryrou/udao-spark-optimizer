@@ -85,6 +85,7 @@ def _get_graph_base_parser() -> ArgumentParser:
                         help="Number of training epochs")
     parser.add_argument("--batch_size", type=int, default=512,
                         help="Batch size")
+    parser.add_argument("--loss_weights", nargs="+", type=float, default=None,)
     # Others
     parser.add_argument("--num_workers", type=int, default=15,
                         help="non-debug only")
