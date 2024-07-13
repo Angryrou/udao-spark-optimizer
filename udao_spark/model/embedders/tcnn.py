@@ -119,8 +119,14 @@ class TreeCNN(BaseGraphEmbedder):
     def __init__(self, net_params: Params) -> None:
         super().__init__(net_params)
         self.hidden_dim = net_params.hidden_dim
+        self.embedding_h = nn.Sequential(
+            nn.Linear(self.input_size, self.hidden_dim),
+            nn.ReLU(),
+            nn.BatchNorm1d(self.hidden_dim),
+        )
+
         self.net = nn.Sequential(
-            TreeConvUnit(self.input_size, net_params.hidden_dim),
+            TreeConvUnit(self.hidden_dim, net_params.hidden_dim),
             TreeLayerNorm(),
             TreeActivation(nn.LeakyReLU()),
             TreeConvUnit(net_params.hidden_dim, net_params.hidden_dim // 2),
@@ -132,5 +138,6 @@ class TreeCNN(BaseGraphEmbedder):
         )
 
     def forward(self, g: dgl.DGLGraph) -> th.Tensor:  # type: ignore[override]
-        g.ndata["h"] = self.concatenate_op_features(g)
+        h = self.concatenate_op_features(g)
+        g.ndata["h"] = self.embedding_h(h)
         return self.net(g)
