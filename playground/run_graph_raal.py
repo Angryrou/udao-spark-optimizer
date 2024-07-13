@@ -81,14 +81,6 @@ if __name__ == "__main__":
             "non_siblings_map": non_siblings_map,
         }
     )
-
-    if params.loss_weights is not None:
-        if len(params.loss_weights) != len(ta.get_objectives()):
-            raise ValueError(
-                f"loss_weights must have the same length as objectives, "
-                f"got {len(params.loss_weights)} and {len(ta.get_objectives())}"
-            )
-
     learning_params = MyLearningParams.from_dict(
         {
             "epochs": params.epochs,
@@ -96,7 +88,6 @@ if __name__ == "__main__":
             "init_lr": params.init_lr,
             "min_lr": params.min_lr,
             "weight_decay": params.weight_decay,
-            "loss_weights": params.loss_weights,
         }
     )
 
