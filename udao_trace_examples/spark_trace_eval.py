@@ -2,11 +2,11 @@ import glob
 import os.path
 from argparse import ArgumentParser
 from collections import defaultdict
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
+import pandas as pd
 
-from udao_spark.optimizer.utils import get_cloud_cost_add_io, get_cloud_cost_wo_io
 from udao_trace.collector.SparkCollector import SparkCollector
 from udao_trace.parser.spark_parser import parse_lqp_objectives
 from udao_trace.utils import BenchmarkType, ClusterName, JsonHandler
@@ -15,6 +15,28 @@ from udao_trace_examples.params import get_collector_parser
 s3 = "spark.sql.adaptive.maxShuffledHashJoinLocalMapThreshold"
 s4 = "spark.sql.autoBroadcastJoinThreshold"
 s5 = "spark.sql.shuffle.partitions"
+
+UdaoNumeric = Union[float, pd.Series, np.ndarray]
+
+aws_cost_cpu_hour_ratio = 0.052624
+aws_cost_mem_hour_ratio = 0.0057785  # for GB*H
+io_gb_ratio = 0.02  # for GB
+
+
+def get_cloud_cost_wo_io(
+    lat: UdaoNumeric, cores: UdaoNumeric, mem: UdaoNumeric, nexec: UdaoNumeric
+) -> UdaoNumeric:
+    cpu_hour = (nexec + 1) * cores * lat / 3600.0
+    mem_hour = (nexec + 1) * mem * lat / 3600.0
+    cost = cpu_hour * aws_cost_cpu_hour_ratio + mem_hour * aws_cost_mem_hour_ratio
+    return cost
+
+
+def get_cloud_cost_add_io(
+    cost_wo_io: UdaoNumeric,
+    io_mb: UdaoNumeric,
+) -> UdaoNumeric:
+    return cost_wo_io + io_mb / 1024.0 * io_gb_ratio
 
 
 def parse_configuration(j: Dict, fine_grained: bool) -> Dict:

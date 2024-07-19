@@ -776,6 +776,33 @@ def add_dist_to_graphs(
     return dgl_dict, max_dist
 
 
+def add_super_node_to_graph(g: dgl.DGLGraph) -> dgl.DGLGraph:
+    # Step 1: Add a super node to the graph, with placeholder
+    g.add_nodes(1)
+
+    # Step 2: Connect the super node to all other nodes
+    src = th.tensor(list(range(g.number_of_nodes() - 1)), dtype=th.long)
+    dst = th.tensor(
+        [g.number_of_nodes() - 1] * (g.number_of_nodes() - 1), dtype=th.long
+    )
+    g.add_edges(src, dst)
+
+    return g
+
+
+def add_super_node(
+    dgl_dict: Dict[int, QueryPlanStructure]
+) -> Dict[int, QueryPlanStructure]:
+    new_g_dict = {}
+    for i, query in dgl_dict.items():
+        new_g_dict[i] = add_super_node_to_graph(query.graph)
+
+    for i, new_g in new_g_dict.items():
+        dgl_dict[i].graph = new_g
+
+    return dgl_dict
+
+
 def add_height_to_graph(g: dgl.DGLGraph) -> dgl.DGLGraph:
     # Convert DGL graph to NetworkX graph for easier topological sorting
     nx_g = dgl.to_networkx(g).reverse()

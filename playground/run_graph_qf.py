@@ -1,5 +1,7 @@
 from pathlib import Path
+from typing import List
 
+import pandas as pd
 import torch as th
 from udao.data.handler.data_processor import DataProcessor
 from udao.model.utils.utils import set_deterministic_torch
@@ -11,12 +13,51 @@ from udao_spark.model.utils import (
     MyLearningParams,
     add_dist_to_graphs,
     add_height_encoding,
+    add_super_node,
     get_graph_transformer_mlp,
     train_and_dump,
 )
 from udao_spark.utils.collaborators import PathWatcher, TypeAdvisor
 from udao_spark.utils.params import ExtractParams, get_graph_transformer_params
 from udao_trace.utils import PickleHandler
+
+
+# Function to add new row for each plan_id
+def add_new_rows_for_series(series: pd.Series, fixed_value: int) -> pd.Series:
+    new_entries = []
+    for plan_id, group in series.groupby(level="plan_id"):
+        new_operation_id = group.index.get_level_values("operation_id").max() + 1
+        new_entry = pd.Series(
+            [fixed_value],
+            index=pd.MultiIndex.from_tuples(
+                [(plan_id, new_operation_id)], names=["plan_id", "operation_id"]
+            ),
+        )
+        new_entries.append(new_entry)
+    new_series = pd.concat([series] + new_entries).sort_index()
+    new_series = new_series.loc[series.index.get_level_values("plan_id").unique()]
+    return new_series
+
+
+def add_new_rows_for_df(data: pd.DataFrame, fixed_values: List[float]) -> pd.DataFrame:
+    new_entries = []
+    unique_plan_ids = data.index.get_level_values("plan_id").unique()
+
+    for plan_id in unique_plan_ids:
+        plan_id_slice = data.loc[plan_id]
+        new_operation_id = (
+            plan_id_slice.index.get_level_values("operation_id").max() + 1
+        )
+        new_entry = pd.DataFrame(
+            [fixed_values],
+            index=pd.MultiIndex.from_tuples(
+                [(plan_id, new_operation_id)], names=["plan_id", "operation_id"]
+            ),
+            columns=data.columns,
+        )
+        new_entries.append(new_entry)
+    return pd.concat([data] + new_entries).sort_index().loc[unique_plan_ids]
+
 
 logger.setLevel("INFO")
 if __name__ == "__main__":
@@ -59,13 +100,33 @@ if __name__ == "__main__":
     if not isinstance(dp, DataProcessor):
         raise TypeError(f"Expected DataProcessor, got {type(dp)}")
     template_plans = dp.feature_extractors["query_structure"].template_plans
+    template_plans = add_super_node(template_plans)
     template_plans = add_height_encoding(template_plans)
     max_height = max(
         [g.graph.ndata["height"].max() for g in template_plans.values()]
     ).item()
     new_template_plans, max_dist = add_dist_to_graphs(template_plans)
+    supper_gid = len(dp.feature_extractors["query_structure"].operation_types)
+
     for k, v in split_iterators.items():
         split_iterators[k].query_structure_container.template_plans = new_template_plans
+        operator_types = split_iterators[k].query_structure_container.operation_types
+        graph_features = split_iterators[k].query_structure_container.graph_features
+        other_graph_features = split_iterators[k].other_graph_features
+
+        operator_types = add_new_rows_for_series(operator_types, supper_gid)
+        graph_features = add_new_rows_for_df(
+            graph_features, [0] * len(graph_features.columns)
+        )
+        other_graph_features["op_enc"].data = add_new_rows_for_df(
+            other_graph_features["op_enc"].data,
+            [0] * len(other_graph_features["op_enc"].data.columns),
+        )
+
+        split_iterators[k].query_structure_container.operation_types = operator_types
+        split_iterators[k].query_structure_container.graph_features = graph_features
+        split_iterators[k].other_graph_features = other_graph_features
+
     # Model definition and training
     model_params = GraphTransformerMLPParams.from_dict(
         {
