@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import List
 
+import numpy as np
 import pandas as pd
 import torch as th
 from udao.data.handler.data_processor import DataProcessor
@@ -24,39 +25,20 @@ from udao_trace.utils import PickleHandler
 
 # Function to add new row for each plan_id
 def add_new_rows_for_series(series: pd.Series, fixed_value: int) -> pd.Series:
-    new_entries = []
-    for plan_id, group in series.groupby(level="plan_id"):
-        new_operation_id = group.index.get_level_values("operation_id").max() + 1
-        new_entry = pd.Series(
-            [fixed_value],
-            index=pd.MultiIndex.from_tuples(
-                [(plan_id, new_operation_id)], names=["plan_id", "operation_id"]
-            ),
-        )
-        new_entries.append(new_entry)
-    new_series = pd.concat([series] + new_entries).sort_index()
+    df = series.groupby(level="plan_id").size().to_frame("operator_id")
+    df["value"] = fixed_value
+    new_entries = df.reset_index().set_index(["plan_id", "operator_id"]).value
+    new_series = pd.concat([series, new_entries]).sort_index()
     new_series = new_series.loc[series.index.get_level_values("plan_id").unique()]
     return new_series
 
 
 def add_new_rows_for_df(data: pd.DataFrame, fixed_values: List[float]) -> pd.DataFrame:
-    new_entries = []
     unique_plan_ids = data.index.get_level_values("plan_id").unique()
-
-    for plan_id in unique_plan_ids:
-        plan_id_slice = data.loc[plan_id]
-        new_operation_id = (
-            plan_id_slice.index.get_level_values("operation_id").max() + 1
-        )
-        new_entry = pd.DataFrame(
-            [fixed_values],
-            index=pd.MultiIndex.from_tuples(
-                [(plan_id, new_operation_id)], names=["plan_id", "operation_id"]
-            ),
-            columns=data.columns,
-        )
-        new_entries.append(new_entry)
-    return pd.concat([data] + new_entries).sort_index().loc[unique_plan_ids]
+    df = data.groupby(level="plan_id").size().to_frame("operator_id")
+    df[data.columns] = np.array(fixed_values)
+    new_entries = df.reset_index().set_index(["plan_id", "operator_id"])
+    return pd.concat([data, new_entries]).sort_index().loc[unique_plan_ids]
 
 
 logger.setLevel("INFO")
@@ -110,11 +92,11 @@ if __name__ == "__main__":
 
     for k, v in split_iterators.items():
         split_iterators[k].query_structure_container.template_plans = new_template_plans
-        operator_types = split_iterators[k].query_structure_container.operation_types
+        operation_types = split_iterators[k].query_structure_container.operation_types
         graph_features = split_iterators[k].query_structure_container.graph_features
         other_graph_features = split_iterators[k].other_graph_features
 
-        operator_types = add_new_rows_for_series(operator_types, supper_gid)
+        operation_types = add_new_rows_for_series(operation_types, supper_gid)
         graph_features = add_new_rows_for_df(
             graph_features, [0] * len(graph_features.columns)
         )
@@ -123,7 +105,7 @@ if __name__ == "__main__":
             [0] * len(other_graph_features["op_enc"].data.columns),
         )
 
-        split_iterators[k].query_structure_container.operation_types = operator_types
+        split_iterators[k].query_structure_container.operation_types = operation_types
         split_iterators[k].query_structure_container.graph_features = graph_features
         split_iterators[k].other_graph_features = other_graph_features
 
