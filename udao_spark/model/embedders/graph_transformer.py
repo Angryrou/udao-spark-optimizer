@@ -65,10 +65,13 @@ class GraphTransformer(BaseGraphEmbedder):
                 raise ValueError("max_dist is required for QF")
             if net_params.max_height is None:
                 raise ValueError("max_height is required for QF")
+            if self.readout != "mean":
+                raise ValueError("readout must be mean for QF to make sign consistent")
             max_dist = net_params.max_dist
             max_height = net_params.max_height
             self.attention_bias = nn.Parameter(th.zeros(max_dist))
             self.height_embedding = nn.Embedding(max_height + 1, net_params.hidden_dim)
+            self.super_node_embedding = nn.Embedding(1, net_params.hidden_dim)
 
         elif self.attention_layer_name == "RAAL":
             if net_params.non_siblings_map is None:
@@ -111,6 +114,10 @@ class GraphTransformer(BaseGraphEmbedder):
         h = self.embedding_h(h)
         if self.attention_layer_name == "QF":
             h_height = self.height_embedding(g.ndata["height"])
+            super_node_indices = th.where(g.out_degrees() == 0)[0]
+            h[super_node_indices] = self.super_node_embedding(
+                th.zeros_like(super_node_indices)
+            )
             h = h + h_height
         elif self.attention_layer_name in ["RAAL", "GTN"]:
             h_lap_pos_enc = self.embedding_lap_pos_enc(g.ndata["pos_enc"])
@@ -122,14 +129,18 @@ class GraphTransformer(BaseGraphEmbedder):
             h = layer.forward(g, h)
         g.ndata["h"] = h
 
-        if self.readout == "sum":
-            hg = dgl.sum_nodes(g, "h")
-        elif self.readout == "max":
-            hg = dgl.max_nodes(g, "h")
-        elif self.readout == "mean":
-            hg = dgl.mean_nodes(g, "h")
+        if self.attention_layer_name == "QF":
+            super_node_indices = th.where(g.out_degrees() == 0)[0]
+            hg = h[super_node_indices]
         else:
-            raise NotImplementedError
+            if self.readout == "sum":
+                hg = dgl.sum_nodes(g, "h")
+            elif self.readout == "max":
+                hg = dgl.max_nodes(g, "h")
+            elif self.readout == "mean":
+                hg = dgl.mean_nodes(g, "h")
+            else:
+                raise NotImplementedError
         return hg
 
     def forward(self, g: dgl.DGLGraph) -> th.Tensor:  # type: ignore[override]
