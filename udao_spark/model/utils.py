@@ -198,10 +198,20 @@ class GraphTransformerMLPParams(UdaoParams):
         if not isinstance(data_dict["iterator_shape"], UdaoEmbedItemShape):
             iterator_shape_dict = data_dict["iterator_shape"]
             data_dict["iterator_shape"] = UdaoEmbedItemShape(
-                embedding_input_shape=iterator_shape_dict["embedding_input_shape"],
+                embedding_input_shape={
+                    k: v
+                    for k, v in iterator_shape_dict["embedding_input_shape"]
+                    if k in data_dict["op_groups"]
+                },
                 feature_names=iterator_shape_dict["feature_names"],
                 output_names=iterator_shape_dict["output_names"],
             )
+        else:
+            data_dict["iterator_shape"].embedding_input_shape = {
+                k: v
+                for k, v in data_dict["iterator_shape"].embedding_input_shape.items()
+                if k in data_dict["op_groups"]
+            }
         if "attention_layer_name" in data_dict:
             if (
                 data_dict["attention_layer_name"] == "RAAL"
