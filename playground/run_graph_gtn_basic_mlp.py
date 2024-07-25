@@ -166,7 +166,7 @@ def get_params() -> ArgumentParser:
 
 logger.setLevel("INFO")
 if __name__ == "__main__":
-    params = get_graph_transformer_params().parse_args()
+    params = get_params().parse_args()
     set_deterministic_torch(params.seed)
     if params.benchmark == "tpcds":
         th.set_float32_matmul_precision("medium")  # type: ignore
