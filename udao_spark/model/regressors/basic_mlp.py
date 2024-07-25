@@ -57,5 +57,7 @@ class BasicMLP(BaseRegressor):
 
     def forward(self, embedding: th.Tensor, inst_feat: th.Tensor) -> th.Tensor:
         input = th.cat([embedding, inst_feat], dim=1)
-        output = self.layers(input)
+        output = input
+        for layer in self.layers:
+            output = layer(output)
         return output
