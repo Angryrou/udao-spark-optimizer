@@ -57,7 +57,7 @@ class UdaoModule(udao.model.UdaoModule):
         self.log(
             "learning_rate",
             self.trainer.optimizers[0].param_groups[0]["lr"],
-            n_step=True,
+            on_step=True,
             on_epoch=True,
             prog_bar=True,
             logger=True,
