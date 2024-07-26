@@ -47,6 +47,26 @@ from .regressors.qppnet_out import QPPNetOut
 
 
 class UdaoModule(udao.model.UdaoModule):
+    def training_step(self, batch: Tuple[Any, th.Tensor], batch_idx: int) -> th.Tensor:
+        y_hat, y = self._shared_step(batch, "train")
+        loss, _ = self.compute_loss(y, y_hat)
+        if th.isnan(loss):
+            raise ValueError("got a nan loss in train")
+        elif th.isinf(loss):
+            raise ValueError("got an inf loss in train")
+        self.log(
+            "learning_rate",
+            self.trainer.optimizers[0].param_groups[0]["lr"],
+            n_step=True,
+            on_epoch=True,
+            prog_bar=True,
+            logger=True,
+        )
+        self.log(
+            "train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True
+        )
+        return loss
+
     def on_validation_epoch_end(self) -> None:
         val_loss = 0.0
         for objective in self.objectives:
