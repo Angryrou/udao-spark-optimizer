@@ -1,7 +1,8 @@
 """This module contains base class for graph-based query embedders."""
 from typing import Callable, List, Optional, Union
-import torch as th
+
 import dgl
+import torch as th
 import torch_geometric
 import torch_geometric.data
 
@@ -13,11 +14,12 @@ Readout = Callable[[Graph], th.Tensor]
 class GraphTransformer(th.nn.Module):
     """Base class for graph-based query embedders."""
 
-    def __init__(self,
-                 preprocess_layers: Optional[List[th.nn.Module]],
-                 layers: List[th.nn.Module],
-                 final_readout: Readout
-                 ):
+    def __init__(
+        self,
+        preprocess_layers: Optional[List[th.nn.Module]],
+        layers: List[th.nn.Module],
+        final_readout: Readout,
+    ):
         """Instantiate a Graph Transformer for query graph embedding.
 
         Args:
