@@ -673,6 +673,7 @@ def get_tuned_trainer(
     scheduler = UdaoLRScheduler(setup_cosine_annealing_lr, warmup.UntunedLinearWarmup)
     trainer = pl.Trainer(
         accelerator=device,
+        max_steps=params.epochs * (len(split_iterators["train"]) // params.batch_size),
         max_epochs=params.epochs,
         logger=tb_logger,
         log_every_n_steps=min(len(split_iterators["train"]) // params.batch_size, 50),
