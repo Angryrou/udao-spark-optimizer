@@ -4,7 +4,6 @@ from typing import Callable, List, Optional, Union
 import dgl
 import torch as th
 import torch_geometric
-import torch_geometric.data
 
 # type aliases to simplify the signature of the GraphTransformer
 Graph = Union[dgl.DGLGraph, torch_geometric.data.Data]
