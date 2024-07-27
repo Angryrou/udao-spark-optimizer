@@ -18,7 +18,7 @@ import torch as th
 import udao
 from autogluon.core.metrics import make_scorer
 from lightning import Trainer
-from lightning.pytorch.callbacks import ModelCheckpoint
+from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
 from lightning.pytorch.loggers import TensorBoardLogger
 from torchmetrics import Metric, WeightedMeanAbsolutePercentageError
 from udao.data import BaseIterator, QueryPlanIterator
@@ -691,6 +691,11 @@ def get_tuned_trainer(
         verbose=True,
     )
     scheduler = UdaoLRScheduler(setup_cosine_annealing_lr, warmup.UntunedLinearWarmup)
+    early_stopping = EarlyStopping(
+        monitor="val_loss",
+        mode="min",
+        patience=50,
+    )
     trainer = pl.Trainer(
         accelerator=device,
         max_steps=params.epochs
@@ -698,7 +703,7 @@ def get_tuned_trainer(
         max_epochs=params.epochs,
         logger=tb_logger,
         log_every_n_steps=min(len(split_iterators["train"]) // params.batch_size, 50),
-        callbacks=[scheduler, checkpoint_callback],
+        callbacks=[scheduler, checkpoint_callback, early_stopping],
     )
     trainer.fit(
         model=module,
