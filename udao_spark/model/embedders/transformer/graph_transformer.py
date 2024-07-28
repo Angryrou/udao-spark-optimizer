@@ -29,6 +29,7 @@ class GraphTransformer(th.nn.Module):
             final_readout (Readout): operation that is applied after the
                 layers, and which produces the final graph representation.
         """
+        super().__init__()
         self.preprocess_layers = preprocess_layers
 
         # Register layers as Modules

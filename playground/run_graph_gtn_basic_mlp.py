@@ -37,6 +37,7 @@ class GraphTransformerBasicMLPParams(UdaoParams):
     type_embedding_dim: int = 8
     embedding_normalizer: Optional[str] = None
     attention_layer_name: AttentionLayerName = "GTN"
+    gtn_dropout: float = 0.0
     # For QF (QueryFormer)
     max_dist: Optional[int] = None
     max_height: Optional[int] = None
@@ -58,7 +59,7 @@ class GraphTransformerBasicMLPParams(UdaoParams):
             data_dict["iterator_shape"] = UdaoEmbedItemShape(
                 embedding_input_shape={
                     k: v
-                    for k, v in iterator_shape_dict["embedding_input_shape"]
+                    for k, v in iterator_shape_dict["embedding_input_shape"].items()
                     if k in data_dict["op_groups"]
                 },
                 feature_names=iterator_shape_dict["feature_names"],
@@ -107,6 +108,7 @@ class GraphTransformerBasicMLPParams(UdaoParams):
                 self.readout,
                 self.type_embedding_dim,
                 self.embedding_normalizer,
+                self.gtn_dropout,
                 self.n_layers,
                 self.hidden_dim,
                 self.dropout,
@@ -137,6 +139,7 @@ def get_graph_transformer_basic_mlp(
             "type_embedding_dim": params.type_embedding_dim,  # 8
             "embedding_normalizer": params.embedding_normalizer,  # None
             "attention_layer_name": params.attention_layer_name,  # "GTN"
+            "dropout": params.gtn_dropout,
             "max_dist": params.max_dist,  # None
             "max_height": params.max_height,  # None
             "non_siblings_map": params.non_siblings_map,  # None
@@ -210,6 +213,7 @@ if __name__ == "__main__":
             "readout": params.readout,
             "type_embedding_dim": params.type_embedding_dim,
             "embedding_normalizer": params.embedding_normalizer,
+            "gtn_dropout": params.gtn_dropout,
             "n_layers": params.n_layers,
             "hidden_dim": params.hidden_dim,
             "dropout": params.dropout,

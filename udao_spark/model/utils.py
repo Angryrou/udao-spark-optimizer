@@ -220,7 +220,7 @@ class GraphTransformerMLPParams(UdaoParams):
             data_dict["iterator_shape"] = UdaoEmbedItemShape(
                 embedding_input_shape={
                     k: v
-                    for k, v in iterator_shape_dict["embedding_input_shape"]
+                    for k, v in iterator_shape_dict["embedding_input_shape"].items()
                     if k in data_dict["op_groups"]
                 },
                 feature_names=iterator_shape_dict["feature_names"],
