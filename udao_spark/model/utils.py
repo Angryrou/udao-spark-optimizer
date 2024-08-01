@@ -6,7 +6,7 @@ from argparse import Namespace
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 import dgl
 import lightning.pytorch as pl
@@ -220,7 +220,7 @@ class GraphTransformerMLPParams(UdaoParams):
             data_dict["iterator_shape"] = UdaoEmbedItemShape(
                 embedding_input_shape={
                     k: v
-                    for k, v in iterator_shape_dict["embedding_input_shape"]
+                    for k, v in iterator_shape_dict["embedding_input_shape"].items()
                     if k in data_dict["op_groups"]
                 },
                 feature_names=iterator_shape_dict["feature_names"],
@@ -741,6 +741,24 @@ def get_graph_ckp_info(weights_path: str) -> Tuple[str, str, str, str]:
     return ag_prefix, model_sign, model_params_path, data_processor_path
 
 
+# Function to add new row for each plan_id
+def add_new_rows_for_series(series: pd.Series, fixed_value: int) -> pd.Series:
+    df = series.groupby(level="plan_id").size().to_frame("operator_id")
+    df["value"] = fixed_value
+    new_entries = df.reset_index().set_index(["plan_id", "operator_id"]).value
+    new_series = pd.concat([series, new_entries]).sort_index()
+    new_series = new_series.loc[series.index.get_level_values("plan_id").unique()]
+    return new_series
+
+
+def add_new_rows_for_df(data: pd.DataFrame, fixed_values: List[float]) -> pd.DataFrame:
+    unique_plan_ids = data.index.get_level_values("plan_id").unique()
+    df = data.groupby(level="plan_id").size().to_frame("operator_id")
+    df[data.columns] = np.array(fixed_values)
+    new_entries = df.reset_index().set_index(["plan_id", "operator_id"])
+    return pd.concat([data, new_entries]).sort_index().loc[unique_plan_ids]
+
+
 def get_non_siblings(g: dgl.DGLGraph) -> Dict[int, List[int]]:
     srcs, dsts, eids = g.edges(form="all", order="srcdst")
     child_dep: Dict[int, List[int]] = defaultdict(list)
@@ -799,20 +817,6 @@ def add_dist_to_graph(g: dgl.DGLGraph) -> dgl.DGLGraph:
     return g_new
 
 
-def add_dist_to_graphs(
-    dgl_dict: Dict[int, QueryPlanStructure]
-) -> Tuple[Dict[int, QueryPlanStructure], int]:
-    new_g_dict = {}
-    for i, query in dgl_dict.items():
-        new_g_dict[i] = add_dist_to_graph(query.graph)
-
-    for i, new_g in new_g_dict.items():
-        dgl_dict[i].graph = new_g
-
-    max_dist = max([v.edata["dist"].max().item() for v in new_g_dict.values()])
-    return dgl_dict, max_dist
-
-
 def add_super_node_to_graph(g: dgl.DGLGraph) -> dgl.DGLGraph:
     # Step 1: Add a super node to the graph, with placeholder
     g.add_nodes(1)
@@ -825,19 +829,6 @@ def add_super_node_to_graph(g: dgl.DGLGraph) -> dgl.DGLGraph:
     g.add_edges(src, dst)
 
     return g
-
-
-def add_super_node(
-    dgl_dict: Dict[int, QueryPlanStructure]
-) -> Dict[int, QueryPlanStructure]:
-    new_g_dict = {}
-    for i, query in dgl_dict.items():
-        new_g_dict[i] = add_super_node_to_graph(query.graph)
-
-    for i, new_g in new_g_dict.items():
-        dgl_dict[i].graph = new_g
-
-    return dgl_dict
 
 
 def add_height_to_graph(g: dgl.DGLGraph) -> dgl.DGLGraph:
@@ -868,12 +859,80 @@ def add_height_to_graph(g: dgl.DGLGraph) -> dgl.DGLGraph:
     return g
 
 
-def add_height_encoding(
-    dgl_dict: Dict[int, QueryPlanStructure]
+def extend_edges_to_graph(g: dgl.DGLGraph) -> dgl.DGLGraph:
+    if "height" not in g.ndata:
+        g = add_height_to_graph(g)
+
+    # Initialize g_new with the same number of nodes as g
+    g_new = dgl.heterograph(
+        data_dict={
+            ("node", "child", "node"): g.edges(),
+            ("node", "descendant", "node"): ([], []),
+            ("node", "reachable", "node"): ([], []),
+            ("node", "same_height", "node"): ([], []),
+        },
+        num_nodes_dict={"node": g.number_of_nodes()},
+    )
+    # Transfer node features from g to g_new
+    for feature_name in g.ndata:
+        g_new.ndata[feature_name] = g.ndata[feature_name]
+
+    # Step 3: Add edges and shortest path distances to g_new
+    g_nx = dgl.to_networkx(g).to_directed()
+    lengths = dict(nx.all_pairs_dijkstra_path_length(g_nx, weight="weight"))
+    src_list, dst_list, distances = [], [], []
+
+    for src, dsts in lengths.items():
+        for dst, dist in dsts.items():
+            # Skip self-loops
+            if src != dst:
+                src_list.append(src)
+                dst_list.append(dst)
+                distances.append(dist)
+
+    # Convert lists to tensors for DGL
+    src_tensor = th.tensor(src_list, dtype=th.long)
+    dst_tensor = th.tensor(dst_list, dtype=th.long)
+    distances_tensor = th.tensor(distances, dtype=th.int32)
+
+    # Add descendant "edges"
+    g_new.add_edges(
+        src_tensor, dst_tensor, data={"dist": distances_tensor}, etype="descendant"
+    )
+
+    # Add reachable "edges"
+    g_new.add_edges(
+        src_tensor, dst_tensor, data={"dist": distances_tensor}, etype="reachable"
+    )
+    g_new.add_edges(
+        dst_tensor, src_tensor, data={"dist": -distances_tensor}, etype="reachable"
+    )
+
+    # Add same_height "edges"
+    height_dict: Dict[int, List[int]] = {}
+    for node_i, h_tensor in enumerate(g.ndata["height"]):
+        h = int(h_tensor)
+        if h not in height_dict:
+            height_dict[h] = []
+        height_dict[h].append(node_i)
+    src_list, dst_list = [], []
+    for h, nodes in height_dict.items():
+        for node_i in nodes:
+            src_list += [node_i] * (len(nodes) - 1)
+            dst_list += [node_j for node_j in nodes if node_j != node_i]
+    g_new.add_edges(src_tensor, dst_tensor, etype="same_height")
+    return g_new
+
+
+def update_dgl_graphs(
+    dgl_dict: Dict[int, QueryPlanStructure],
+    funcs: List[Callable[[dgl.DGLGraph], dgl.DGLGraph]],
 ) -> Dict[int, QueryPlanStructure]:
     new_g_dict = {}
     for i, query in dgl_dict.items():
-        new_g_dict[i] = add_height_to_graph(query.graph)
+        new_g_dict[i] = query.graph
+        for func in funcs:
+            new_g_dict[i] = func(new_g_dict[i])
 
     for i, new_g in new_g_dict.items():
         dgl_dict[i].graph = new_g

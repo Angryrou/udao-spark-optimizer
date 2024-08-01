@@ -4,7 +4,6 @@ from typing import Callable, List, Optional, Union
 import dgl
 import torch as th
 import torch_geometric
-import torch_geometric.data
 
 # type aliases to simplify the signature of the GraphTransformer
 Graph = Union[dgl.DGLGraph, torch_geometric.data.Data]
@@ -30,6 +29,7 @@ class GraphTransformer(th.nn.Module):
             final_readout (Readout): operation that is applied after the
                 layers, and which produces the final graph representation.
         """
+        super().__init__()
         self.preprocess_layers = preprocess_layers
 
         # Register layers as Modules

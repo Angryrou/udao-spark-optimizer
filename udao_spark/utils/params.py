@@ -207,6 +207,8 @@ def get_graph_transformer_params() -> ArgumentParser:
                         help="Type embedding dimension")
     parser.add_argument("--embedding_normalizer", type=str, default=None,
                         help="Embedding normalizer")
+    parser.add_argument("--gtn_dropout", type=float, default=0.0,
+                        help="Dropout rate")
     # Regressor parameters
     parser.add_argument("--n_layers", type=int, default=2,
                         help="Number of layers in the regressor")
