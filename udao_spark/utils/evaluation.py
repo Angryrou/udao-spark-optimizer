@@ -14,13 +14,18 @@ from udao.optimization.utils.moo_utils import get_default_device
 
 from udao_spark.model.model_server import ModelServer
 from udao_spark.model.utils import (
-    add_dist_to_graphs,
+    add_dist_to_graph,
+    add_height_to_graph,
+    add_new_rows_for_df,
+    add_new_rows_for_series,
+    add_super_node_to_graph,
     calibrate_negative_predictions,
     local_p50_err,
     local_p50_wape,
     local_p90_err,
     local_p90_wape,
     local_wmape,
+    update_dgl_graphs,
 )
 from udao_spark.utils.collaborators import PathWatcher, TypeAdvisor, get_data_sign
 from udao_spark.utils.params import ExtractParams, QType
@@ -155,11 +160,48 @@ def get_ag_data(
                 if not isinstance(dp, DataProcessor):
                     raise TypeError(f"Expected DataProcessor, got {type(dp)}")
                 template_plans = dp.feature_extractors["query_structure"].template_plans
-                new_template_plans, max_dist = add_dist_to_graphs(template_plans)
+                template_plans = update_dgl_graphs(
+                    template_plans,
+                    funcs=[
+                        add_super_node_to_graph,
+                        add_height_to_graph,
+                        add_dist_to_graph,
+                    ],
+                )
+                # max_dist = max([g.graph.edata["dist"].max().item()
+                #                 for g in template_plans.values()])
+                supper_gid = len(
+                    dp.feature_extractors["query_structure"].operation_types
+                )
                 for k, v in split_iterators.items():
                     split_iterators[
                         k
-                    ].query_structure_container.template_plans = new_template_plans
+                    ].query_structure_container.template_plans = template_plans
+                    operation_types = split_iterators[
+                        k
+                    ].query_structure_container.operation_types
+                    graph_features = split_iterators[
+                        k
+                    ].query_structure_container.graph_features
+                    other_graph_features = split_iterators[k].other_graph_features
+
+                    operation_types = add_new_rows_for_series(
+                        operation_types, supper_gid
+                    )
+                    graph_features = add_new_rows_for_df(
+                        graph_features, [0] * len(graph_features.columns)
+                    )
+                    other_graph_features["op_enc"].data = add_new_rows_for_df(
+                        other_graph_features["op_enc"].data,
+                        [0] * len(other_graph_features["op_enc"].data.columns),
+                    )
+                    split_iterators[
+                        k
+                    ].query_structure_container.operation_types = operation_types
+                    split_iterators[
+                        k
+                    ].query_structure_container.graph_features = graph_features
+                    split_iterators[k].other_graph_features = other_graph_features
 
             graph_np_dict = get_graph_embedding(
                 ms,

@@ -1,8 +1,5 @@
 from pathlib import Path
-from typing import List
 
-import numpy as np
-import pandas as pd
 import torch as th
 from udao.data.handler.data_processor import DataProcessor
 from udao.model.utils.utils import set_deterministic_torch
@@ -12,34 +9,18 @@ from udao_spark.data.utils import get_split_iterators
 from udao_spark.model.utils import (
     GraphTransformerMLPParams,
     MyLearningParams,
-    add_dist_to_graphs,
-    add_height_encoding,
-    add_super_node,
+    add_dist_to_graph,
+    add_height_to_graph,
+    add_new_rows_for_df,
+    add_new_rows_for_series,
+    add_super_node_to_graph,
     get_graph_transformer_mlp,
     train_and_dump,
+    update_dgl_graphs,
 )
 from udao_spark.utils.collaborators import PathWatcher, TypeAdvisor
 from udao_spark.utils.params import ExtractParams, get_graph_transformer_params
 from udao_trace.utils import PickleHandler
-
-
-# Function to add new row for each plan_id
-def add_new_rows_for_series(series: pd.Series, fixed_value: int) -> pd.Series:
-    df = series.groupby(level="plan_id").size().to_frame("operator_id")
-    df["value"] = fixed_value
-    new_entries = df.reset_index().set_index(["plan_id", "operator_id"]).value
-    new_series = pd.concat([series, new_entries]).sort_index()
-    new_series = new_series.loc[series.index.get_level_values("plan_id").unique()]
-    return new_series
-
-
-def add_new_rows_for_df(data: pd.DataFrame, fixed_values: List[float]) -> pd.DataFrame:
-    unique_plan_ids = data.index.get_level_values("plan_id").unique()
-    df = data.groupby(level="plan_id").size().to_frame("operator_id")
-    df[data.columns] = np.array(fixed_values)
-    new_entries = df.reset_index().set_index(["plan_id", "operator_id"])
-    return pd.concat([data, new_entries]).sort_index().loc[unique_plan_ids]
-
 
 logger.setLevel("INFO")
 if __name__ == "__main__":
@@ -82,16 +63,20 @@ if __name__ == "__main__":
     if not isinstance(dp, DataProcessor):
         raise TypeError(f"Expected DataProcessor, got {type(dp)}")
     template_plans = dp.feature_extractors["query_structure"].template_plans
-    template_plans = add_super_node(template_plans)
-    template_plans = add_height_encoding(template_plans)
+    template_plans = update_dgl_graphs(
+        template_plans,
+        funcs=[add_super_node_to_graph, add_height_to_graph, add_dist_to_graph],
+    )
     max_height = max(
         [g.graph.ndata["height"].max() for g in template_plans.values()]
     ).item()
-    new_template_plans, max_dist = add_dist_to_graphs(template_plans)
+    max_dist = max(
+        [g.graph.edata["dist"].max().item() for g in template_plans.values()]
+    )
     supper_gid = len(dp.feature_extractors["query_structure"].operation_types)
 
     for k, v in split_iterators.items():
-        split_iterators[k].query_structure_container.template_plans = new_template_plans
+        split_iterators[k].query_structure_container.template_plans = template_plans
         operation_types = split_iterators[k].query_structure_container.operation_types
         graph_features = split_iterators[k].query_structure_container.graph_features
         other_graph_features = split_iterators[k].other_graph_features
