@@ -89,7 +89,8 @@ def _get_graph_base_parser() -> ArgumentParser:
     # Others
     parser.add_argument("--num_workers", type=int, default=15,
                         help="non-debug only")
-    parser.add_argument("--op_groups", nargs="+", default=["type", "cbo", "op_enc"],
+    parser.add_argument("--op_groups", nargs="+",
+                        default=["type", "cbo", "op_enc", "hist", "bitmap"],
                         help="List of operation groups")
     # fmt: on
     return parser
@@ -102,6 +103,10 @@ def get_graph_avg_params() -> ArgumentParser:
     parser.add_argument("--output_size", type=int, default=32,
                         help="Embedder output size")
     parser.add_argument("--type_embedding_dim", type=int, default=8,
+                        help="Type embedding dimension")
+    parser.add_argument("--hist_embedding_dim", type=int, default=32,
+                        help="Type embedding dimension")
+    parser.add_argument("--bitmap_embedding_dim", type=int, default=32,
                         help="Type embedding dimension")
     parser.add_argument("--embedding_normalizer", type=str, default=None,
                         help="Embedding normalizer")
@@ -131,6 +136,10 @@ def get_tree_lstm_params() -> ArgumentParser:
                         help="Readout function")
     parser.add_argument("--type_embedding_dim", type=int, default=8,
                         help="Type embedding dimension")
+    parser.add_argument("--hist_embedding_dim", type=int, default=32,
+                        help="Type embedding dimension")
+    parser.add_argument("--bitmap_embedding_dim", type=int, default=32,
+                        help="Type embedding dimension")
     parser.add_argument("--embedding_normalizer", type=str, default=None,
                         help="Embedding normalizer")
     # Regressor parameters
@@ -157,6 +166,10 @@ def get_tree_cnn_params() -> ArgumentParser:
                         help="Readout function")
     parser.add_argument("--type_embedding_dim", type=int, default=8,
                         help="Type embedding dimension")
+    parser.add_argument("--hist_embedding_dim", type=int, default=32,
+                        help="Type embedding dimension")
+    parser.add_argument("--bitmap_embedding_dim", type=int, default=32,
+                        help="Type embedding dimension")
     parser.add_argument("--embedding_normalizer", type=str, default=None,
                         help="Embedding normalizer")
     # Regressor parameters
@@ -177,6 +190,10 @@ def get_qppnet_params() -> ArgumentParser:
     parser.add_argument("--output_size", type=int, default=32,
                         help="Embedder output size")
     parser.add_argument("--type_embedding_dim", type=int, default=8,
+                        help="Type embedding dimension")
+    parser.add_argument("--hist_embedding_dim", type=int, default=32,
+                        help="Type embedding dimension")
+    parser.add_argument("--bitmap_embedding_dim", type=int, default=32,
                         help="Type embedding dimension")
     parser.add_argument("--embedding_normalizer", type=str, default=None,
                         help="Embedding normalizer")
@@ -204,6 +221,10 @@ def get_graph_transformer_params() -> ArgumentParser:
                         choices=["mean", "max", "sum"],
                         help="Readout function")
     parser.add_argument("--type_embedding_dim", type=int, default=8,
+                        help="Type embedding dimension")
+    parser.add_argument("--hist_embedding_dim", type=int, default=32,
+                        help="Type embedding dimension")
+    parser.add_argument("--bitmap_embedding_dim", type=int, default=32,
                         help="Type embedding dimension")
     parser.add_argument("--embedding_normalizer", type=str, default=None,
                         help="Embedding normalizer")

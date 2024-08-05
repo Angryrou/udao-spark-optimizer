@@ -5,7 +5,8 @@ import dgl
 import torch as th
 import torch.nn as nn
 from dgl.udf import EdgeBatch, NodeBatch
-from udao.model import BaseGraphEmbedder
+
+from .base_graph_embedder import BaseGraphEmbedder
 
 
 class NeuralUnit(nn.Module):

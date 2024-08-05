@@ -4,9 +4,10 @@ from typing import Dict, List, Literal, Optional
 import dgl
 import torch as th
 import torch.nn as nn
-from udao.model import BaseGraphEmbedder
 from udao.model.embedders.layers.graph_transformer_layer import GraphTransformerLayer
 from udao.model.embedders.layers.multi_head_attention import AttentionLayerName
+
+from .base_graph_embedder import BaseGraphEmbedder
 
 ReadoutType = Literal["sum", "max", "mean"]
 

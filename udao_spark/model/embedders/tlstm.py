@@ -6,8 +6,9 @@ import numpy as np
 import torch as th
 import torch.nn as nn
 from dgl.udf import EdgeBatch, NodeBatch
-from udao.model import BaseGraphEmbedder
 from udao.model.embedders.graph_transformer import ReadoutType
+
+from .base_graph_embedder import BaseGraphEmbedder
 
 
 class ChildSumTreeLSTMCell(nn.Module):
