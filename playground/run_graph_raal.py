@@ -73,6 +73,8 @@ if __name__ == "__main__":
             "gtn_n_heads": params.gtn_n_heads,
             "readout": params.readout,
             "type_embedding_dim": params.type_embedding_dim,
+            "hist_embedding_dim": params.hist_embedding_dim,
+            "bitmap_embedding_dim": params.bitmap_embedding_dim,
             "embedding_normalizer": params.embedding_normalizer,
             "n_layers": params.n_layers,
             "hidden_dim": params.hidden_dim,

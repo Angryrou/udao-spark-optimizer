@@ -126,6 +126,8 @@ class GraphAverageMLPParams(UdaoParams):
     op_groups: List[str]
     output_size: int = 32
     type_embedding_dim: int = 8
+    hist_embedding_dim: int = 32
+    bitmap_embedding_dim: int = 32
     embedding_normalizer: Optional[str] = None
     # MLP
     n_layers: int = 2
@@ -158,6 +160,8 @@ class GraphAverageMLPParams(UdaoParams):
                 tuple(self.op_groups),
                 self.output_size,
                 self.type_embedding_dim,
+                self.hist_embedding_dim,
+                self.bitmap_embedding_dim,
                 self.embedding_normalizer,
                 self.n_layers,
                 self.hidden_dim,
@@ -178,6 +182,8 @@ def get_graph_avg_mlp(params: GraphAverageMLPParams) -> UdaoModel:
             "output_size": params.output_size,  # 32
             "op_groups": params.op_groups,  # ["type", "cbo", "op_enc"]
             "type_embedding_dim": params.type_embedding_dim,  # 8
+            "hist_embedding_dim": params.hist_embedding_dim,  # 32
+            "bitmap_embedding_dim": params.bitmap_embedding_dim,  # 32
             "embedding_normalizer": params.embedding_normalizer,  # None
         },
         regressor_params={
@@ -199,6 +205,8 @@ class GraphTransformerMLPParams(UdaoParams):
     gtn_n_heads: int = 2
     readout: str = "mean"
     type_embedding_dim: int = 8
+    hist_embedding_dim: int = 32
+    bitmap_embedding_dim: int = 32
     embedding_normalizer: Optional[str] = None
     attention_layer_name: AttentionLayerName = "GTN"
     # For QF (QueryFormer)
@@ -268,6 +276,8 @@ class GraphTransformerMLPParams(UdaoParams):
                 self.gtn_n_heads,
                 self.readout,
                 self.type_embedding_dim,
+                self.hist_embedding_dim,
+                self.bitmap_embedding_dim,
                 self.embedding_normalizer,
                 self.n_layers,
                 self.hidden_dim,
@@ -293,6 +303,8 @@ def get_graph_transformer_mlp(params: GraphTransformerMLPParams) -> UdaoModel:
             "readout": params.readout,  # "mean"
             "op_groups": params.op_groups,  # ["type", "cbo", "op_enc"]
             "type_embedding_dim": params.type_embedding_dim,  # 8
+            "hist_embedding_dim": params.hist_embedding_dim,  # 32
+            "bitmap_embedding_dim": params.bitmap_embedding_dim,  # 32
             "embedding_normalizer": params.embedding_normalizer,  # None
             "attention_layer_name": params.attention_layer_name,  # "GTN"
             "max_dist": params.max_dist,  # None
@@ -382,6 +394,8 @@ class TreeLSTMParams(UdaoParams):
     lstm_dropout: float = 0.0
     readout: str = "mean"
     type_embedding_dim: int = 8
+    hist_embedding_dim: int = 32
+    bitmap_embedding_dim: int = 32
     embedding_normalizer: Optional[str] = None
     # MLP
     n_layers: int = 2
@@ -418,6 +432,8 @@ class TreeLSTMParams(UdaoParams):
                 self.lstm_dropout,
                 self.readout,
                 self.type_embedding_dim,
+                self.hist_embedding_dim,
+                self.bitmap_embedding_dim,
                 self.embedding_normalizer,
                 self.n_layers,
                 self.hidden_dim,
@@ -441,6 +457,8 @@ def get_tree_lstm_mlp(params: TreeLSTMParams) -> UdaoModel:
             "readout": params.readout,  # "mean"
             "op_groups": params.op_groups,  # ["type", "cbo", "op_enc"]
             "type_embedding_dim": params.type_embedding_dim,  # 8
+            "hist_embedding_dim": params.hist_embedding_dim,  # 32
+            "bitmap_embedding_dim": params.bitmap_embedding_dim,  # 32
             "embedding_normalizer": params.embedding_normalizer,  # None
         },
         regressor_params={
@@ -460,6 +478,8 @@ class TreeCNNParams(UdaoParams):
     tcnn_hidden_dim: int = 256
     readout: str = "max"
     type_embedding_dim: int = 8
+    hist_embedding_dim: int = 32
+    bitmap_embedding_dim: int = 32
     embedding_normalizer: Optional[str] = None
     # MLP
     n_layers: int = 2
@@ -495,6 +515,8 @@ class TreeCNNParams(UdaoParams):
                 self.tcnn_hidden_dim,
                 self.readout,
                 self.type_embedding_dim,
+                self.hist_embedding_dim,
+                self.bitmap_embedding_dim,
                 self.embedding_normalizer,
                 self.n_layers,
                 self.hidden_dim,
@@ -523,6 +545,8 @@ def get_tree_cnn_mlp(params: TreeCNNParams) -> UdaoModel:
             "readout": params.readout,  # "mean"
             "op_groups": params.op_groups,  # ["type", "cbo", "op_enc"]
             "type_embedding_dim": params.type_embedding_dim,  # 8
+            "hist_embedding_dim": params.hist_embedding_dim,  # 32
+            "bitmap_embedding_dim": params.bitmap_embedding_dim,  # 32
             "embedding_normalizer": params.embedding_normalizer,  # None
         },
         regressor_params={
@@ -544,6 +568,8 @@ class QPPNetParams(UdaoParams):
     hidden_size: int = 128
     output_size: int = 32
     type_embedding_dim: int = 8
+    hist_embedding_dim: int = 32
+    bitmap_embedding_dim: int = 32
     embedding_normalizer: Optional[str] = None
 
     @classmethod
@@ -573,6 +599,8 @@ class QPPNetParams(UdaoParams):
                 tuple(self.op_groups),
                 self.output_size,
                 self.type_embedding_dim,
+                self.hist_embedding_dim,
+                self.bitmap_embedding_dim,
                 self.embedding_normalizer,
                 self.num_layers,
                 self.hidden_size,
@@ -592,6 +620,8 @@ def get_qppnet(params: QPPNetParams) -> UdaoModel:
             "output_size": params.output_size,  # 128
             "op_groups": params.op_groups,  # ["type", "cbo", "op_enc"]
             "type_embedding_dim": params.type_embedding_dim,  # 8
+            "hist_embedding_dim": params.hist_embedding_dim,  # 32
+            "bitmap_embedding_dim": params.bitmap_embedding_dim,  # 32
             "embedding_normalizer": params.embedding_normalizer,  # None
             "num_layers": params.num_layers,  # 5
             "hidden_size": params.hidden_size,  # 128
