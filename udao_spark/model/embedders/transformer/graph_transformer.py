@@ -37,7 +37,7 @@ class GraphTransformer(th.nn.Module):
 
         self.final_readout = final_readout
 
-    def forward(self, input: Graph) -> th.Tensor:
+    def forward(self, graph: Graph) -> th.Tensor:
         """Compute the forward pass of the Graph Transformer.
 
         Args:
@@ -49,10 +49,10 @@ class GraphTransformer(th.nn.Module):
         # apply preprocessing layers
         if self.preprocess_layers:
             for pre_process_layer in self.preprocess_layers:
-                input = pre_process_layer(input)
+                graph = pre_process_layer(graph)
 
         # apply forward layers
         for layer in self.layers:
-            input = layer(input)
+            graph = layer(graph)
 
-        return self.final_readout(input)
+        return self.final_readout(graph)
