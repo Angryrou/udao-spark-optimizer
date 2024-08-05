@@ -107,7 +107,7 @@ jpath=/opt/hex_users/$USER/spark-3.2.1-hadoop3.3.0/jdk1.8
 5. expose table samples within the pyspark session.
 ```python
 # within pyspark
-database_name = "tpch_100" # or "tpch_100"
+database_name = "tpch_100" # or "tpcds_100"
 sql(f"USE {database_name}")
 tables = sql(f"SHOW TABLES").toPandas()
 table_names = tables['tableName'].tolist()
@@ -131,19 +131,22 @@ def get_table_row_count(table_name):
 result = {}
 for table_name in table_names:
     row_count = get_table_row_count(table_name)
-    if row_count > 1000:
-        query = f"""
-        SELECT * FROM {table_name}
-        TABLESAMPLE (1000 ROWS)
-        """
-        result[table_name] = sql(query).toPandas()
-    else:
-        df = sql(f"SELECT * FROM {table_name}")
-        result[table_name] = df.sample(withReplacement=True, fraction=1001 / row_count).limit(1000).toPandas()
+    df = sql(f"SELECT * FROM {table_name}")
+    pd_df = df.sample(withReplacement=True, fraction=1200 / row_count).toPandas()
+    if pd_df.shape[0] < 1000:
+        raise ValueError(f"Table {table_name} has less than 1000 rows, only {result[table_name].shape[0]} rows are sampled.")
+    result[table_name] = pd_df.sample(n=1000)
+
+result = {
+    table_name: result[table_name].reset_index(drop=True)
+    for table_name in result
+}
 
 # Save the samples to a pickle file
 import pickle
 with open(f"/opt/hex_users/hex1/chenghao/{database_name}_samples.pkl", "wb") as f:
     pickle.dump(result, f)
-
+# # for tpcds_100
+# with open(f"/opt/hex_users/hex2/chenghao/{database_name}_samples.pkl", "wb") as f:
+#     pickle.dump(result, f)
 ```
