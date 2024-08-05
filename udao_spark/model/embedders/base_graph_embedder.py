@@ -90,7 +90,7 @@ class BaseGraphEmbedder(BaseEmbedder, ABC):
                     "n_op_types and type_embedding_dim must be provided "
                     "if `type` is included in op_groups"
                 )
-            self.op_type_embedder = nn.Embedding(
+            self.op_embedder = nn.Embedding(
                 net_params.n_op_types, net_params.type_embedding_dim
             )
             self.input_size += net_params.type_embedding_dim
@@ -139,7 +139,7 @@ class BaseGraphEmbedder(BaseEmbedder, ABC):
         """
         op_list = []
         if self.op_type:
-            op_list.append(self.op_type_embedder(g.ndata["op_gid"]))
+            op_list.append(self.op_embedder(g.ndata["op_gid"]))
         if self.op_cbo:
             op_list.append(g.ndata["cbo"])
         if self.op_enc:
