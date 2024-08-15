@@ -60,6 +60,8 @@ if __name__ == "__main__":
             "op_groups": params.op_groups,
             "output_size": params.output_size,
             "type_embedding_dim": params.type_embedding_dim,
+            "hist_embedding_dim": params.hist_embedding_dim,
+            "bitmap_embedding_dim": params.bitmap_embedding_dim,
             "embedding_normalizer": params.embedding_normalizer,
             "num_layers": params.num_layers,
             "hidden_size": params.hidden_size,

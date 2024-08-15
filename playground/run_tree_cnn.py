@@ -61,6 +61,8 @@ if __name__ == "__main__":
             "output_size": params.output_size,
             "tcnn_hidden_dim": params.tcnn_hidden_dim,
             "type_embedding_dim": params.type_embedding_dim,
+            "hist_embedding_dim": params.hist_embedding_dim,
+            "bitmap_embedding_dim": params.bitmap_embedding_dim,
             "n_layers": params.n_layers,
             "hidden_dim": params.hidden_dim,
             "dropout": params.dropout,

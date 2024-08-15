@@ -1,4 +1,4 @@
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -21,6 +21,10 @@ from udao.data.preprocessors.normalize_preprocessor import FitTransformProtocol
 from udao_trace.configuration import SparkConf
 
 from ...utils.collaborators import TypeAdvisor
+from ..extractors.predicate_statistics_extractor import (
+    PredicateBitmapExtractor,
+    PredicateHistogramExtractor,
+)
 from ..extractors.query_structure_extractor import (
     QueryStructureExtractor2,
     get_extract_operations_from_serialized_json,
@@ -33,34 +37,81 @@ def create_udao_data_processor(
     lpe_size: int,
     vec_size: int,
     tensor_dtypes: th.dtype = th.float32,
+    hists: Optional[Dict[str, np.ndarray]] = None,
+    table_samples: Optional[Dict[str, pd.DataFrame]] = None,
 ) -> DataProcessor:
-    data_processor_getter = create_data_processor(QueryPlanIterator, "op_enc")
     tabular_columns = ta.get_tabular_columns()
     tabular_columns_scaler = MinMaxScalerWithTrainedTheta(tabular_columns, sc)
-    return data_processor_getter(
-        tensor_dtypes=tensor_dtypes,
-        tabular_features=FeaturePipeline(
-            extractor=TabularFeatureExtractor(columns=tabular_columns),
-            preprocessors=[NormalizePreprocessor(tabular_columns_scaler)],
-        ),
-        objectives=FeaturePipeline(
-            extractor=TabularFeatureExtractor(columns=ta.get_objectives()),
-        ),
-        query_structure=FeaturePipeline(
-            extractor=QueryStructureExtractor2(
-                ta=ta, positional_encoding_size=lpe_size
+    if hists is not None and table_samples is not None:
+        data_processor_getter = create_data_processor(
+            QueryPlanIterator, "op_enc", "hist", "bitmap"
+        )
+        return data_processor_getter(
+            tensor_dtypes=tensor_dtypes,
+            tabular_features=FeaturePipeline(
+                extractor=TabularFeatureExtractor(columns=tabular_columns),
+                preprocessors=[NormalizePreprocessor(tabular_columns_scaler)],
             ),
-            preprocessors=[NormalizePreprocessor(MinMaxScaler(), "graph_features")],
-        ),
-        op_enc=FeaturePipeline(
-            extractor=PredicateEmbeddingExtractor(
-                Word2VecEmbedder(Word2VecParams(vec_size=vec_size)),
-                extract_operations=get_extract_operations_from_serialized_json(
-                    ta.q_type
+            objectives=FeaturePipeline(
+                extractor=TabularFeatureExtractor(columns=ta.get_objectives()),
+            ),
+            query_structure=FeaturePipeline(
+                extractor=QueryStructureExtractor2(
+                    ta=ta, positional_encoding_size=lpe_size
+                ),
+                preprocessors=[NormalizePreprocessor(MinMaxScaler(), "graph_features")],
+            ),
+            op_enc=FeaturePipeline(
+                extractor=PredicateEmbeddingExtractor(
+                    Word2VecEmbedder(Word2VecParams(vec_size=vec_size)),
+                    extract_operations=get_extract_operations_from_serialized_json(
+                        ta.q_type
+                    ),
                 ),
             ),
-        ),
-    )
+            hist=FeaturePipeline(
+                extractor=PredicateHistogramExtractor(
+                    hists=hists,
+                    extract_operations=get_extract_operations_from_serialized_json(
+                        ta.q_type
+                    ),
+                ),
+            ),
+            bitmap=FeaturePipeline(
+                extractor=PredicateBitmapExtractor(
+                    table_samples=table_samples,
+                    extract_operations=get_extract_operations_from_serialized_json(
+                        ta.q_type
+                    ),
+                ),
+            ),
+        )
+    else:
+        data_processor_getter = create_data_processor(QueryPlanIterator, "op_enc")
+        return data_processor_getter(
+            tensor_dtypes=tensor_dtypes,
+            tabular_features=FeaturePipeline(
+                extractor=TabularFeatureExtractor(columns=tabular_columns),
+                preprocessors=[NormalizePreprocessor(tabular_columns_scaler)],
+            ),
+            objectives=FeaturePipeline(
+                extractor=TabularFeatureExtractor(columns=ta.get_objectives()),
+            ),
+            query_structure=FeaturePipeline(
+                extractor=QueryStructureExtractor2(
+                    ta=ta, positional_encoding_size=lpe_size
+                ),
+                preprocessors=[NormalizePreprocessor(MinMaxScaler(), "graph_features")],
+            ),
+            op_enc=FeaturePipeline(
+                extractor=PredicateEmbeddingExtractor(
+                    Word2VecEmbedder(Word2VecParams(vec_size=vec_size)),
+                    extract_operations=get_extract_operations_from_serialized_json(
+                        ta.q_type
+                    ),
+                ),
+            ),
+        )
 
 
 class MinMaxScalerWithTrainedTheta(FitTransformProtocol):

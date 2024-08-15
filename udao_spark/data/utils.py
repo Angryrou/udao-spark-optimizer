@@ -351,6 +351,8 @@ def extract_and_save_iterators(
     ta: TypeAdvisor,
     tensor_dtypes: th.dtype,
     cache_file: str = "split_iterators.pkl",
+    hists: Optional[Dict[str, np.ndarray]] = None,
+    table_samples: Optional[Dict[str, pd.DataFrame]] = None,
 ) -> Dict[DatasetType, BaseIterator]:
     params = pw.extract_params
     if Path(f"{pw.cc_extract_prefix}/{cache_file}").exists():
@@ -370,6 +372,8 @@ def extract_and_save_iterators(
         lpe_size=params.lpe_size,
         vec_size=params.vec_size,
         tensor_dtypes=tensor_dtypes,
+        hists=hists,
+        table_samples=table_samples,
     )
     data_handler = DataHandler(
         df.reset_index(),
@@ -398,14 +402,33 @@ def get_split_iterators(
     pw: PathWatcher,
     ta: TypeAdvisor,
     tensor_dtypes: th.dtype,
+    hists: Optional[Dict[str, np.ndarray]] = None,
+    table_samples: Optional[Dict[str, pd.DataFrame]] = None,
 ) -> Dict[DatasetType, BaseIterator]:
     cache_file = "split_iterators.pkl"
+
+    if hists is None:
+        df = pd.read_csv(
+            f"{pw.base_dir}/assets/data_stats/regrouped_{pw.benchmark}_hist.csv"
+        )
+        hists = {
+            row["column"]: np.array(list(map(float, row["hists"][1:-1].split(", "))))
+            for _, row in df.iterrows()
+        }
+    if table_samples is None:
+        table_samples = PickleHandler.load(
+            header=f"{pw.base_dir}/assets/data_stats",
+            file_name=f"{pw.benchmark}_100_samples.pkl",
+        )  # type: ignore
+
     if not Path(f"{pw.cc_extract_prefix}/{cache_file}").exists():
         return extract_and_save_iterators(
             pw=pw,
             ta=ta,
             tensor_dtypes=tensor_dtypes,
             cache_file=cache_file,
+            hists=hists,
+            table_samples=table_samples,
         )
     split_iterators = PickleHandler.load(pw.cc_extract_prefix, cache_file)
     if not isinstance(split_iterators, Dict):

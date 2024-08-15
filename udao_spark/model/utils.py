@@ -25,7 +25,7 @@ from udao.data import BaseIterator, QueryPlanIterator
 from udao.data.iterators.query_plan_iterator import QueryPlanInput
 from udao.data.utils.query_plan import QueryPlanStructure
 from udao.data.utils.utils import DatasetType
-from udao.model import MLP, GraphAverager, UdaoModel
+from udao.model import MLP, UdaoModel
 from udao.model.embedders.layers.multi_head_attention import AttentionLayerName
 from udao.model.module import LearningParams
 from udao.model.utils.losses import WMAPELoss
@@ -39,10 +39,7 @@ from ..data.utils import checkpoint_model_structure
 from ..utils.collaborators import PathWatcher, TypeAdvisor
 from ..utils.logging import logger
 from ..utils.params import ExtractParams, QType, UdaoParams
-from .embedders.graph_transformer import GraphTransformer
-from .embedders.qppnet import QPPNet
-from .embedders.tcnn import TreeCNN
-from .embedders.tlstm import TreeLSTM
+from .embedders import GraphAverager, GraphTransformer, QPPNet, TreeCNN, TreeLSTM
 from .regressors.qppnet_out import QPPNetOut
 
 
@@ -126,6 +123,8 @@ class GraphAverageMLPParams(UdaoParams):
     op_groups: List[str]
     output_size: int = 32
     type_embedding_dim: int = 8
+    hist_embedding_dim: Optional[int] = None
+    bitmap_embedding_dim: Optional[int] = None
     embedding_normalizer: Optional[str] = None
     # MLP
     n_layers: int = 2
@@ -152,18 +151,27 @@ class GraphAverageMLPParams(UdaoParams):
         }
 
     def hash(self) -> str:
-        attributes_tuple = str(
-            (
-                str(self.iterator_shape),
-                tuple(self.op_groups),
-                self.output_size,
-                self.type_embedding_dim,
-                self.embedding_normalizer,
-                self.n_layers,
-                self.hidden_dim,
-                self.dropout,
-            )
-        ).encode("utf-8")
+        elements = [
+            str(self.iterator_shape),
+            tuple(self.op_groups),
+            self.output_size,
+            self.type_embedding_dim,
+        ]
+
+        # Conditionally add elements if they are not None
+        if self.hist_embedding_dim is not None:
+            elements.append(self.hist_embedding_dim)
+
+        if self.bitmap_embedding_dim is not None:
+            elements.append(self.bitmap_embedding_dim)
+
+        # Continue adding the rest of the elements
+        elements.extend(
+            [self.embedding_normalizer, self.n_layers, self.hidden_dim, self.dropout]
+        )
+
+        # Convert the list to a tuple, then to string, and encode it
+        attributes_tuple = str(tuple(elements)).encode("utf-8")
         sha256_hash = hashlib.sha256(attributes_tuple)
         hex12 = sha256_hash.hexdigest()[:12]
         return "graph_avg_" + hex12
@@ -178,6 +186,8 @@ def get_graph_avg_mlp(params: GraphAverageMLPParams) -> UdaoModel:
             "output_size": params.output_size,  # 32
             "op_groups": params.op_groups,  # ["type", "cbo", "op_enc"]
             "type_embedding_dim": params.type_embedding_dim,  # 8
+            "hist_embedding_dim": params.hist_embedding_dim,  # 32
+            "bitmap_embedding_dim": params.bitmap_embedding_dim,  # 32
             "embedding_normalizer": params.embedding_normalizer,  # None
         },
         regressor_params={
@@ -199,6 +209,8 @@ class GraphTransformerMLPParams(UdaoParams):
     gtn_n_heads: int = 2
     readout: str = "mean"
     type_embedding_dim: int = 8
+    hist_embedding_dim: int = 32
+    bitmap_embedding_dim: int = 32
     embedding_normalizer: Optional[str] = None
     attention_layer_name: AttentionLayerName = "GTN"
     # For QF (QueryFormer)
@@ -258,22 +270,31 @@ class GraphTransformerMLPParams(UdaoParams):
         }
 
     def hash(self) -> str:
-        attributes_tuple = str(
-            (
-                str(self.iterator_shape),
-                tuple(self.op_groups),
-                self.output_size,
-                self.pos_encoding_dim,
-                self.gtn_n_layers,
-                self.gtn_n_heads,
-                self.readout,
-                self.type_embedding_dim,
-                self.embedding_normalizer,
-                self.n_layers,
-                self.hidden_dim,
-                self.dropout,
-            )
-        ).encode("utf-8")
+        elements = [
+            str(self.iterator_shape),
+            tuple(self.op_groups),
+            self.output_size,
+            self.pos_encoding_dim,
+            self.gtn_n_layers,
+            self.gtn_n_heads,
+            self.readout,
+            self.type_embedding_dim,
+        ]
+
+        # Conditionally add elements if they are not None
+        if self.hist_embedding_dim is not None:
+            elements.append(self.hist_embedding_dim)
+
+        if self.bitmap_embedding_dim is not None:
+            elements.append(self.bitmap_embedding_dim)
+
+        # Continue adding the rest of the elements
+        elements.extend(
+            [self.embedding_normalizer, self.n_layers, self.hidden_dim, self.dropout]
+        )
+
+        # Convert the list to a tuple, then to string, and encode it
+        attributes_tuple = str(tuple(elements)).encode("utf-8")
         sha256_hash = hashlib.sha256(attributes_tuple)
         hex12 = sha256_hash.hexdigest()[:12]
         return f"graph_{self.attention_layer_name.lower()}_" + hex12
@@ -293,6 +314,8 @@ def get_graph_transformer_mlp(params: GraphTransformerMLPParams) -> UdaoModel:
             "readout": params.readout,  # "mean"
             "op_groups": params.op_groups,  # ["type", "cbo", "op_enc"]
             "type_embedding_dim": params.type_embedding_dim,  # 8
+            "hist_embedding_dim": params.hist_embedding_dim,  # 32
+            "bitmap_embedding_dim": params.bitmap_embedding_dim,  # 32
             "embedding_normalizer": params.embedding_normalizer,  # None
             "attention_layer_name": params.attention_layer_name,  # "GTN"
             "max_dist": params.max_dist,  # None
@@ -382,6 +405,8 @@ class TreeLSTMParams(UdaoParams):
     lstm_dropout: float = 0.0
     readout: str = "mean"
     type_embedding_dim: int = 8
+    hist_embedding_dim: int = 32
+    bitmap_embedding_dim: int = 32
     embedding_normalizer: Optional[str] = None
     # MLP
     n_layers: int = 2
@@ -409,21 +434,31 @@ class TreeLSTMParams(UdaoParams):
         }
 
     def hash(self) -> str:
-        attributes_tuple = str(
-            (
-                str(self.iterator_shape),
-                tuple(self.op_groups),
-                self.output_size,
-                self.lstm_hidden_dim,
-                self.lstm_dropout,
-                self.readout,
-                self.type_embedding_dim,
-                self.embedding_normalizer,
-                self.n_layers,
-                self.hidden_dim,
-                self.dropout,
-            )
-        ).encode("utf-8")
+        elements = [
+            str(self.iterator_shape),
+            tuple(self.op_groups),
+            self.output_size,
+            self.lstm_hidden_dim,
+            self.lstm_dropout,
+            self.readout,
+            self.type_embedding_dim,
+        ]
+
+        # Conditionally add elements if they are not None
+        if self.hist_embedding_dim is not None:
+            elements.append(self.hist_embedding_dim)
+
+        if self.bitmap_embedding_dim is not None:
+            elements.append(self.bitmap_embedding_dim)
+
+        # Continue adding the rest of the elements
+        elements.extend(
+            [self.embedding_normalizer, self.n_layers, self.hidden_dim, self.dropout]
+        )
+
+        # Convert the list to a tuple, then to string, and encode it
+        attributes_tuple = str(tuple(elements)).encode("utf-8")
+
         sha256_hash = hashlib.sha256(attributes_tuple)
         hex12 = sha256_hash.hexdigest()[:12]
         return "tree_lstm_" + hex12
@@ -441,6 +476,8 @@ def get_tree_lstm_mlp(params: TreeLSTMParams) -> UdaoModel:
             "readout": params.readout,  # "mean"
             "op_groups": params.op_groups,  # ["type", "cbo", "op_enc"]
             "type_embedding_dim": params.type_embedding_dim,  # 8
+            "hist_embedding_dim": params.hist_embedding_dim,  # 32
+            "bitmap_embedding_dim": params.bitmap_embedding_dim,  # 32
             "embedding_normalizer": params.embedding_normalizer,  # None
         },
         regressor_params={
@@ -460,6 +497,8 @@ class TreeCNNParams(UdaoParams):
     tcnn_hidden_dim: int = 256
     readout: str = "max"
     type_embedding_dim: int = 8
+    hist_embedding_dim: int = 32
+    bitmap_embedding_dim: int = 32
     embedding_normalizer: Optional[str] = None
     # MLP
     n_layers: int = 2
@@ -487,20 +526,30 @@ class TreeCNNParams(UdaoParams):
         }
 
     def hash(self) -> str:
-        attributes_tuple = str(
-            (
-                str(self.iterator_shape),
-                tuple(self.op_groups),
-                self.output_size,
-                self.tcnn_hidden_dim,
-                self.readout,
-                self.type_embedding_dim,
-                self.embedding_normalizer,
-                self.n_layers,
-                self.hidden_dim,
-                self.dropout,
-            )
-        ).encode("utf-8")
+        elements = [
+            str(self.iterator_shape),
+            tuple(self.op_groups),
+            self.output_size,
+            self.tcnn_hidden_dim,
+            self.readout,
+            self.type_embedding_dim,
+        ]
+
+        # Conditionally add elements if they are not None
+        if self.hist_embedding_dim is not None:
+            elements.append(self.hist_embedding_dim)
+
+        if self.bitmap_embedding_dim is not None:
+            elements.append(self.bitmap_embedding_dim)
+
+        # Continue adding the rest of the elements
+        elements.extend(
+            [self.embedding_normalizer, self.n_layers, self.hidden_dim, self.dropout]
+        )
+
+        # Convert the list to a tuple, then to string, and encode it
+        attributes_tuple = str(tuple(elements)).encode("utf-8")
+
         sha256_hash = hashlib.sha256(attributes_tuple)
         hex12 = sha256_hash.hexdigest()[:12]
         return "tree_cnn_" + hex12
@@ -523,6 +572,8 @@ def get_tree_cnn_mlp(params: TreeCNNParams) -> UdaoModel:
             "readout": params.readout,  # "mean"
             "op_groups": params.op_groups,  # ["type", "cbo", "op_enc"]
             "type_embedding_dim": params.type_embedding_dim,  # 8
+            "hist_embedding_dim": params.hist_embedding_dim,  # 32
+            "bitmap_embedding_dim": params.bitmap_embedding_dim,  # 32
             "embedding_normalizer": params.embedding_normalizer,  # None
         },
         regressor_params={
@@ -544,6 +595,8 @@ class QPPNetParams(UdaoParams):
     hidden_size: int = 128
     output_size: int = 32
     type_embedding_dim: int = 8
+    hist_embedding_dim: int = 32
+    bitmap_embedding_dim: int = 32
     embedding_normalizer: Optional[str] = None
 
     @classmethod
@@ -567,17 +620,32 @@ class QPPNetParams(UdaoParams):
         }
 
     def hash(self) -> str:
-        attributes_tuple = str(
-            (
-                str(self.iterator_shape),
-                tuple(self.op_groups),
-                self.output_size,
-                self.type_embedding_dim,
+        elements = [
+            str(self.iterator_shape),
+            tuple(self.op_groups),
+            self.output_size,
+            self.type_embedding_dim,
+        ]
+
+        # Conditionally add elements if they are not None
+        if self.hist_embedding_dim is not None:
+            elements.append(self.hist_embedding_dim)
+
+        if self.bitmap_embedding_dim is not None:
+            elements.append(self.bitmap_embedding_dim)
+
+        # Continue adding the rest of the elements
+        elements.extend(
+            [
                 self.embedding_normalizer,
                 self.num_layers,
                 self.hidden_size,
-            )
-        ).encode("utf-8")
+            ]
+        )
+
+        # Convert the list to a tuple, then to string, and encode it
+        attributes_tuple = str(tuple(elements)).encode("utf-8")
+
         sha256_hash = hashlib.sha256(attributes_tuple)
         hex12 = sha256_hash.hexdigest()[:12]
         return "qppnet_" + hex12
@@ -592,6 +660,8 @@ def get_qppnet(params: QPPNetParams) -> UdaoModel:
             "output_size": params.output_size,  # 128
             "op_groups": params.op_groups,  # ["type", "cbo", "op_enc"]
             "type_embedding_dim": params.type_embedding_dim,  # 8
+            "hist_embedding_dim": params.hist_embedding_dim,  # 32
+            "bitmap_embedding_dim": params.bitmap_embedding_dim,  # 32
             "embedding_normalizer": params.embedding_normalizer,  # None
             "num_layers": params.num_layers,  # 5
             "hidden_size": params.hidden_size,  # 128

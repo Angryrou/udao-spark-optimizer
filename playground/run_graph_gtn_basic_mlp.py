@@ -35,6 +35,8 @@ class GraphTransformerBasicMLPParams(UdaoParams):
     gtn_n_heads: int = 2
     readout: str = "mean"
     type_embedding_dim: int = 8
+    hist_embedding_dim: int = 32
+    bitmap_embedding_dim: int = 32
     embedding_normalizer: Optional[str] = None
     attention_layer_name: AttentionLayerName = "GTN"
     gtn_dropout: float = 0.0
@@ -107,6 +109,8 @@ class GraphTransformerBasicMLPParams(UdaoParams):
                 self.gtn_n_heads,
                 self.readout,
                 self.type_embedding_dim,
+                self.hist_embedding_dim,
+                self.bitmap_embedding_dim,
                 self.embedding_normalizer,
                 self.gtn_dropout,
                 self.n_layers,
@@ -135,8 +139,10 @@ def get_graph_transformer_basic_mlp(
             "n_heads": params.gtn_n_heads,  # 2
             "hidden_dim": params.output_size,  # same as out_size
             "readout": params.readout,  # "mean"
-            "op_groups": params.op_groups,  # ["type", "cbo", "op_enc"]
+            "op_groups": params.op_groups,  # all types
             "type_embedding_dim": params.type_embedding_dim,  # 8
+            "hist_embedding_dim": params.hist_embedding_dim,  # 32
+            "bitmap_embedding_dim": params.bitmap_embedding_dim,  # 32
             "embedding_normalizer": params.embedding_normalizer,  # None
             "attention_layer_name": params.attention_layer_name,  # "GTN"
             "dropout": params.gtn_dropout,
@@ -212,6 +218,8 @@ if __name__ == "__main__":
             "gtn_n_heads": params.gtn_n_heads,
             "readout": params.readout,
             "type_embedding_dim": params.type_embedding_dim,
+            "hist_embedding_dim": params.hist_embedding_dim,
+            "bitmap_embedding_dim": params.bitmap_embedding_dim,
             "embedding_normalizer": params.embedding_normalizer,
             "gtn_dropout": params.gtn_dropout,
             "n_layers": params.n_layers,
