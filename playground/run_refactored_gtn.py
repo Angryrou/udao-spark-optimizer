@@ -15,7 +15,11 @@ from udao.utils.logging import logger
 
 from udao_spark.data.utils import get_split_iterators
 from udao_spark.model.embedders.transformer import model_factory
-from udao_spark.model.utils import MyLearningParams, train_and_dump
+from udao_spark.model.utils import (
+    GraphTransformerMLPParams,
+    MyLearningParams,
+    train_and_dump,
+)
 from udao_spark.utils.collaborators import PathWatcher, TypeAdvisor
 from udao_spark.utils.params import ExtractParams
 
@@ -139,6 +143,23 @@ def main(
         type_embedding_dim=type_embedding_dim,
     )
 
+    model_params = GraphTransformerMLPParams.from_dict(
+        {
+            "iterator_shape": split_iterators["train"].shape,
+            "op_groups": op_groups,
+            "output_size": output_size,
+            "pos_encoding_dim": pos_encoding_dim,
+            "gtn_n_layers": gtn_n_layers,
+            "gtn_n_heads": gtn_n_heads,
+            "readout": readout,
+            "type_embedding_dim": type_embedding_dim,
+            "embedding_normalizer": embedding_normalizer,
+            "n_layers": n_layers,
+            "hidden_dim": hidden_dim,
+            "dropout": dropout,
+        }
+    )
+
     mlp_params = MLP.Params(
         input_embedding_dim=output_size,
         input_features_dim=len(iterator_shape.feature_names),
@@ -199,7 +220,7 @@ def main(
         model=model,
         split_iterators=split_iterators,
         extract_params=extract_params,
-        model_params=mlp_params,  # type: ignore
+        model_params=model_params,  # type: ignore
         learning_params=learning_params,
         params=params,  # type: ignore
         device=device,
