@@ -27,7 +27,6 @@ app = typer.Typer(
     rich_markup_mode="rich",
     help="CLI to train and evalute a graph embedder + regressor model on a query benchmark.",  # noqa: E501
 )
-logger.setLevel("INFO")
 
 
 @app.command()
@@ -235,3 +234,8 @@ class dotdict(dict):
     __getattr__ = dict.get
     __setattr__ = dict.__setitem__  # type: ignore
     __delattr__ = dict.__delitem__  # type: ignore
+
+
+logger.setLevel("INFO")
+if __name__ == "__main__":
+    app()
