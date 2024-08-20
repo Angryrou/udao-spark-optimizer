@@ -5,11 +5,11 @@ from typing import Union
 import dgl
 import torch as th
 import torch_geometric
-from torch import nn as nn
 from udao.model.embedders.layers.multi_head_attention import MultiHeadAttentionLayer
 
 from udao_spark.model.embedders.transformer.graph_transformer import (
     GraphFeatureExtractor,
+    PreProcessingLayer,
 )
 from udao_spark.model.embedders.transformer.layers import (
     base_graph_transformer_layer as udao_spark_embedders_base_layers,
@@ -64,7 +64,7 @@ def get_multihead_attention_layer(
 def get_concatenate_features_layer(
     op_embedder: th.nn.Module, op_type: bool, op_cbo: bool, op_enc: bool
 ) -> GraphFeatureExtractor:
-    """Creates a concatenation layer
+    """Create a concatenation layer
 
     Args:
         op_embedder (th.nn.Module): Linear layer
@@ -85,3 +85,28 @@ def get_concatenate_features_layer(
         return op_tensor
 
     return concatenate_op_features
+
+
+def get_positional_encoding_layer(
+    positional_embedder: th.nn.Module,
+) -> PreProcessingLayer:
+    """
+    Create a positional encoding layer.
+    Parameters
+    ----------
+    positional_embedder: Linear layer
+
+    Returns
+    th.Tensor with extra features representing the positional encoding.
+    -------
+
+    """
+
+    def positional_encoding(g: Graph, h: th.Tensor) -> th.Tensor:
+        # currently supports only DGL graph
+        if g.ndata["pos_enc"]:
+            h_lap_pos_enc = positional_embedder(g.ndata["pos_enc"])
+            h = h + h_lap_pos_enc
+        return h
+
+    return positional_encoding

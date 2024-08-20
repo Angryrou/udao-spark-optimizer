@@ -11,6 +11,7 @@ from torch import nn as nn
 Graph = Union[dgl.DGLGraph, torch_geometric.data.Data]  # type: ignore
 Readout = Callable[[Graph], th.Tensor]
 GraphFeatureExtractor = Callable[[Graph], th.Tensor]
+PreProcessingLayer = Union[th.nn.Module, Callable[[Graph, th.Tensor], th.Tensor]]
 
 
 class GraphTransformer(th.nn.Module):
@@ -19,7 +20,7 @@ class GraphTransformer(th.nn.Module):
     def __init__(
         self,
         feature_extractor: GraphFeatureExtractor,
-        preprocess_layers: Optional[List[th.nn.Module]],
+        preprocess_layers: Optional[List[PreProcessingLayer]],
         layers: List[th.nn.Module],
         final_readout: Readout,
     ):
@@ -39,7 +40,7 @@ class GraphTransformer(th.nn.Module):
         super().__init__()
         self.feature_extractor = feature_extractor
 
-        self.preprocess_layers: list[nn.Module]
+        self.preprocess_layers: list[PreProcessingLayer]
         if preprocess_layers:
             if isinstance(preprocess_layers, nn.Module):
                 self.preprocess_layers = [preprocess_layers]
@@ -64,7 +65,7 @@ class GraphTransformer(th.nn.Module):
         # apply preprocessing layers
         if self.preprocess_layers:
             for pre_process_layer in self.preprocess_layers:
-                h = pre_process_layer(h)
+                h = pre_process_layer(graph, h)
 
         # apply forward layers
         for layer in self.layers:

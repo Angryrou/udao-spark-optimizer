@@ -16,6 +16,7 @@ def create_graph_transformer(
     output_size: int,
     n_layers: int,
     n_heads: int,
+    pos_encoding_dim: Optional[int],
     n_op_types: Optional[int],
     op_type: bool,
     op_cbo: bool,
@@ -40,10 +41,20 @@ def create_graph_transformer(
     )
 
     # preprocessing layer of input features
+    pre_processing_layers: list[udao_graph_transformer.PreProcessingLayer]
     # IMPORTANT: the dimension of type must now be added to the input dimension.
     if op_type:
         in_dim += type_embedding_dim
     embedding_h = nn.Linear(in_dim, hidden_dim)
+    pre_processing_layers = [embedding_h]
+
+    # positional encoding
+    if pos_encoding_dim:
+        embedding_lap_pos_enc = nn.Linear(pos_encoding_dim, hidden_dim)
+        positional_encoding_layer = udao_layer_factory.get_positional_encoding_layer(
+            embedding_lap_pos_enc
+        )
+        pre_processing_layers.append(positional_encoding_layer)
 
     # functional for final readout to address pass the "h" of `mean_nodes`
     def final_readout(graph: udao_graph_transformer.Graph) -> th.Tensor:
@@ -63,7 +74,7 @@ def create_graph_transformer(
         layers.append(layer)
     graph_model = udao_graph_transformer.GraphTransformer(
         feature_extractor,
-        preprocess_layers=[embedding_h],
+        preprocess_layers=pre_processing_layers,
         layers=layers,
         final_readout=final_readout,
     )
