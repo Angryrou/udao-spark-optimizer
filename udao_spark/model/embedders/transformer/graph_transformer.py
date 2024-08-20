@@ -65,7 +65,10 @@ class GraphTransformer(th.nn.Module):
         # apply preprocessing layers
         if self.preprocess_layers:
             for pre_process_layer in self.preprocess_layers:
-                h = pre_process_layer(graph, h)
+                if isinstance(pre_process_layer, th.nn.Module):
+                    h = pre_process_layer(h)
+                else:
+                    h = pre_process_layer(graph, h)
 
         # apply forward layers
         for layer in self.layers:
