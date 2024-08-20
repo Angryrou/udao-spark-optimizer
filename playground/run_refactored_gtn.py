@@ -139,6 +139,7 @@ def main(
         op_cbo=True if "cbo" in op_groups else False,
         op_enc=True if "op_enc" in op_groups else False,
         type_embedding_dim=type_embedding_dim,
+        pos_encoding_dim=lpe_size,
     )
 
     model_params = GraphTransformerMLPParams.from_dict(

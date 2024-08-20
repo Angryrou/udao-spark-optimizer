@@ -55,6 +55,7 @@ def create_graph_transformer(
             embedding_lap_pos_enc
         )
         pre_processing_layers.append(positional_encoding_layer)
+        in_dim += pos_encoding_dim
 
     # functional for final readout to address pass the "h" of `mean_nodes`
     def final_readout(graph: udao_graph_transformer.Graph) -> th.Tensor:
