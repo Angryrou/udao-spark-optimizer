@@ -104,9 +104,8 @@ def get_positional_encoding_layer(
 
     def positional_encoding(g: Graph, h: th.Tensor) -> th.Tensor:
         # currently supports only DGL graph
-        if g.ndata["pos_enc"]:
-            h_lap_pos_enc = positional_embedder(g.ndata["pos_enc"])
-            h = h + h_lap_pos_enc
+        h_lap_pos_enc = positional_embedder(g.ndata["pos_enc"])
+        h = h + h_lap_pos_enc
         return h
 
     return positional_encoding
