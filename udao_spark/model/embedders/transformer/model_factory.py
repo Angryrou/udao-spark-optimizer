@@ -40,6 +40,9 @@ def create_graph_transformer(
     )
 
     # preprocessing layer of input features
+    # IMPORTANT: the dimension of type must now be added to the input dimension.
+    if op_type:
+        in_dim += type_embedding_dim
     embedding_h = nn.Linear(in_dim, hidden_dim)
 
     # functional for final readout to address pass the "h" of `mean_nodes`

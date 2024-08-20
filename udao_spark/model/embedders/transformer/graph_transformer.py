@@ -60,13 +60,11 @@ class GraphTransformer(th.nn.Module):
         Returns:
             th.Tensor: tensor representation of the query graph.
         """
-        input_features = self.feature_extractor(graph)
+        h = self.feature_extractor(graph)
         # apply preprocessing layers
         if self.preprocess_layers:
             for pre_process_layer in self.preprocess_layers:
-                h = pre_process_layer(input_features)
-        else:
-            h = input_features
+                h = pre_process_layer(h)
 
         # apply forward layers
         for layer in self.layers:

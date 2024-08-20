@@ -120,7 +120,6 @@ def main(
     # TODO: extract the inputs that I need from this function
     iterator_shape = split_iterators["train"].shape
     embedding_input_shapes = iterator_shape.embedding_input_shape
-    op_groups = [name for name in embedding_input_shapes.keys()]
     input_size = sum(
         [embedding_input_shapes[name] for name in op_groups if name != "type"]
     )
