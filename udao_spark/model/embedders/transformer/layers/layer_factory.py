@@ -97,7 +97,6 @@ def get_positional_encoding_layer(
     positional_embedder: Linear layer
 
     Returns
-    th.Tensor with extra features representing the positional encoding.
     -------
 
     """

@@ -72,6 +72,7 @@ class GraphTransformer(th.nn.Module):
 
         # apply forward layers
         for layer in self.layers:
-            graph = layer(graph, h)
+            h = layer(graph, h)
+        graph.ndata["h"] = h
 
         return self.final_readout(graph)

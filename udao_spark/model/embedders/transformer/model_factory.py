@@ -65,9 +65,9 @@ def create_graph_transformer(
     for idx_layer in range(n_layers):
         out_dims.append(hidden_dim if idx_layer < n_layers - 1 else output_size)
     layers: list[nn.Module] = []
-    for out_dim in out_dims:
+    for idx, out_dim in enumerate(out_dims):
         layer = udao_layer_factory.get_multihead_attention_layer(
-            in_dim=in_dim,
+            in_dim=hidden_dim if idx == 0 else out_dims[idx - 1],
             out_dim=out_dim,
             n_heads=n_heads,
             batch_norm=True,

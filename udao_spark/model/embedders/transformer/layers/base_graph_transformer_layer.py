@@ -80,7 +80,7 @@ class BaseGraphTransformerLayer(th.nn.Module):
 
         # multi-head attention out
         attn_out = self.attention(graph, h)
-        h = attn_out.view(-1, self.out_channels)
+        h = attn_out.view(-1, self.out_dim)
         h = F.dropout(h, self.dropout, training=self.training)
         h = self.O(h)
 
