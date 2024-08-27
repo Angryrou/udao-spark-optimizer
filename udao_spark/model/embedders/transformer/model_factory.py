@@ -17,10 +17,10 @@ def create_graph_transformer(
     n_layers: int,
     n_heads: int,
     pos_encoding_dim: Optional[int],
+    hist_embedding_dim: Optional[int],
+    bitmap_embedding_dim: Optional[int],
     n_op_types: Optional[int],
-    op_type: bool,
-    op_cbo: bool,
-    op_enc: bool,
+    op_groups: list[str],
     type_embedding_dim: int,
 ) -> udao_graph_transformer.GraphTransformer:
     """Create a Graph Transformer model.
@@ -33,18 +33,36 @@ def create_graph_transformer(
         output_size (int): Size of each output sample
         n_layers (int): Number of layers
         n_heads (int): Number of multi-head attentions.
+        type_embedding_dim (int): encoding dimension of type embedding
+        op_groups (list[str]): list of attributes of node encodings
+        n_op_types: (Optional[int]): input dimension of type embedding
+        bitmap_embedding_dim (Optional[int]): dimension of bitmap embedding
+        hist_embedding_dim (Optional[int]): dimension of hist embedding
+        pos_encoding_dim (Optional[int]): dimension of positional encoding
+
     """
     # define feature extractor
     op_embedder = nn.Embedding(n_op_types, type_embedding_dim)  # type: ignore
+    # TODO (glachaud): fix me (shouldn't the parameters be reversed?)
+    op_hist_embedder: Optional[th.nn.Module] = None
+    if hist_embedding_dim:
+        op_hist_embedder = nn.Linear(150, hist_embedding_dim)
+    op_bitmap_embedder: Optional[th.nn.Module] = None
+    if bitmap_embedding_dim:
+        op_bitmap_embedder = nn.Linear(1000, bitmap_embedding_dim)
     feature_extractor = udao_layer_factory.get_concatenate_features_layer(
-        op_embedder, op_type=op_type, op_cbo=op_cbo, op_enc=op_enc
+        op_embedder, op_hist_embedder, op_bitmap_embedder, op_groups
     )
 
     # preprocessing layer of input features
     pre_processing_layers: list[udao_graph_transformer.PreProcessingLayer]
     # IMPORTANT: the dimension of type must now be added to the input dimension.
-    if op_type:
+    if "type" in op_groups:
         in_dim += type_embedding_dim
+    if "hist" in op_groups and hist_embedding_dim:
+        in_dim += hist_embedding_dim
+    if "bitmap" in op_groups and bitmap_embedding_dim:
+        in_dim += bitmap_embedding_dim
     embedding_h = nn.Linear(in_dim, hidden_dim)
     pre_processing_layers = [embedding_h]
 

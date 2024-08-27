@@ -1,6 +1,6 @@
 """This module contains functions to create graph transformer layers."""
 
-from typing import Union
+from typing import Optional, Union
 
 import dgl
 import torch as th
@@ -60,27 +60,35 @@ def get_multihead_attention_layer(
     )
 
 
-# TODO(glachaud): complete this function
+# TODO(glachaud): refactoring in progress
 def get_concatenate_features_layer(
-    op_embedder: th.nn.Module, op_type: bool, op_cbo: bool, op_enc: bool
+    op_embedder: th.nn.Module,
+    op_hist_embedder: Optional[th.nn.Module],
+    op_bitmap_embedder: Optional[th.nn.Module],
+    op_groups: list[str],
 ) -> GraphFeatureExtractor:
     """Create a concatenation layer
 
     Args:
         op_embedder (th.nn.Module): Linear layer
-        op_type: TBF
-        op_cbo: TBF
-        op_enc: TBF
+        op_bitmap_embedder (Optional[th.nn.Module]): Linear layer
+        op_hist_embedder (Optional[th.nn.Module]): Linear layer
+        op_groups (list[str]): list of attributes of node encodings
     """
 
+    # TODO (glachaud): refactoring in progress
     def concatenate_op_features(g: dgl.DGLGraph) -> th.Tensor:
         op_list = []
-        if op_type:
+        if "type" in op_groups:
             op_list.append(op_embedder(g.ndata["op_gid"]))
-        if op_cbo:
+        if "cbo" in op_groups:
             op_list.append(g.ndata["cbo"])
-        if op_enc:
+        if "op_enc" in op_groups:
             op_list.append(g.ndata["op_enc"])
+        if "hist" and op_hist_embedder:
+            op_list.append(op_hist_embedder(g.ndata["hist"]))
+        if "bitmap" and op_bitmap_embedder:
+            op_list.append(op_bitmap_embedder(g.ndata["bitmap"]))
         op_tensor = th.cat(op_list, dim=1) if len(op_list) > 1 else op_list[0]
         return op_tensor
 

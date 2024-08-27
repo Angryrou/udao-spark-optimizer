@@ -51,6 +51,8 @@ def main(
     gtn_n_heads: int,
     readout: str,
     type_embedding_dim: int,
+    hist_embedding_dim: int,
+    bitmap_embedding_dim: int,
     n_layers: int,
     hidden_dim: int,
     dropout: float,
@@ -135,10 +137,10 @@ def main(
         n_layers=gtn_n_layers,
         n_heads=gtn_n_heads,
         n_op_types=n_op_types,
-        op_type=True if "type" in op_groups else False,
-        op_cbo=True if "cbo" in op_groups else False,
-        op_enc=True if "op_enc" in op_groups else False,
+        op_groups=op_groups,
         type_embedding_dim=type_embedding_dim,
+        hist_embedding_dim=hist_embedding_dim,
+        bitmap_embedding_dim=bitmap_embedding_dim,
         pos_encoding_dim=lpe_size,
     )
 
