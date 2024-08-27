@@ -136,7 +136,6 @@ def main(
     # TODO: create graph transformer using the model factory
     graph_transformer = model_factory.create_graph_transformer(
         in_dim=input_size,
-        hidden_dim=hidden_dim,
         output_size=output_size,
         n_layers=gtn_n_layers,
         n_heads=gtn_n_heads,

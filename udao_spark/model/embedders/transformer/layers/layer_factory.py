@@ -85,9 +85,9 @@ def get_concatenate_features_layer(
             op_list.append(g.ndata["cbo"])
         if "op_enc" in op_groups:
             op_list.append(g.ndata["op_enc"])
-        if "hist" and op_hist_embedder:
+        if "hist" in op_groups and op_hist_embedder:
             op_list.append(op_hist_embedder(g.ndata["hist"]))
-        if "bitmap" and op_bitmap_embedder:
+        if "bitmap" in op_groups and op_bitmap_embedder:
             op_list.append(op_bitmap_embedder(g.ndata["bitmap"]))
         op_tensor = th.cat(op_list, dim=1) if len(op_list) > 1 else op_list[0]
         return op_tensor

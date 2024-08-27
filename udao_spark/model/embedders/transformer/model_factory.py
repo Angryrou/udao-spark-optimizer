@@ -12,7 +12,6 @@ import udao_spark.model.embedders.transformer.layers.layer_factory as udao_layer
 
 def create_graph_transformer(
     in_dim: int,
-    hidden_dim: int,
     output_size: int,
     n_layers: int,
     n_heads: int,
@@ -63,12 +62,12 @@ def create_graph_transformer(
         in_dim += hist_embedding_dim
     if "bitmap" in op_groups and bitmap_embedding_dim:
         in_dim += bitmap_embedding_dim
-    embedding_h = nn.Linear(in_dim, hidden_dim)
+    embedding_h = nn.Linear(in_dim, output_size)
     pre_processing_layers = [embedding_h]
 
     # positional encoding
     if pos_encoding_dim:
-        embedding_lap_pos_enc = nn.Linear(pos_encoding_dim, hidden_dim)
+        embedding_lap_pos_enc = nn.Linear(pos_encoding_dim, output_size)
         positional_encoding_layer = udao_layer_factory.get_positional_encoding_layer(
             embedding_lap_pos_enc
         )
@@ -81,11 +80,11 @@ def create_graph_transformer(
 
     out_dims = []
     for idx_layer in range(n_layers):
-        out_dims.append(hidden_dim if idx_layer < n_layers - 1 else output_size)
+        out_dims.append(output_size)
     layers: list[nn.Module] = []
     for idx, out_dim in enumerate(out_dims):
         layer = udao_layer_factory.get_multihead_attention_layer(
-            in_dim=hidden_dim if idx == 0 else out_dims[idx - 1],
+            in_dim=output_size if idx == 0 else out_dims[idx - 1],
             out_dim=out_dim,
             n_heads=n_heads,
             batch_norm=True,
