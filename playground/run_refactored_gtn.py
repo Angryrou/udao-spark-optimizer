@@ -123,7 +123,11 @@ def main(
     iterator_shape = split_iterators["train"].shape
     embedding_input_shapes = iterator_shape.embedding_input_shape
     input_size = sum(
-        [embedding_input_shapes[name] for name in op_groups if name != "type"]
+        [
+            embedding_input_shapes[name]
+            for name in op_groups
+            if name not in ["type", "hist", "bitmap"]
+        ]
     )
     n_op_types = None
     if "type" in op_groups:
