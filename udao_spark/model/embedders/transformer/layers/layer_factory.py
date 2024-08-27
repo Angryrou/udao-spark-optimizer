@@ -5,6 +5,7 @@ from typing import Optional, Union
 import dgl
 import torch as th
 import torch_geometric
+from dgl.nn.pytorch import GATConv
 from udao.model.embedders.layers.multi_head_attention import MultiHeadAttentionLayer
 
 from udao_spark.model.embedders.transformer.graph_transformer import (
@@ -17,6 +18,49 @@ from udao_spark.model.embedders.transformer.layers import (
 
 Graph = Union[dgl.DGLGraph, torch_geometric.data.Data]  # type: ignore
 BaseGraphTransformerType = udao_spark_embedders_base_layers.BaseGraphTransformerLayer
+
+
+def get_multihead_gat_attention_layer(
+    in_dim: int,
+    out_dim: int,
+    n_heads: int = 1,
+    dropout: float = 0.0,
+    use_bias: bool = False,
+    residual: bool = True,
+    layer_norm: bool = False,
+    batch_norm: bool = False,
+) -> BaseGraphTransformerType:
+    """Create a multi-head GAT attention layer
+
+    Parameters
+    ----------
+    in_dim
+    out_dim
+    n_heads
+    dropout
+    use_bias
+    residual
+    layer_norm
+    batch_norm
+
+    Returns
+    -------
+
+    """
+    attention_layer = GATConv(
+        in_feats=in_dim, out_feats=out_dim, num_heads=n_heads, bias=use_bias
+    )
+    return udao_spark_embedders_base_layers.BaseGraphTransformerLayer(
+        attention_layer,
+        in_dim,
+        out_dim,
+        n_heads,
+        dropout,
+        use_bias,
+        residual,
+        layer_norm,
+        batch_norm,
+    )
 
 
 def get_multihead_attention_layer(
