@@ -4,8 +4,8 @@ import pandas as pd
 
 sql_path = "spark-sqls"
 for name, path in [
-    ("job_train", "./train.csv"),
-    ("synthetic", "./synthetic.csv"),
+    ("job-train", "./train.csv"),
+    ("job-synthetic", "./synthetic.csv"),
     ("job-light", "./job-light.csv"),
 ]:
     os.makedirs(f"{sql_path}/{name}", exist_ok=True)
