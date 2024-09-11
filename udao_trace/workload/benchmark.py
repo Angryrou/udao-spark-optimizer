@@ -14,7 +14,14 @@ class Benchmark:
         return self.benchmark_type.value
 
     def get_prefix(self) -> str:
-        return f"{self.get_name()}{self.scale_factor}"
+        if self.benchmark_type in [
+            BenchmarkType.JOB_TRAIN,
+            BenchmarkType.JOB_SYNTHETIC,
+            BenchmarkType.JOB_LIGHT,
+        ]:
+            return self.get_name()
+        else:
+            return f"{self.get_name()}{self.scale_factor}"
 
     def get_template_id(self, template: str) -> int:
         return self.template2id[template]
@@ -36,5 +43,11 @@ class Benchmark:
             ]
         elif benchmark_type == BenchmarkType.TPCXBB:
             return [str(i) for i in range(1, 31)]
+        elif benchmark_type == BenchmarkType.JOB_TRAIN:
+            return [str(i) for i in range(100000)]
+        elif benchmark_type == BenchmarkType.JOB_SYNTHETIC:
+            return [str(i) for i in range(5000)]
+        elif benchmark_type == BenchmarkType.JOB_LIGHT:
+            return [str(i) for i in range(70)]
         else:
             raise ValueError(f"{benchmark_type} is not supported")

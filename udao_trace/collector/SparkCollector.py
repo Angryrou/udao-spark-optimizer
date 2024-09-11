@@ -93,6 +93,8 @@ class SparkCollector:
 
         trace_header = f"{header}/trace"
         log_header = f"{header}/log"
+        if template.startswith("job"):
+            qid = 1
         app_name = self.benchmark.get_prefix() + f"_{template}-{qid}_{knob_sign}"
 
         if rt_enable == "true":
