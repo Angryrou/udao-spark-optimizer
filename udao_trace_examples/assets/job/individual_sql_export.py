@@ -3,10 +3,10 @@ import os
 import pandas as pd
 
 sql_path = "spark-sqls"
-for prefix, name, path in [
-    ("tr", "train", "./train.csv"),
-    ("syn", "synthetic", "./synthetic.csv"),
-    ("jl", "job-light", "./job-light.csv"),
+for name, path in [
+    ("job_train", "./train.csv"),
+    ("synthetic", "./synthetic.csv"),
+    ("job-light", "./job-light.csv"),
 ]:
     os.makedirs(f"{sql_path}/{name}", exist_ok=True)
     df_train = pd.read_csv(path, sep="#", header=None, names=["c1", "c2", "c3", "c4"])
@@ -36,5 +36,5 @@ for prefix, name, path in [
         pred = " AND ".join(preds)
         sql = f"""SELECT COUNT(*) FROM {tables} WHERE {pred}"""
 
-        with open(f"{sql_path}/{name}/{prefix}-{i}.sql", "w") as f:
+        with open(f"{sql_path}/{name}/{i}.sql", "w") as f:
             f.write(sql)
