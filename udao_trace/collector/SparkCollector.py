@@ -186,7 +186,8 @@ class SparkCollector:
             template_to_conf_dict = PickleHandler.load(
                 cache_header, f"{len(templates)}x{n_data_per_template}.pkl"
             )
-            assert isinstance(template_to_conf_dict, Dict)
+            if not isinstance(template_to_conf_dict, Dict):
+                raise ValueError("template_to_conf_dict is not a dictionary")
             logger.debug("template_to_conf_dict loaded")
         except BaseException:
             logger.debug("template_to_conf_dict not found, generating...")
@@ -203,6 +204,20 @@ class SparkCollector:
             )
             logger.debug("template_to_conf_dict saved")
         return template_to_conf_dict
+
+    def _get_job_lhs_conf_df(self, n_queries: int, seed: int) -> pd.DataFrame:
+        cache_header = f"{self.header}/lhs/cache"
+        try:
+            configurations = PickleHandler.load(cache_header, f"{n_queries}.pkl")
+            if not isinstance(configurations, pd.DataFrame):
+                raise ValueError("configurations is not a DataFrame")
+            logger.debug("configurations loaded")
+        except BaseException:
+            logger.debug("configurations not found, generating...")
+            configurations = self.spark_conf.get_lhs_configurations(n_queries, seed)
+            PickleHandler.save(configurations, cache_header, f"{n_queries}.pkl")
+            logger.debug("template_to_conf_dict saved")
+        return configurations
 
     def start_default(self, n_processes: int = 6, cluster_cores: int = 120) -> None:
         knob_sign = ",".join([str(k.default) for k in self.spark_conf.knob_list])
@@ -252,6 +267,35 @@ class SparkCollector:
         lhs_header = f"{self.header}/lhs_{len(templates)}x{n_data_per_template}"
         self._start(
             total=total,
+            header=lhs_header,
+            get_next=prepare_lhs_i,
+            cluster_cores=cluster_cores,
+            n_processes=n_processes,
+        )
+
+    def start_lhs_job(
+        self,
+        cluster_cores: int = 120,
+        seed: int = 42,
+        n_processes: int = 6,
+    ) -> None:
+        queries = self.benchmark.templates
+        n_queries = len(queries)
+        configurations = self._get_job_lhs_conf_df(n_queries, seed)
+
+        def prepare_lhs_i(index: int) -> Tuple[str, int, str, int]:
+            template = str(index)
+            qid = 1
+            conf_df = configurations.iloc[index]
+            knob_sign = str(conf_df.name)
+            cores = int(conf_df["spark.executor.cores"]) * (
+                int(conf_df["spark.executor.instances"]) + 1
+            )
+            return template, qid, knob_sign, cores
+
+        lhs_header = f"{self.header}/lhs"
+        self._start(
+            total=n_queries,
             header=lhs_header,
             get_next=prepare_lhs_i,
             cluster_cores=cluster_cores,
