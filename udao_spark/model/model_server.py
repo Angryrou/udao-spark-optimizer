@@ -55,7 +55,7 @@ class ModelServer:
             model = get_graph_transformer_mlp(graph_gtn_ml_params)
             logger.info("GRAPH MODEL DETAILS:\n")
             logger.info(model)
-        elif model_sign == "graph_gtn_basic":
+        elif model_sign == "graph_gtn_basic_mlp":
             graph_gtn_basic_params = GraphTransformerBasicMLPParams.from_dict(
                 JsonHandler.load_json(model_params_path)
             )
@@ -63,7 +63,7 @@ class ModelServer:
             model = get_graph_transformer_basic_mlp(graph_gtn_basic_params)
             logger.info("GRAPH MODEL DETAILS:\n")
             logger.info(model)
-        elif model_sign == "graph_gtn_sk":
+        elif model_sign == "graph_gtn_sk_mlp":
             graph_gtn_sk_params = GraphTransformerSKMLPParams.from_dict(
                 JsonHandler.load_json(model_params_path)
             )
