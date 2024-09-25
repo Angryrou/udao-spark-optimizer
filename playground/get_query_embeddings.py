@@ -94,6 +94,7 @@ def get_query_emb_q_compile(
     return index_splits, graph_np_dict
 
 
-get_query_emb_q_compile()
-for fold in range(1, 11):
-    get_query_emb_q_compile(fold=fold)
+if __name__ == "__main__":
+    get_query_emb_q_compile()
+    for fold in range(1, 11):
+        get_query_emb_q_compile(fold=fold)
