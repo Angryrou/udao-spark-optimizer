@@ -17,6 +17,9 @@ class BenchmarkType(Enum):
     TPCH = "tpch"
     TPCDS = "tpcds"
     TPCXBB = "tpcxbb"
+    JOB_LIGHT = "job-light"
+    JOB_SYNTHETIC = "job-synthetic"
+    JOB_TRAIN = "job-train"
 
 
 class ClusterName(Enum):
