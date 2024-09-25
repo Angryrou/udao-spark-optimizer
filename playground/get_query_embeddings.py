@@ -66,6 +66,7 @@ def get_query_emb_q_compile(
         model_sign="graph_gtn_sk_mlp",
         model_params_path=model_params_path,
         weights_path=ckp_weight_path,
+        verbose=False,
     )
     if model_sign not in [
         "graph_gtn_sk_mlp",
