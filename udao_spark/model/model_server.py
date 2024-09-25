@@ -19,12 +19,16 @@ from ..utils.logging import logger
 from ..utils.params import QType
 from .utils import (
     GraphAverageMLPParams,
+    GraphTransformerBasicMLPParams,
     GraphTransformerMLPParams,
+    GraphTransformerSKMLPParams,
     TreeLSTMParams,
     UdaoModule,
     calibrate_negative_predictions,
     get_graph_avg_mlp,
+    get_graph_transformer_basic_mlp,
     get_graph_transformer_mlp,
+    get_graph_transformer_sk_mlp,
     get_tree_lstm_mlp,
 )
 
@@ -49,6 +53,22 @@ class ModelServer:
             graph_gtn_ml_params = GraphTransformerMLPParams.from_dict(param_dict)
             objectives = graph_gtn_ml_params.iterator_shape.output_names
             model = get_graph_transformer_mlp(graph_gtn_ml_params)
+            logger.info("GRAPH MODEL DETAILS:\n")
+            logger.info(model)
+        elif model_sign == "graph_gtn_basic":
+            graph_gtn_basic_params = GraphTransformerBasicMLPParams.from_dict(
+                JsonHandler.load_json(model_params_path)
+            )
+            objectives = graph_gtn_basic_params.iterator_shape.output_names
+            model = get_graph_transformer_basic_mlp(graph_gtn_basic_params)
+            logger.info("GRAPH MODEL DETAILS:\n")
+            logger.info(model)
+        elif model_sign == "graph_gtn_sk":
+            graph_gtn_sk_params = GraphTransformerSKMLPParams.from_dict(
+                JsonHandler.load_json(model_params_path)
+            )
+            objectives = graph_gtn_sk_params.iterator_shape.output_names
+            model = get_graph_transformer_sk_mlp(graph_gtn_sk_params)
             logger.info("GRAPH MODEL DETAILS:\n")
             logger.info(model)
         elif model_sign.startswith("tree"):
