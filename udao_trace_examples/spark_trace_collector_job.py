@@ -47,5 +47,5 @@ if __name__ == "__main__":
             cluster_cores=args.cluster_cores,
             seed=args.seed,
             n_processes=args.n_processes,
-            range=(args.range_start, args.range_end),
+            query_range=(args.range_start, args.range_end),
         )
