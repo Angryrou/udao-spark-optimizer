@@ -24,8 +24,9 @@ Steps to get hist of each numerical column and samples for bitmap.
 
 2. export histograms for each column in tables from spark-shell
 ```scala
-val benchmark = "tpch"
-sql(s"use ${benchmark}_100")
+// val benchmark = "tpch"
+// sql(s"use ${benchmark}_100")
+sql("use job")
 val tables = spark.catalog.listTables().collect()
 
 import java.time.LocalDate
@@ -69,7 +70,8 @@ val histDF = spark.createDataFrame(allHistograms).toDF("table", "column", "dtype
 histDF.show(false)
 
 // Write the DataFrame to a CSV file
-val path = "/user/hex1/raw_tpch_hist.csv"
+val path = "/user/hex1/raw_job_hist.csv"
+// val path = "/user/hex1/raw_tpch_hist.csv"
 // val path = "/user/hex2/raw_tpcds_hist.csv"
 histDF.coalesce(1).write.option("header", "true").csv(path)
 ```
@@ -78,6 +80,7 @@ histDF.coalesce(1).write.option("header", "true").csv(path)
 ```bash
 # on hex1@node1
 hadoop fs -getmerge /user/hex1/raw_tpch_hist.csv ~/chenghao/raw_tpch_hist.csv
+hadoop fs -getmerge /user/hex1/raw_job_hist.csv ~/chenghao/raw_job_hist.csv
 # on hex2@node7
 hadoop fs -getmerge /user/hex2/raw_tpcds_hist.csv ~/chenghao/raw_tpcds_hist.csv
 ```
@@ -107,7 +110,7 @@ jpath=/opt/hex_users/$USER/spark-3.2.1-hadoop3.3.0/jdk1.8
 5. expose table samples within the pyspark session.
 ```python
 # within pyspark
-database_name = "tpch_100" # or "tpcds_100"
+database_name = "job" # or "tpch_100" "tpcds_100"
 sql(f"USE {database_name}")
 tables = sql(f"SHOW TABLES").toPandas()
 table_names = tables['tableName'].tolist()
