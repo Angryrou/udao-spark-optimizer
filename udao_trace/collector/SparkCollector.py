@@ -291,7 +291,7 @@ class SparkCollector:
             n_queries = len(queries)
 
         def prepare_lhs_i(index: int) -> Tuple[str, int, str, int]:
-            template = str(index)
+            template = queries[index]
             qid = 1
             conf_df = configurations.iloc[index]
             knob_sign = str(conf_df.name)
