@@ -6,18 +6,18 @@ from udao_trace_examples.params import get_collector_parser
 
 
 def get_parser() -> ArgumentParser:
+    # fmt: off
     parser = get_collector_parser()
-    parser.add_argument(
-        "--range-start", type=int, default=-1, help="Start of the range (inclusive)"
-    )
-    parser.add_argument(
-        "--range-end", type=int, default=-1, help="End of the range (inclusive)"
-    )
+    parser.add_argument("--range-start", type=int, default=-1,
+        help="Start of the range (inclusive)")
+    parser.add_argument("--range-end", type=int, default=-1,
+        help="End of the range (inclusive)")
+    # fmt: on
     return parser
 
 
 if __name__ == "__main__":
-    args = get_collector_parser().parse_args()
+    args = get_parser().parse_args()
 
     if args.parametric_bash_file != "assets/run_spark_collect_job.sh":
         raise ValueError(
