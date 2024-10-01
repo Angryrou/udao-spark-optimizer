@@ -1,22 +1,86 @@
 import re
 from datetime import date, datetime
-from typing import Callable, Dict, List, Tuple
+from typing import Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
 from udao.data import StaticExtractor, TabularContainer
+from udao.data.predicate_embedders.utils import build_unique_operations
+
+from udao_trace.utils import JsonHandler
 
 
-def get_pred_triplets(pred: str) -> str:
+def get_table_metadata(pred_str: str) -> Dict[str, str]:
+    columns_pattern = r"\[([^\]]+)\]"
+    columns_match = re.search(columns_pattern, pred_str)
+    if columns_match:
+        columns_str = columns_match.group(1)
+        columns_list = [col.strip() for col in columns_str.split(",")]
+    else:
+        raise Exception(f"Columns not found in {pred_str}")
+
+    table_pattern = r"`[^`]+`\.`[^`]+`\.`([^`]+)`"
+    table_match = re.search(table_pattern, pred_str)
+    if table_match:
+        table_name = table_match.group(1)
+    else:
+        raise Exception(f"Table name not found in {pred_str}")
+    return {col: table_name for col in columns_list}
+
+
+def get_pred_triplets_with_meta(pred: str, col2rel: Dict[str, str]) -> str:
     if "CASE WHEN" in pred or "OR" in pred:
         return ""
-    pattern = r"(\w+)(?:#\d+)\s*([<>=!]{1,2})\s*(\d{4}-\d{2}-\d{2}|\d+\.\d+|\d+)"
+    # pattern = r"(\w+)(?:#\d+)\s*([<>=!]{1,2})\s*(\d{4}-\d{2}-\d{2}|\d+\.\d+|\d+)"
+    pattern = r"(\w+#\d+)\s*([<>=!]{1,2})\s*(\d{4}-\d{2}-\d{2}|\d+\.\d+|\d+)"
     matches = re.finditer(pattern, pred)  # type: ignore
     triplets = [match.groups() for match in matches]
-    if any(["_" not in triplet[0] for triplet in triplets]):
+    triplets = [triplet for triplet in triplets if triplet[0] in col2rel]
+    rel_set = set([col2rel[triplet[0]] for triplet in triplets])
+    if len(rel_set) == 0:
         return ""
-    triplets_str = ";".join([",".join(triplet) for triplet in triplets])
+    if len(rel_set) > 1:
+        raise Exception(f"Multiple tables found in {pred}")
+    else:
+        rel = rel_set.pop()
+    triplets_str = (
+        rel
+        + ":"
+        + ";".join(
+            [
+                ",".join([triplet[0].split("#")[0], triplet[1], triplet[2]])
+                for triplet in triplets
+            ]
+        )
+    )
     return triplets_str
+
+
+def get_pred_triplets_with_table_name(lqp_str: str) -> List[str]:
+    operators = JsonHandler.load_json_from_str(lqp_str)["operators"]
+    col2rel = {}
+    for v in operators.values():
+        if "LogicalRelation" in v["className"]:
+            pred_str = v["predicate"]
+            col2rel.update(get_table_metadata(pred_str))
+    id2triplets = {
+        int(op_id): get_pred_triplets_with_meta(op["predicate"], col2rel)
+        for op_id, op in operators.items()
+    }
+    return [id2triplets[i] for i in range(len(id2triplets))]
+
+
+def extract_operations_with_table_names(
+    df: pd.DataFrame,
+) -> Tuple[Dict[int, List[int]], List[str]]:
+    graph_column = "lqp"
+    df = df[["id", graph_column]].copy()
+    df[graph_column] = df[graph_column].apply(
+        lambda x: get_pred_triplets_with_table_name(x)
+    )
+    df = df.explode(graph_column, ignore_index=True)
+    df.rename(columns={graph_column: "operation"}, inplace=True)
+    return build_unique_operations(df)
 
 
 def date_format_match(val_str: str) -> bool:
@@ -99,10 +163,7 @@ def hist_hits(hist: np.ndarray, op: str, val: float) -> np.ndarray:
 class PredicateHistogramExtractor(StaticExtractor[TabularContainer]):
     def __init__(
         self,
-        hists: Dict[str, np.ndarray],
-        extract_operations: Callable[
-            [pd.DataFrame, Callable], Tuple[Dict[int, List[int]], List[str]]
-        ],
+        hists: Dict[Tuple[str, str], np.ndarray],
         max_num_of_column_predicates: int = 3,
     ):
         super().__init__()
@@ -110,7 +171,6 @@ class PredicateHistogramExtractor(StaticExtractor[TabularContainer]):
             raise ValueError("No histograms provided.")
         self.hists = hists
         self.hists_bins = len(list(hists.values())[0]) - 1  # 50
-        self.extract_operations = extract_operations
         self.max_triplets = max_num_of_column_predicates  # 3
 
     def hist_encoding(self, pred_triplets: List[str]) -> np.ndarray:
@@ -119,12 +179,13 @@ class PredicateHistogramExtractor(StaticExtractor[TabularContainer]):
         for i, operations in enumerate(pred_triplets):
             if operations == "":
                 continue
-            triplets = [operation.split(",") for operation in operations.split(";")]
-            if any(triplet[0] not in self.hists for triplet in triplets):
+            table_name, triplet_str = operations.split(":")
+            triplets = [operation.split(",") for operation in triplet_str.split(";")]
+            if any((table_name, triplet[0]) not in self.hists for triplet in triplets):
                 continue
 
             triplets_dict = {}
-            for operation in operations.split(";"):
+            for operation in triplet_str.split(";"):
                 col, op, val_str = operation.split(",")
                 if date_format_match(val_str):
                     val = float(days_since_epoch(val_str))
@@ -154,14 +215,16 @@ class PredicateHistogramExtractor(StaticExtractor[TabularContainer]):
             for j, (col, op_vals) in enumerate(triplets_dict.items()):
                 res_col = np.ones(n)
                 for op, val in op_vals.items():
-                    res_col = res_col + hist_hits(self.hists[col], op, val) - np.ones(n)
+                    res_col = (
+                        res_col
+                        + hist_hits(self.hists[(table_name, col)], op, val)
+                        - np.ones(n)
+                    )
                 ress[i, j * n : (j + 1) * n] = res_col
         return ress
 
     def extract_features(self, df: pd.DataFrame) -> TabularContainer:
-        plan_to_operations, pred_triplets = self.extract_operations(
-            df, get_pred_triplets
-        )
+        plan_to_operations, pred_triplets = extract_operations_with_table_names(df)
         embeddings_list = self.hist_encoding(pred_triplets)
         op_emb = np.concatenate(
             [embeddings_list[plan_to_operations[idx]] for idx in df["id"].tolist()]
@@ -192,9 +255,6 @@ class PredicateBitmapExtractor(StaticExtractor[TabularContainer]):
     def __init__(
         self,
         table_samples: Dict[str, pd.DataFrame],
-        extract_operations: Callable[
-            [pd.DataFrame, Callable], Tuple[Dict[int, List[int]], List[str]]
-        ],
     ) -> None:
         super().__init__()
         if len(table_samples) == 0:
@@ -205,9 +265,6 @@ class PredicateBitmapExtractor(StaticExtractor[TabularContainer]):
         self.bitmap_size = np.mean(
             [df.shape[0] for df in table_samples.values()]
         ).astype(int)
-        self.column2table = {
-            col: table for table, df in table_samples.items() for col in df.columns
-        }
         for table, df in table_samples.items():
             # also convert date columns to datetime64[ns] format
             for col in df.select_dtypes(include="object").columns:
@@ -216,7 +273,6 @@ class PredicateBitmapExtractor(StaticExtractor[TabularContainer]):
             df["sid"] = np.arange(df.shape[0])
             table_samples[table] = df
         self.table_samples = table_samples
-        self.extract_operations = extract_operations
 
     def bitmap_encoding(self, pred_triplets: List[str]) -> np.ndarray:
         n = self.bitmap_size
@@ -224,13 +280,8 @@ class PredicateBitmapExtractor(StaticExtractor[TabularContainer]):
         for i, operations in enumerate(pred_triplets):
             if operations == "":
                 continue
-            triplets = [operation.split(",") for operation in operations.split(";")]
-            if any(col not in self.column2table for col, _, _ in triplets):
-                continue
-            potential_tables = [self.column2table[col] for col, _, _ in triplets]
-            if len(set(potential_tables)) != 1:
-                raise ValueError("We have not implemented this case yet.")
-            table = potential_tables[0]
+            table_name, triplets_str = operations.split(":")
+            triplets = [operation.split(",") for operation in triplets_str.split(";")]
             sql = " & ".join(
                 [
                     f"""{col} {op if op != '=' else '=='} {("'" + val_str + "'")
@@ -238,14 +289,15 @@ class PredicateBitmapExtractor(StaticExtractor[TabularContainer]):
                     for col, op, val_str in triplets
                 ]
             )
-            bits = self.table_samples[table].query(sql).sid.values
+            bits = self.table_samples[table_name].query(sql).sid.values
             ress[i, bits] = 1
         return ress
 
     def extract_features(self, df: pd.DataFrame) -> TabularContainer:
-        plan_to_operations, pred_triplets = self.extract_operations(
-            df, get_pred_triplets
-        )
+        # plan_to_operations, pred_triplets = self.extract_operations(
+        #     df, get_pred_triplets
+        # )
+        plan_to_operations, pred_triplets = extract_operations_with_table_names(df)
         embeddings_list = self.bitmap_encoding(pred_triplets)
         op_emb = np.concatenate(
             [embeddings_list[plan_to_operations[idx]] for idx in df["id"].tolist()]

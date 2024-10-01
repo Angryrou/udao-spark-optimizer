@@ -17,6 +17,20 @@ class OperatorMisMatchError(BaseException):
     """raise when the operator names from `operator` and `link` do not match"""
 
 
+def get_ordered_parsing(
+    graph_str: str,
+    operation_processing: Callable[[str], str] = lambda x: x,
+) -> List[str]:
+    # align with the operator order feat as size and rows_count
+    operators = JsonHandler.load_json_from_str(graph_str)
+    id_op = {
+        int(op_id): operation_processing(op["predicate"])
+        for op_id, op in operators["operators"].items()
+    }
+    ops = [id_op[i] for i in range(len(id_op))]
+    return ops
+
+
 def extract_operations_from_serialized_json_base(
     graph_column: str,
     plan_df: pd.DataFrame,
@@ -24,12 +38,7 @@ def extract_operations_from_serialized_json_base(
 ) -> Tuple[Dict[int, List[int]], List[str]]:
     df = plan_df[["id", graph_column]].copy()
     df[graph_column] = df[graph_column].apply(
-        lambda lqp_str: [
-            operation_processing(op["predicate"])
-            for op_id, op in JsonHandler.load_json_from_str(lqp_str)[
-                "operators"
-            ].items()
-        ]  # type: ignore
+        lambda graph_str: get_ordered_parsing(graph_str, operation_processing)
     )
     df = df.explode(graph_column, ignore_index=True)
     df.rename(columns={graph_column: "operation"}, inplace=True)

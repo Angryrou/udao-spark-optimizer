@@ -312,10 +312,52 @@ def magic_setup(pw: PathWatcher, seed: int) -> None:
         save_and_log_index(index_splits_qs, pw, f"index_splits_qs-{pw.fold}.pkl")
 
 
+def job_setup(pw: PathWatcher, seed: int) -> None:
+    header = pw.data_prefix
+    df_raw_dict = {
+        "TRAIN": pd.read_csv(f"{header}/train_q_100000x1.csv", low_memory=pw.debug),
+        "SYNTHETIC": pd.read_csv(
+            f"{header}/synthetic_q_5000x1.csv", low_memory=pw.debug
+        ),
+        "LIGHT": pd.read_csv(f"{header}/light_q_70x1.csv", low_memory=pw.debug),
+    }
+    # prepare data
+    try:
+        df_q_compile = ParquetHandler.load(pw.cc_prefix, "df_q_compile.parquet")
+    except Exception as e:
+        logger.warning(f"Failed to load df_q_compile_* from cache: {e}")
+        df_dict = {}
+        sc = SparkConf(str(pw.base_dir / "assets/spark_configuration_aqe_on.json"))
+        for k, df_raw in df_raw_dict.items():
+            df_raw["template"] = k + df_raw["template"].astype(int).astype(str)
+            df_q = prepare_data(df_raw, benchmark=pw.benchmark, sc=sc, q_type="q")
+            df_q_compile_k = df_q[df_q["lqp_id"] == 0].copy()  # for compile-time df
+            df_dict[k] = df_q_compile_k
+        df_q_compile = pd.concat(df_dict.values())
+        save_and_log_df(df_q_compile, ["appid"], pw, "df_q_compile")
+        logger.info("Saved and loaded df_q_compile_* from cache")
+        df_train, df_val = train_test_split(
+            df_dict["TRAIN"],
+            test_size=0.1,
+            stratify=None,
+            random_state=seed,
+        )
+        index_splits_q_compile = {
+            "train": df_train.appid.to_list(),
+            "val": df_val.appid.to_list(),
+            "test": df_dict["SYNTHETIC"].appid.tolist()
+            + df_dict["LIGHT"].appid.tolist(),
+        }
+        save_and_log_index(index_splits_q_compile, pw, "index_splits_q_compile.pkl")
+
+
 # Data Split Index
 def extract_index_splits(
     pw: PathWatcher, seed: int, q_type: str
 ) -> Tuple[pd.DataFrame, Dict[DatasetType, List[str]]]:
+    if pw.benchmark == "job" and q_type != "q_compile":
+        raise NotImplementedError("job benchmark only supports q_compile")
+
     index_splits_name = (
         f"index_splits_{q_type}.pkl"
         if pw.fold is None
@@ -329,7 +371,10 @@ def extract_index_splits(
             f"not found {index_splits_name} or df_{q_type}.parquet "
             f"under {pw.cc_prefix}, start magic setup..."
         )
-        magic_setup(pw, seed)
+        if pw.benchmark != "job":
+            magic_setup(pw, seed)
+        else:
+            job_setup(pw, seed)
     else:
         logger.info(f"found {pw.cc_prefix}/df_{q_type}.pkl, loading...")
         logger.info(f"found {pw.cc_prefix}/{index_splits_name}, loading...")
@@ -351,9 +396,12 @@ def extract_and_save_iterators(
     ta: TypeAdvisor,
     tensor_dtypes: th.dtype,
     cache_file: str = "split_iterators.pkl",
-    hists: Optional[Dict[str, np.ndarray]] = None,
+    hists: Optional[Dict[Tuple[str, str], np.ndarray]] = None,
     table_samples: Optional[Dict[str, pd.DataFrame]] = None,
 ) -> Dict[DatasetType, BaseIterator]:
+    if pw.benchmark == "job" and ta.q_type != "q_compile":
+        raise NotImplementedError("job benchmark only supports q_compile")
+
     params = pw.extract_params
     if Path(f"{pw.cc_extract_prefix}/{cache_file}").exists():
         raise FileExistsError(f"{pw.cc_extract_prefix}/{cache_file} already exists.")
@@ -402,23 +450,29 @@ def get_split_iterators(
     pw: PathWatcher,
     ta: TypeAdvisor,
     tensor_dtypes: th.dtype,
-    hists: Optional[Dict[str, np.ndarray]] = None,
+    hists: Optional[Dict[Tuple[str, str], np.ndarray]] = None,
     table_samples: Optional[Dict[str, pd.DataFrame]] = None,
 ) -> Dict[DatasetType, BaseIterator]:
     cache_file = "split_iterators.pkl"
+
+    if pw.benchmark == "job" and ta.q_type != "q_compile":
+        raise NotImplementedError("job benchmark only supports q_compile")
 
     if hists is None:
         df = pd.read_csv(
             f"{pw.base_dir}/assets/data_stats/regrouped_{pw.benchmark}_hist.csv"
         )
         hists = {
-            row["column"]: np.array(list(map(float, row["hists"][1:-1].split(", "))))
+            (row["table"], row["column"]): np.array(
+                list(map(float, row["hists"][1:-1].split(", ")))
+            )
             for _, row in df.iterrows()
         }
     if table_samples is None:
+        bm = pw.benchmark
         table_samples = PickleHandler.load(
             header=f"{pw.base_dir}/assets/data_stats",
-            file_name=f"{pw.benchmark}_100_samples.pkl",
+            file_name=f"{bm}_samples.pkl" if bm == "job" else f"{bm}_100_samples.pkl",
         )  # type: ignore
 
     if not Path(f"{pw.cc_extract_prefix}/{cache_file}").exists():
