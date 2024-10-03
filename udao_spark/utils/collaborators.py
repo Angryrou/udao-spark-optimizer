@@ -28,6 +28,10 @@ def get_data_sign(bm: str, debug: bool) -> str:
         return f"102x{10 if debug else 490}"
     if bm == "job":
         return "100000x1"
+    if bm == "tpcds+job":
+        return f"102x{10 if debug else 490}+100000x1"
+    if bm == "tpch+job":
+        return f"22x{10 if debug else 2273}+100000x1"
     raise NoBenchmarkError(bm)
 
 

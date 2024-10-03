@@ -603,6 +603,100 @@ def get_graph_transformer_sk_mlp(params: GraphTransformerSKMLPParams) -> UdaoMod
     return model
 
 
+def sink_job_stats(
+    ckp_learning_header: str, device: str, target_mask: Optional[np.ndarray] = None
+) -> None:
+    if not os.path.exists(
+        f"{ckp_learning_header}/obj_df_test_SYNTHETIC_{device}.pkl"
+    ) or not os.path.exists(f"{ckp_learning_header}/obj_df_test_LIGHT_{device}.pkl"):
+        tfile = glob.glob(f"{ckp_learning_header}/obj_df_test_with_*.pkl")[0]
+        tfile_name = os.path.basename(tfile)
+        cache = PickleHandler.load(ckp_learning_header, tfile_name)
+        if not isinstance(cache, dict):
+            raise TypeError(f"Expected dict, got {type(cache)}")
+        obj_df = cache["obj_df"]
+        obj_names = obj_df.columns.to_list()[:2]
+        if target_mask is not None:
+            obj_df = obj_df[target_mask]
+        ood_mask = np.array([False] * len(obj_df))
+        ood_mask[-70:] = True
+        id_mask = ~ood_mask
+        for masks, test_type in [(id_mask, "SYNTHETIC"), (ood_mask, "LIGHT")]:
+            obj_df_sub = obj_df[masks].copy()
+            metrics: Dict[str, Dict[str, float]] = {}
+            for obj_ind, obj in enumerate(obj_names):
+                metrics[obj] = {}
+                y = obj_df_sub[obj].values
+                y_pred = obj_df_sub[f"{obj}_pred"].values
+                qerr = np.maximum(y, y_pred) / np.minimum(y, y_pred)
+                metrics[obj]["wmape"] = local_wmape(y, y_pred)
+                metrics[obj]["p50_err"] = local_p50_err(y, y_pred)
+                metrics[obj]["p90_err"] = local_p90_err(y, y_pred)
+                metrics[obj]["p50_wape"] = local_p50_wape(y, y_pred)
+                metrics[obj]["p90_wape"] = local_p90_wape(y, y_pred)
+                metrics[obj]["p50_qerr"] = np.percentile(qerr, 50)
+                metrics[obj]["p90_qerr"] = np.percentile(qerr, 90)
+                metrics[obj]["p99_qerr"] = np.percentile(qerr, 99)
+                metrics[obj]["max_qerr"] = np.max(qerr)
+                metrics[obj]["mean_qerr"] = np.mean(qerr)
+                metrics[obj]["corr"] = float(np.corrcoef(y, y_pred)[0, 1])
+            print("metrics: ", metrics)
+            test_file_name_sub = f"obj_df_test_{test_type}_{device}.pkl"
+            PickleHandler.save(
+                {
+                    "obj_df": obj_df_sub,
+                    "metrics": metrics,
+                },
+                ckp_learning_header,
+                test_file_name_sub,
+                overwrite=True,
+            )
+
+
+def sink_tpc_stats(
+    benchmark: str,
+    ckp_learning_header: str,
+    device: str,
+    target_mask: np.ndarray,
+) -> None:
+    if not os.path.exists(
+        f"{ckp_learning_header}/obj_df_test_{benchmark}_{device}.pkl"
+    ):
+        tfile = glob.glob(f"{ckp_learning_header}/obj_df_test_with_*.pkl")[0]
+        tfile_name = os.path.basename(tfile)
+        cache = PickleHandler.load(ckp_learning_header, tfile_name)
+        if not isinstance(cache, dict):
+            raise TypeError(f"Expected dict, got {type(cache)}")
+        obj_df = cache["obj_df"][target_mask]
+        obj_names = obj_df.columns.to_list()[:2]
+
+        metrics: Dict[str, Dict[str, float]] = {}
+        for obj_ind, obj in enumerate(obj_names):
+            metrics[obj] = {}
+            y = obj_df[obj].values
+            y_pred = obj_df[f"{obj}_pred"].values
+            qerr = np.maximum(y, y_pred) / np.minimum(y, y_pred)
+            metrics[obj]["wmape"] = local_wmape(y, y_pred)
+            metrics[obj]["p50_err"] = local_p50_err(y, y_pred)
+            metrics[obj]["p90_err"] = local_p90_err(y, y_pred)
+            metrics[obj]["p50_wape"] = local_p50_wape(y, y_pred)
+            metrics[obj]["p90_wape"] = local_p90_wape(y, y_pred)
+            metrics[obj]["p50_qerr"] = np.percentile(qerr, 50)
+            metrics[obj]["p90_qerr"] = np.percentile(qerr, 90)
+            metrics[obj]["p99_qerr"] = np.percentile(qerr, 99)
+            metrics[obj]["max_qerr"] = np.max(qerr)
+            metrics[obj]["mean_qerr"] = np.mean(qerr)
+            metrics[obj]["corr"] = float(np.corrcoef(y, y_pred)[0, 1])
+        print("metrics: ", metrics)
+        test_file_name_sub = f"obj_df_test_{benchmark}_{device}.pkl"
+        PickleHandler.save(
+            {"obj_df": obj_df, "metrics": metrics},
+            ckp_learning_header,
+            test_file_name_sub,
+            overwrite=True,
+        )
+
+
 def train_and_dump(
     ta: TypeAdvisor,
     pw: PathWatcher,
@@ -668,49 +762,28 @@ def train_and_dump(
         print("model found and loadable at", ckp_learning_header)
 
     if params.benchmark == "job":
-        if not os.path.exists(
-            f"obj_df_test_SYNTHETIC_{device}.pkl"
-        ) or not os.path.exists(f"obj_df_test_LIGHT_{device}.pkl"):
-            tfile = glob.glob(f"{ckp_learning_header}/obj_df_test_with_*.pkl")[0]
-            tfile_name = os.path.basename(tfile)
-            cache = PickleHandler.load(ckp_learning_header, tfile_name)
-            if not isinstance(cache, dict):
-                raise TypeError(f"Expected dict, got {type(cache)}")
-            obj_df = cache["obj_df"]
-            obj_names = obj_df.columns.to_list()[:2]
-            ood_mask = np.array([False] * len(obj_df))
-            ood_mask[-70:] = True
-            id_mask = ~ood_mask
-            for masks, test_type in [(id_mask, "SYNTHETIC"), (ood_mask, "LIGHT")]:
-                obj_df_sub = obj_df[masks].copy()
-                metrics: Dict[str, Dict[str, float]] = {}
-                for obj_ind, obj in enumerate(obj_names):
-                    metrics[obj] = {}
-                    y = obj_df_sub[obj].values
-                    y_pred = obj_df_sub[f"{obj}_pred"].values
-                    qerr = np.maximum(y, y_pred) / np.minimum(y, y_pred)
-                    metrics[obj]["wmape"] = local_wmape(y, y_pred)
-                    metrics[obj]["p50_err"] = local_p50_err(y, y_pred)
-                    metrics[obj]["p90_err"] = local_p90_err(y, y_pred)
-                    metrics[obj]["p50_wape"] = local_p50_wape(y, y_pred)
-                    metrics[obj]["p90_wape"] = local_p90_wape(y, y_pred)
-                    metrics[obj]["p50_qerr"] = np.percentile(qerr, 50)
-                    metrics[obj]["p90_qerr"] = np.percentile(qerr, 90)
-                    metrics[obj]["p99_qerr"] = np.percentile(qerr, 99)
-                    metrics[obj]["max_qerr"] = np.max(qerr)
-                    metrics[obj]["mean_qerr"] = np.mean(qerr)
-                    metrics[obj]["corr"] = float(np.corrcoef(y, y_pred)[0, 1])
-                print("metrics: ", metrics)
-                test_file_name_sub = f"obj_df_test_{test_type}_{device}.pkl"
-                PickleHandler.save(
-                    {
-                        "obj_df": obj_df_sub,
-                        "metrics": metrics,
-                    },
-                    ckp_learning_header,
-                    test_file_name_sub,
-                    overwrite=True,
-                )
+        sink_job_stats(ckp_learning_header, device)
+    elif params.benchmark.endswith("+job"):
+        bm_list = params.benchmark.split("+")
+        pw_job = PathWatcher(
+            pw.base_dir,
+            "job",
+            pw.debug,
+            pw.extract_params,
+            pw.fold,
+        )
+        index_splits_jobs = PickleHandler.load(
+            pw_job.cc_prefix, "index_splits_q_compile.pkl"
+        )
+        if not isinstance(index_splits_jobs, dict):
+            raise TypeError(f"Expected dict, got {type(index_splits_jobs)}")
+        n_test_jobs = len(index_splits_jobs["test"])
+        n_test = len(split_iterators["test"].keys)
+        job_mask = np.array([False] * n_test)
+        job_mask[-n_test_jobs:] = True
+        sink_job_stats(ckp_learning_header, device, job_mask)
+        tpc_mask = ~job_mask
+        sink_tpc_stats(bm_list[0], ckp_learning_header, device, tpc_mask)
 
 
 @dataclass
