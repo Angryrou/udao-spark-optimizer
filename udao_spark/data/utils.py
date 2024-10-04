@@ -520,7 +520,7 @@ def get_split_iterators(
             for bm_ in bm.split("+"):
                 hists_ = get_hist(f"{data_stats_header}/regrouped_{bm_}_hist.csv")
                 hists_ = {
-                    (bm + table, column): hist
+                    (bm + "." + table, column): hist
                     for (table, column), hist in hists_.items()
                 }
                 hists.update(hists_)
@@ -538,7 +538,7 @@ def get_split_iterators(
                 if not isinstance(table_samples_, Dict):
                     raise TypeError(f"table_samples_ is not a dict: {table_samples_}")
                 table_samples_ = {
-                    bm + table: df for table, df in table_samples_.items()
+                    bm_ + "." + table: df for table, df in table_samples_.items()
                 }
                 table_samples.update(table_samples_)
         else:
@@ -548,6 +548,9 @@ def get_split_iterators(
             table_samples = PickleHandler.load(data_stats_header, bitmap_name)  # type: ignore
             if not isinstance(table_samples, Dict):
                 raise TypeError(f"table_samples is not a dict: {table_samples}")
+            table_samples = {
+                bm + "." + table: df for table, df in table_samples.items()
+            }
 
     if not Path(f"{pw.cc_extract_prefix}/{cache_file}").exists():
         return extract_and_save_iterators(

@@ -19,10 +19,10 @@ def get_table_metadata(pred_str: str) -> Dict[str, str]:
     else:
         raise Exception(f"Columns not found in {pred_str}")
 
-    table_pattern = r"`[^`]+`\.`[^`]+`\.`([^`]+)`"
+    table_pattern = r"`[^`]+`\.`([^`]+)`\.`([^`]+)`"
     table_match = re.search(table_pattern, pred_str)
     if table_match:
-        table_name = table_match.group(1)
+        table_name = table_match.group(1) + "." + table_match.group(2)
     else:
         raise Exception(f"Table name not found in {pred_str}")
     return {col: table_name for col in columns_list}
@@ -31,7 +31,6 @@ def get_table_metadata(pred_str: str) -> Dict[str, str]:
 def get_pred_triplets_with_meta(pred: str, col2rel: Dict[str, str]) -> str:
     if "CASE WHEN" in pred or "OR" in pred:
         return ""
-    # pattern = r"(\w+)(?:#\d+)\s*([<>=!]{1,2})\s*(\d{4}-\d{2}-\d{2}|\d+\.\d+|\d+)"
     pattern = r"(\w+#\d+)\s*([<>=!]{1,2})\s*(\d{4}-\d{2}-\d{2}|\d+\.\d+|\d+)"
     matches = re.finditer(pattern, pred)  # type: ignore
     triplets = [match.groups() for match in matches]
