@@ -531,27 +531,24 @@ def get_split_iterators(
         if "+" in bm:
             table_samples = {}
             for bm_ in bm.split("+"):
-                bitmap_name = (
-                    f"{bm_}_samples.pkl" if bm_ == "job" else f"{bm_}_100_samples.pkl"
-                )
+                dbname = "job" if bm_ == "job" else f"{bm_}_100"
+                bitmap_name = f"{dbname}_samples.pkl"
                 table_samples_ = PickleHandler.load(data_stats_header, bitmap_name)
                 if not isinstance(table_samples_, Dict):
                     raise TypeError(f"table_samples_ is not a dict: {table_samples_}")
                 table_samples_ = {
-                    bm_ + "." + table: df for table, df in table_samples_.items()
+                    dbname + "." + table: df for table, df in table_samples_.items()
                 }
                 table_samples.update(table_samples_)
         else:
-            bitmap_name = (
-                f"{bm}_samples.pkl" if bm == "job" else f"{bm}_100_samples.pkl"
-            )
+            dbname = "job" if bm == "job" else f"{bm}_100"
+            bitmap_name = f"{dbname}_samples.pkl"
             table_samples = PickleHandler.load(data_stats_header, bitmap_name)  # type: ignore
             if not isinstance(table_samples, Dict):
                 raise TypeError(f"table_samples is not a dict: {table_samples}")
             table_samples = {
-                bm + "." + table: df for table, df in table_samples.items()
+                dbname + "." + table: df for table, df in table_samples.items()
             }
-
     if not Path(f"{pw.cc_extract_prefix}/{cache_file}").exists():
         return extract_and_save_iterators(
             pw=pw,
