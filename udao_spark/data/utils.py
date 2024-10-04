@@ -404,7 +404,7 @@ def extract_index_splits_wrapper(
                         bm,
                         pw.debug,
                         pw.extract_params,
-                        pw.fold,
+                        None if bm == "job" else pw.fold,
                     ),
                     seed,
                     q_type,

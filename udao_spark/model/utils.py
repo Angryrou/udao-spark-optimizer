@@ -764,13 +764,13 @@ def train_and_dump(
     if params.benchmark == "job":
         sink_job_stats(ckp_learning_header, device)
     elif params.benchmark.endswith("+job"):
-        bm_list = params.benchmark.split("+")
+        bm_tpc = params.benchmark.split("+")[0]
         pw_job = PathWatcher(
             pw.base_dir,
             "job",
             pw.debug,
             pw.extract_params,
-            pw.fold,
+            None,
         )
         index_splits_jobs = PickleHandler.load(
             pw_job.cc_prefix, "index_splits_q_compile.pkl"
@@ -783,7 +783,7 @@ def train_and_dump(
         job_mask[-n_test_jobs:] = True
         sink_job_stats(ckp_learning_header, device, job_mask)
         tpc_mask = ~job_mask
-        sink_tpc_stats(bm_list[0], ckp_learning_header, device, tpc_mask)
+        sink_tpc_stats(bm_tpc, ckp_learning_header, device, tpc_mask)
 
 
 @dataclass
