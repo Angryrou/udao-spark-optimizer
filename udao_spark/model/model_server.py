@@ -19,12 +19,16 @@ from ..utils.logging import logger
 from ..utils.params import QType
 from .utils import (
     GraphAverageMLPParams,
+    GraphTransformerBasicMLPParams,
     GraphTransformerMLPParams,
+    GraphTransformerSKMLPParams,
     TreeLSTMParams,
     UdaoModule,
     calibrate_negative_predictions,
     get_graph_avg_mlp,
+    get_graph_transformer_basic_mlp,
     get_graph_transformer_mlp,
+    get_graph_transformer_sk_mlp,
     get_tree_lstm_mlp,
 )
 
@@ -32,7 +36,11 @@ from .utils import (
 class ModelServer:
     @classmethod
     def from_ckp_path(
-        cls, model_sign: str, model_params_path: str, weights_path: str
+        cls,
+        model_sign: str,
+        model_params_path: str,
+        weights_path: str,
+        verbose: bool = True,
     ) -> "ModelServer":
         if model_sign == "graph_avg":
             graph_avg_ml_params = GraphAverageMLPParams.from_dict(
@@ -40,8 +48,6 @@ class ModelServer:
             )
             objectives = graph_avg_ml_params.iterator_shape.output_names
             model = get_graph_avg_mlp(graph_avg_ml_params)
-            logger.info("GRAPH MODEL DETAILS:\n")
-            logger.info(model)
         elif model_sign in ["graph_gtn", "graph_qf", "graph_raal"]:
             param_dict = JsonHandler.load_json(model_params_path)
             if model_sign == "graph_raal":
@@ -49,19 +55,30 @@ class ModelServer:
             graph_gtn_ml_params = GraphTransformerMLPParams.from_dict(param_dict)
             objectives = graph_gtn_ml_params.iterator_shape.output_names
             model = get_graph_transformer_mlp(graph_gtn_ml_params)
-            logger.info("GRAPH MODEL DETAILS:\n")
-            logger.info(model)
+        elif model_sign == "graph_gtn_basic_mlp":
+            graph_gtn_basic_params = GraphTransformerBasicMLPParams.from_dict(
+                JsonHandler.load_json(model_params_path)
+            )
+            objectives = graph_gtn_basic_params.iterator_shape.output_names
+            model = get_graph_transformer_basic_mlp(graph_gtn_basic_params)
+
+        elif model_sign == "graph_gtn_sk_mlp":
+            graph_gtn_sk_params = GraphTransformerSKMLPParams.from_dict(
+                JsonHandler.load_json(model_params_path)
+            )
+            objectives = graph_gtn_sk_params.iterator_shape.output_names
+            model = get_graph_transformer_sk_mlp(graph_gtn_sk_params)
         elif model_sign.startswith("tree"):
             tree_lstm_ml_params = TreeLSTMParams.from_dict(
                 JsonHandler.load_json(model_params_path)
             )
             objectives = tree_lstm_ml_params.iterator_shape.output_names
             model = get_tree_lstm_mlp(tree_lstm_ml_params)
-            logger.info("Tree MODEL DETAILS:\n")
-            logger.info(model)
         else:
             raise ValueError(f"Unknown model sign: {model_sign}")
-
+        if verbose:
+            logger.info("MODEL DETAILS:\n")
+            logger.info(model)
         model.eval()
         for p in model.parameters():
             p.requires_grad = False

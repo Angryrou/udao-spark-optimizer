@@ -50,6 +50,7 @@ def get_graph_embedding(
     index_splits: Dict[str, np.ndarray],
     weights_header: str,
     name: str = "graph_np_dict.pkl",
+    bs: int = 1024,
 ) -> Dict[str, np.ndarray]:
     try:
         graph_np_dict = PickleHandler.load(weights_header, name)
@@ -60,7 +61,6 @@ def get_graph_embedding(
     except FileNotFoundError:
         print("not found, generating...")
     graph_embedding_dict = {}
-    bs = 1024
     device = get_default_device()
     for split, iterator in split_iterators.items():
         print(f"start working on {split}")
