@@ -330,7 +330,8 @@ def job_setup(pw: PathWatcher, seed: int) -> None:
         df_dict = {}
         sc = SparkConf(str(pw.base_dir / "assets/spark_configuration_aqe_on.json"))
         for k, df_raw in df_raw_dict.items():
-            df_raw["template"] = k + df_raw["template"].astype(int).astype(str)
+            if not isinstance(df_raw["template"].iloc[0], str):
+                df_raw["template"] = k + df_raw["template"].astype(int).astype(str)
             df_q = prepare_data(df_raw, benchmark=pw.benchmark, sc=sc, q_type="q")
             df_q_compile_k = df_q[df_q["lqp_id"] == 0].copy()  # for compile-time df
             df_dict[k] = df_q_compile_k
