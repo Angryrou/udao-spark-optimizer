@@ -49,5 +49,11 @@ class Benchmark:
             return [str(i) for i in range(5000)]
         elif benchmark_type == BenchmarkType.JOB_LIGHT:
             return [str(i) for i in range(70)]
+        elif benchmark_type == BenchmarkType.JOB:
+            return (
+                ["TRAIN" + str(i) for i in range(100000)]
+                + ["SYNTHETIC" + str(i) for i in range(5000)]
+                + ["LIGHT" + str(i) for i in range(70)]
+            )
         else:
             raise ValueError(f"{benchmark_type} is not supported")

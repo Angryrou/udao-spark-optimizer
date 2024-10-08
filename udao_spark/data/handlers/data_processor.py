@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -37,7 +37,7 @@ def create_udao_data_processor(
     lpe_size: int,
     vec_size: int,
     tensor_dtypes: th.dtype = th.float32,
-    hists: Optional[Dict[str, np.ndarray]] = None,
+    hists: Optional[Dict[Tuple[str, str], np.ndarray]] = None,
     table_samples: Optional[Dict[str, pd.DataFrame]] = None,
 ) -> DataProcessor:
     tabular_columns = ta.get_tabular_columns()
@@ -69,21 +69,9 @@ def create_udao_data_processor(
                     ),
                 ),
             ),
-            hist=FeaturePipeline(
-                extractor=PredicateHistogramExtractor(
-                    hists=hists,
-                    extract_operations=get_extract_operations_from_serialized_json(
-                        ta.q_type
-                    ),
-                ),
-            ),
+            hist=FeaturePipeline(extractor=PredicateHistogramExtractor(hists=hists)),
             bitmap=FeaturePipeline(
-                extractor=PredicateBitmapExtractor(
-                    table_samples=table_samples,
-                    extract_operations=get_extract_operations_from_serialized_json(
-                        ta.q_type
-                    ),
-                ),
+                extractor=PredicateBitmapExtractor(table_samples=table_samples),
             ),
         )
     else:

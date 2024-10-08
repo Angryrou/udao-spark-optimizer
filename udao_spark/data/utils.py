@@ -1,3 +1,4 @@
+import os.path
 from itertools import chain
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -312,10 +313,53 @@ def magic_setup(pw: PathWatcher, seed: int) -> None:
         save_and_log_index(index_splits_qs, pw, f"index_splits_qs-{pw.fold}.pkl")
 
 
+def job_setup(pw: PathWatcher, seed: int) -> None:
+    header = pw.data_prefix
+    df_raw_dict = {
+        "TRAIN": pd.read_csv(f"{header}/train_q_100000x1.csv", low_memory=pw.debug),
+        "SYNTHETIC": pd.read_csv(
+            f"{header}/synthetic_q_5000x1.csv", low_memory=pw.debug
+        ),
+        "LIGHT": pd.read_csv(f"{header}/light_q_70x1.csv", low_memory=pw.debug),
+    }
+    # prepare data
+    try:
+        df_q_compile = ParquetHandler.load(pw.cc_prefix, "df_q_compile.parquet")
+    except Exception as e:
+        logger.warning(f"Failed to load df_q_compile_* from cache: {e}")
+        df_dict = {}
+        sc = SparkConf(str(pw.base_dir / "assets/spark_configuration_aqe_on.json"))
+        for k, df_raw in df_raw_dict.items():
+            if not isinstance(df_raw["template"].iloc[0], str):
+                df_raw["template"] = k + df_raw["template"].astype(int).astype(str)
+            df_q = prepare_data(df_raw, benchmark=pw.benchmark, sc=sc, q_type="q")
+            df_q_compile_k = df_q[df_q["lqp_id"] == 0].copy()  # for compile-time df
+            df_dict[k] = df_q_compile_k
+        df_q_compile = pd.concat(df_dict.values())
+        save_and_log_df(df_q_compile, ["appid"], pw, "df_q_compile")
+        logger.info("Saved and loaded df_q_compile_* from cache")
+        df_train, df_val = train_test_split(
+            df_dict["TRAIN"],
+            test_size=0.1,
+            stratify=None,
+            random_state=seed,
+        )
+        index_splits_q_compile = {
+            "train": df_train.appid.to_list(),
+            "val": df_val.appid.to_list(),
+            "test": df_dict["SYNTHETIC"].appid.tolist()
+            + df_dict["LIGHT"].appid.tolist(),
+        }
+        save_and_log_index(index_splits_q_compile, pw, "index_splits_q_compile.pkl")
+
+
 # Data Split Index
 def extract_index_splits(
     pw: PathWatcher, seed: int, q_type: str
 ) -> Tuple[pd.DataFrame, Dict[DatasetType, List[str]]]:
+    if pw.benchmark == "job" and q_type != "q_compile":
+        raise NotImplementedError("job benchmark only supports q_compile")
+
     index_splits_name = (
         f"index_splits_{q_type}.pkl"
         if pw.fold is None
@@ -329,7 +373,10 @@ def extract_index_splits(
             f"not found {index_splits_name} or df_{q_type}.parquet "
             f"under {pw.cc_prefix}, start magic setup..."
         )
-        magic_setup(pw, seed)
+        if pw.benchmark != "job":
+            magic_setup(pw, seed)
+        else:
+            job_setup(pw, seed)
     else:
         logger.info(f"found {pw.cc_prefix}/df_{q_type}.pkl, loading...")
         logger.info(f"found {pw.cc_prefix}/{index_splits_name}, loading...")
@@ -346,19 +393,56 @@ def extract_index_splits(
     return df, index_splits
 
 
+def extract_index_splits_wrapper(
+    pw: PathWatcher, seed: int, q_type: str
+) -> Tuple[pd.DataFrame, Dict[DatasetType, List[str]]]:
+    if "+" in pw.benchmark:
+        dfs, index_splits_list = zip(
+            *[
+                extract_index_splits(
+                    PathWatcher(
+                        pw.base_dir,
+                        bm,
+                        pw.debug,
+                        pw.extract_params,
+                        None if bm == "job" else pw.fold,
+                    ),
+                    seed,
+                    q_type,
+                )
+                for bm in pw.benchmark.split("+")
+            ]
+        )
+        df = pd.concat(dfs)
+        index_splits = {
+            split: list(
+                chain.from_iterable(
+                    [index_splits[split] for index_splits in index_splits_list]
+                )
+            )
+            for split in index_splits_list[0].keys()
+        }
+        return df, index_splits
+    else:
+        return extract_index_splits(pw=pw, seed=seed, q_type=q_type)
+
+
 def extract_and_save_iterators(
     pw: PathWatcher,
     ta: TypeAdvisor,
     tensor_dtypes: th.dtype,
     cache_file: str = "split_iterators.pkl",
-    hists: Optional[Dict[str, np.ndarray]] = None,
+    hists: Optional[Dict[Tuple[str, str], np.ndarray]] = None,
     table_samples: Optional[Dict[str, pd.DataFrame]] = None,
 ) -> Dict[DatasetType, BaseIterator]:
+    if "job" in pw.benchmark and ta.q_type != "q_compile":
+        raise NotImplementedError("job benchmark only supports q_compile")
+
     params = pw.extract_params
     if Path(f"{pw.cc_extract_prefix}/{cache_file}").exists():
         raise FileExistsError(f"{pw.cc_extract_prefix}/{cache_file} already exists.")
     logger.info("start extracting split_iterators")
-    df, index_splits = extract_index_splits(
+    df, index_splits = extract_index_splits_wrapper(
         pw=pw, seed=params.seed, q_type=ta.get_q_type_for_cache()
     )
 
@@ -398,29 +482,74 @@ def extract_and_save_iterators(
     return split_iterators
 
 
+def get_hist(path: str) -> Dict[Tuple[str, str], np.ndarray]:
+    df = pd.read_csv(path)
+    hists = {
+        (row["table"], row["column"]): np.array(
+            list(map(float, row["hists"][1:-1].split(", ")))
+        )
+        for _, row in df.iterrows()
+    }
+    return hists
+
+
+def get_bitmap(path: str) -> Dict[str, np.ndarray]:
+    bitmap = PickleHandler.load(
+        header=os.path.dirname(path),
+        file_name=os.path.basename(path),
+    )  # type: ignore
+    return bitmap  # type: ignore
+
+
 def get_split_iterators(
     pw: PathWatcher,
     ta: TypeAdvisor,
     tensor_dtypes: th.dtype,
-    hists: Optional[Dict[str, np.ndarray]] = None,
+    hists: Optional[Dict[Tuple[str, str], np.ndarray]] = None,
     table_samples: Optional[Dict[str, pd.DataFrame]] = None,
 ) -> Dict[DatasetType, BaseIterator]:
     cache_file = "split_iterators.pkl"
+    bm = pw.benchmark
 
+    if bm == "job" and ta.q_type != "q_compile":
+        raise NotImplementedError("job benchmark only supports q_compile")
+
+    data_stats_header = f"{pw.base_dir}/assets/data_stats"
     if hists is None:
-        df = pd.read_csv(
-            f"{pw.base_dir}/assets/data_stats/regrouped_{pw.benchmark}_hist.csv"
-        )
-        hists = {
-            row["column"]: np.array(list(map(float, row["hists"][1:-1].split(", "))))
-            for _, row in df.iterrows()
-        }
-    if table_samples is None:
-        table_samples = PickleHandler.load(
-            header=f"{pw.base_dir}/assets/data_stats",
-            file_name=f"{pw.benchmark}_100_samples.pkl",
-        )  # type: ignore
+        if "+" in bm:
+            hists = {}
+            for bm_ in bm.split("+"):
+                hists_ = get_hist(f"{data_stats_header}/regrouped_{bm_}_hist.csv")
+                hists_ = {
+                    (bm + "." + table, column): hist
+                    for (table, column), hist in hists_.items()
+                }
+                hists.update(hists_)
+        else:
+            hists = get_hist(f"{data_stats_header}/regrouped_{bm}_hist.csv")
 
+    if table_samples is None:
+        if "+" in bm:
+            table_samples = {}
+            for bm_ in bm.split("+"):
+                dbname = "job" if bm_ == "job" else f"{bm_}_100"
+                bitmap_name = f"{dbname}_samples.pkl"
+                table_samples_ = PickleHandler.load(data_stats_header, bitmap_name)
+                if not isinstance(table_samples_, Dict):
+                    raise TypeError(f"table_samples_ is not a dict: {table_samples_}")
+                table_samples_ = {
+                    dbname + "." + table: df for table, df in table_samples_.items()
+                }
+                table_samples.update(table_samples_)
+        else:
+            dbname = "job" if bm == "job" else f"{bm}_100"
+            bitmap_name = f"{dbname}_samples.pkl"
+            table_samples = PickleHandler.load(data_stats_header, bitmap_name)  # type: ignore
+            if not isinstance(table_samples, Dict):
+                raise TypeError(f"table_samples is not a dict: {table_samples}")
+            table_samples = {
+                dbname + "." + table: df for table, df in table_samples.items()
+            }
     if not Path(f"{pw.cc_extract_prefix}/{cache_file}").exists():
         return extract_and_save_iterators(
             pw=pw,

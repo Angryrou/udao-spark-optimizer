@@ -26,7 +26,13 @@ def get_data_sign(bm: str, debug: bool) -> str:
         return f"22x{10 if debug else 2273}"
     if bm == "tpcds":
         return f"102x{10 if debug else 490}"
-    raise NoBenchmarkError
+    if bm == "job":
+        return "100000x1"
+    if bm == "tpcds+job":
+        return f"102x{10 if debug else 490}+100000x1"
+    if bm == "tpch+job":
+        return f"22x{10 if debug else 2273}+100000x1"
+    raise NoBenchmarkError(bm)
 
 
 class PathWatcher:
@@ -42,6 +48,9 @@ class PathWatcher:
         self.benchmark = benchmark
         self.debug = debug
         self.fold = fold
+
+        if benchmark == "job" and fold is not None:
+            raise ValueError("fold is not supported for job benchmark")
 
         data_sign = self._get_data_sign()
         data_prefix = f"{str(base_dir)}/data/{benchmark}"

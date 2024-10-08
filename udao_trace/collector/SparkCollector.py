@@ -278,13 +278,20 @@ class SparkCollector:
         cluster_cores: int = 120,
         seed: int = 42,
         n_processes: int = 6,
+        query_range: Tuple[int, int] = (-1, -1),  # both inclusive
     ) -> None:
         queries = self.benchmark.templates
         n_queries = len(queries)
         configurations = self._get_job_lhs_conf_df(n_queries, seed)
+        if query_range[0] >= 0:
+            if query_range[0] > query_range[1]:
+                raise ValueError("range[0] > range[1], no queries to submit")
+            configurations = configurations.iloc[query_range[0] : query_range[1] + 1]
+            queries = queries[query_range[0] : query_range[1] + 1]
+            n_queries = len(queries)
 
         def prepare_lhs_i(index: int) -> Tuple[str, int, str, int]:
-            template = str(index)
+            template = queries[index]
             qid = 1
             conf_df = configurations.iloc[index]
             knob_sign = str(conf_df.name)
