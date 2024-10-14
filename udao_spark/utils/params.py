@@ -62,6 +62,8 @@ def get_base_parser() -> ArgumentParser:
                         help="Random seed")
     parser.add_argument("--fold", type=int, default=None,
                         help="Fold number, from 0 to 9")
+    parser.add_argument("--data_percentage", type=int, default=None,
+                        help="Portion number, from 0 to 100")
     # fmt: on
     return parser
 

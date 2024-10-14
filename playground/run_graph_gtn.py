@@ -12,10 +12,10 @@ from udao_spark.model.utils import (
     GraphTransformerMLPParams,
     MyLearningParams,
     get_graph_transformer_mlp,
+    param_init,
     train_and_dump,
 )
-from udao_spark.utils.collaborators import PathWatcher, TypeAdvisor
-from udao_spark.utils.params import ExtractParams, get_graph_transformer_params
+from udao_spark.utils.params import get_graph_transformer_params
 
 logger.setLevel("INFO")
 if __name__ == "__main__":
@@ -29,23 +29,7 @@ if __name__ == "__main__":
     th.set_default_dtype(tensor_dtypes)  # type: ignore
 
     # Data definition
-    ta = TypeAdvisor(q_type=params.q_type)
-    extract_params = ExtractParams.from_dict(
-        {
-            "lpe_size": params.lpe_size,
-            "vec_size": params.vec_size,
-            "seed": params.seed,
-            "q_type": params.q_type,
-            "debug": params.debug,
-        }
-    )
-    pw = PathWatcher(
-        Path(__file__).parent,
-        params.benchmark,
-        params.debug,
-        extract_params,
-        params.fold,
-    )
+    ta, pw = param_init(Path(__file__).parent, params)
     split_iterators = get_split_iterators(pw=pw, ta=ta, tensor_dtypes=tensor_dtypes)
     train_iterator = cast(QueryPlanIterator, split_iterators["train"])
     split_iterators["train"].set_augmentations(
@@ -96,7 +80,7 @@ if __name__ == "__main__":
         pw=pw,
         model=model,
         split_iterators=split_iterators,
-        extract_params=extract_params,
+        extract_params=pw.extract_params,
         model_params=model_params,
         learning_params=learning_params,
         params=params,
