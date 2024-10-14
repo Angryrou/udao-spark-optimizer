@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import cast
 
 import torch as th
@@ -31,7 +32,7 @@ if __name__ == "__main__":
     th.set_default_dtype(tensor_dtypes)  # type: ignore
 
     # Data definition
-    ta, pw = param_init(params)
+    ta, pw = param_init(Path(__file__).parent, params)
     split_iterators = get_split_iterators(pw=pw, ta=ta, tensor_dtypes=tensor_dtypes)
     train_iterator = cast(QueryPlanIterator, split_iterators["train"])
     split_iterators["train"].set_augmentations(
