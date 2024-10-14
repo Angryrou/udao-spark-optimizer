@@ -697,6 +697,28 @@ def sink_tpc_stats(
         )
 
 
+def param_init(params: Namespace) -> Tuple[TypeAdvisor, PathWatcher]:
+    ta = TypeAdvisor(q_type=params.q_type)
+    extract_params = ExtractParams.from_dict(
+        {
+            "lpe_size": params.lpe_size,
+            "vec_size": params.vec_size,
+            "seed": params.seed,
+            "q_type": params.q_type,
+            "debug": params.debug,
+        }
+    )
+    pw = PathWatcher(
+        Path(__file__).parent,
+        params.benchmark,
+        params.debug,
+        extract_params,
+        params.fold,
+        params.data_percentile,
+    )
+    return ta, pw
+
+
 def train_and_dump(
     ta: TypeAdvisor,
     pw: PathWatcher,

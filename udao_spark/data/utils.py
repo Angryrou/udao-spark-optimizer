@@ -1,3 +1,4 @@
+import itertools
 import os.path
 from itertools import chain
 from pathlib import Path
@@ -445,6 +446,14 @@ def extract_and_save_iterators(
     df, index_splits = extract_index_splits_wrapper(
         pw=pw, seed=params.seed, q_type=ta.get_q_type_for_cache()
     )
+
+    data_percentile = pw.data_percentile
+    if data_percentile is not None:
+        index_splits = {
+            k: v if k == "test" else v[: int(np.ceil(len(v) * data_percentile / 100))]
+            for k, v in index_splits.items()
+        }
+        df = df.loc[list(itertools.chain.from_iterable(index_splits.values()))]
 
     cache_file_dp = "data_processor.pkl"
     if Path(f"{pw.cc_extract_prefix}/{cache_file_dp}").exists():
