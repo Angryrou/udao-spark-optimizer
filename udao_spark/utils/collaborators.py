@@ -43,13 +43,13 @@ class PathWatcher:
         debug: bool,
         extract_params: ExtractParams,
         fold: Optional[int],
-        data_percentile: Optional[int] = None,
+        data_percentage: Optional[int] = None,
     ):
         self.base_dir = base_dir
         self.benchmark = benchmark
         self.debug = debug
         self.fold = fold
-        self.data_percentile = data_percentile
+        self.data_percentage = data_percentage
 
         if benchmark == "job" and fold is not None:
             raise ValueError("fold is not supported for job benchmark")
@@ -62,10 +62,10 @@ class PathWatcher:
             if fold not in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]:
                 raise ValueError(f"fold must be in [1, 2, ..., 10], got {fold}")
             cc_extract_prefix += f"-{fold}"
-        if data_percentile is not None:
-            if data_percentile not in list(range(101)):
+        if data_percentage is not None:
+            if data_percentage not in list(range(101)):
                 raise ValueError("data_percentage must be in [0, 1, ..., 100]")
-            cc_extract_prefix += f"_{data_percentile}"
+            cc_extract_prefix += f"_{data_percentage}"
         self.data_sign = data_sign
         self.data_prefix = data_prefix
         self.cc_prefix = cc_prefix

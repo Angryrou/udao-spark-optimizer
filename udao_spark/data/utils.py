@@ -447,10 +447,10 @@ def extract_and_save_iterators(
         pw=pw, seed=params.seed, q_type=ta.get_q_type_for_cache()
     )
 
-    data_percentile = pw.data_percentile
-    if data_percentile is not None:
+    data_percentage = pw.data_percentage
+    if data_percentage is not None:
         index_splits = {
-            k: v if k == "test" else v[: int(np.ceil(len(v) * data_percentile / 100))]
+            k: v if k == "test" else v[: int(np.ceil(len(v) * data_percentage / 100))]
             for k, v in index_splits.items()
         }
         df = df.loc[list(itertools.chain.from_iterable(index_splits.values()))]

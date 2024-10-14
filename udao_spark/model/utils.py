@@ -714,7 +714,7 @@ def param_init(params: Namespace) -> Tuple[TypeAdvisor, PathWatcher]:
         params.debug,
         extract_params,
         params.fold,
-        params.data_percentile,
+        params.data_percentage,
     )
     return ta, pw
 
