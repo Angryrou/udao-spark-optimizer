@@ -96,32 +96,13 @@ for table_name, table_info in tables.items():
 
 def generate_queries(query_cnt: int) -> List[str]:
     queries = []
+    # fix the startign table as title
+    start_table = "title"
+    remaining_tables = [t for t in tables.keys() if t not in start_table]
+
     for _ in range(query_cnt):
         num_tables = random.choice([4, 5])  # 3-4 joins
-        # Randomly select a starting table
-        start_table = random.choice(list(tables.keys()))
-        # Build the path of tables
-        path = [start_table]
-        used_tables = set(path)
-        current_table = start_table
-        while len(path) < num_tables:
-            possible_tables = []
-            # Get foreign keys from current_table
-            for fk in tables[current_table]["foreign_keys"]:
-                if fk["ref_table"] not in used_tables:
-                    possible_tables.append((fk["ref_table"], current_table, fk))
-            # Get reverse foreign keys to current_table
-            for rfk in tables[current_table].get("reverse_foreign_keys", []):
-                if rfk["ref_table"] not in used_tables:
-                    possible_tables.append((rfk["ref_table"], current_table, rfk))
-            if not possible_tables:
-                break
-            next_table_info = random.choice(possible_tables)
-            next_table = next_table_info[0]
-            path.append(next_table)
-            used_tables.add(next_table)
-            current_table = next_table
-        # Now, build the query
+        path = [start_table] + random.sample(remaining_tables, num_tables - 1)
         table_aliases = {table: tables[table]["alias"] for table in path}
         from_clause = ", ".join(
             [f"{table} {alias}" for table, alias in table_aliases.items()]
@@ -208,7 +189,7 @@ def generate_queries(query_cnt: int) -> List[str]:
 
 
 # Example usage
-query_cnt = 40000  # Replace with your desired number of queries
+query_cnt = 50  # Replace with your desired number of queries
 random.seed(0)
 queries = generate_queries(query_cnt)
 
@@ -217,7 +198,7 @@ name = "job-ext"
 with open(f"{sql_path}/{name}_{query_cnt}.txt", "w") as f:
     f.write("\n".join(queries))
 
-os.makedirs(f"{sql_path}/{name}")
+os.makedirs(f"{sql_path}/{name}", exist_ok=True)
 for qid, q in enumerate(queries):
     with open(f"{sql_path}/{name}/{qid}.sql", "w") as f:
         f.write(q)
