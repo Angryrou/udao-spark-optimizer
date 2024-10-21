@@ -18,6 +18,7 @@ class Benchmark:
             BenchmarkType.JOB_TRAIN,
             BenchmarkType.JOB_SYNTHETIC,
             BenchmarkType.JOB_LIGHT,
+            BenchmarkType.JOB_EXT,
         ]:
             return self.get_name()
         else:
