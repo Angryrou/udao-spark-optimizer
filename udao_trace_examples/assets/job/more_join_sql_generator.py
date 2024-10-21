@@ -208,7 +208,7 @@ def generate_queries(query_cnt: int) -> List[str]:
 
 
 # Example usage
-query_cnt = 50  # Replace with your desired number of queries
+query_cnt = 40000  # Replace with your desired number of queries
 random.seed(0)
 queries = generate_queries(query_cnt)
 
