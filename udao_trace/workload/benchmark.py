@@ -49,6 +49,8 @@ class Benchmark:
             return [str(i) for i in range(5000)]
         elif benchmark_type == BenchmarkType.JOB_LIGHT:
             return [str(i) for i in range(70)]
+        elif benchmark_type == BenchmarkType.JOB_EXT:
+            return [str(i) for i in range(40000)]
         elif benchmark_type == BenchmarkType.JOB:
             return (
                 ["TRAIN" + str(i) for i in range(100000)]

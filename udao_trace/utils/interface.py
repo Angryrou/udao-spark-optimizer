@@ -20,6 +20,7 @@ class BenchmarkType(Enum):
     JOB_LIGHT = "job-light"
     JOB_SYNTHETIC = "job-synthetic"
     JOB_TRAIN = "job-train"
+    JOB_EXT = "job-ext"
     JOB = "job"
 
 
