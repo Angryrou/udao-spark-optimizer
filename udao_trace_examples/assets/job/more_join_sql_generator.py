@@ -152,7 +152,7 @@ def generate_queries(query_cnt: int) -> List[str]:
                 columns = [
                     col
                     for col in tables[pred_table]["columns"].keys()
-                    if col != "movie_id"
+                    if col not in ["id", "movie_id"]
                 ]
             if not columns:
                 continue
