@@ -1,4 +1,3 @@
-import os.path
 import random
 from typing import Dict, List
 
@@ -9,7 +8,10 @@ tables: Dict[str, Dict] = {
         "columns": {
             "id": {"min": 1, "max": 2528312},
             "kind_id": {"min": 1, "max": 7},
-            "production_year": {"min": 1880, "max": 2019},
+            "production_year": {
+                "min": 1950,
+                "max": 2008,
+            },  # shrink the range to concentrate on heavy hitter
         },
         "foreign_keys": [
             {"column": "id", "ref_table": "movie_companies", "ref_column": "movie_id"},
@@ -24,7 +26,32 @@ tables: Dict[str, Dict] = {
         "columns": {
             "id": {"min": 1, "max": 14835720},
             "movie_id": {"min": 1, "max": 2526430},
-            "info_type_id": {"min": 1, "max": 110},
+            "info_type_id": {
+                "min": 1,
+                "max": 110,
+                "heavy_hitter": [
+                    16,
+                    3,
+                    7,
+                    8,
+                    4,
+                    2,
+                    1,
+                    18,
+                    15,
+                    5,
+                    6,
+                    17,
+                    98,
+                    13,
+                    107,
+                    9,
+                    105,
+                    106,
+                    94,
+                    103,
+                ],
+            },
         },
         "foreign_keys": [
             {"column": "movie_id", "ref_table": "title", "ref_column": "id"}
@@ -35,7 +62,7 @@ tables: Dict[str, Dict] = {
         "columns": {
             "id": {"min": 1, "max": 36244344},
             "movie_id": {"min": 1, "max": 2525975},
-            "person_id": {"min": 1, "max": 4061926},
+            # "person_id": {"min": 1, "max": 4061926},
             "role_id": {"min": 1, "max": 11},
         },
         "foreign_keys": [
@@ -47,7 +74,33 @@ tables: Dict[str, Dict] = {
         "columns": {
             "id": {"min": 1, "max": 2609129},
             "movie_id": {"min": 2, "max": 2525745},
-            "company_id": {"min": 1, "max": 234997},
+            "company_id": {
+                "min": 1,
+                "max": 234997,
+                "heavy_hitter": [
+                    6,
+                    19,
+                    160,
+                    27,
+                    166,
+                    11137,
+                    34,
+                    11203,
+                    11,
+                    846,
+                    2561,
+                    1451,
+                    11141,
+                    225,
+                    596,
+                    424,
+                    159,
+                    7851,
+                    302,
+                    1284,
+                    22956,
+                ],
+            },
             "company_type_id": {"min": 1, "max": 2},
         },
         "foreign_keys": [
@@ -59,7 +112,7 @@ tables: Dict[str, Dict] = {
         "columns": {
             "id": {"min": 1, "max": 1380035},
             "movie_id": {"min": 2, "max": 2525793},
-            "info_type_id": {"min": 99, "max": 113},
+            "info_type_id": {"min": 99, "max": 113, "heavy_hitter": [99, 100, 101]},
         },
         "foreign_keys": [
             {"column": "movie_id", "ref_table": "title", "ref_column": "id"}
@@ -70,7 +123,33 @@ tables: Dict[str, Dict] = {
         "columns": {
             "id": {"min": 1, "max": 4523930},
             "movie_id": {"min": 2, "max": 2525971},
-            "keyword_id": {"min": 1, "max": 134170},
+            "keyword_id": {
+                "min": 1,
+                "max": 134170,
+                "heavy_hitter": [
+                    335,
+                    16264,
+                    117,
+                    2488,
+                    359,
+                    382,
+                    137,
+                    1,
+                    1382,
+                    121,
+                    245,
+                    347,
+                    398,
+                    870,
+                    56,
+                    236,
+                    784,
+                    875,
+                    47,
+                    3636,
+                    7084,
+                ],
+            },
         },
         "foreign_keys": [
             {"column": "movie_id", "ref_table": "title", "ref_column": "id"}
@@ -162,23 +241,26 @@ def generate_queries(query_cnt: int) -> List[str]:
             col_max = tables[pred_table]["columns"][column]["max"]
             if pred_table == "title" and column == "production_year":
                 # For 'production_year', use a range predicate
-                operator = random.choice([">", "<", "BETWEEN"])
-                if operator in [">", "<"]:
-                    value = random.randint(col_min, col_max)
+                operator = random.choice([">", "BETWEEN"])
+                value = random.randint(col_min, col_max)
+                if operator in [">"]:
                     predicate = f"{pred_alias}.{column}{operator}{value}"
                 else:
-                    all_choices = list(range(col_min, col_max + 1))
-                    v1, v2 = random.sample(all_choices, 2)
-                    if v1 > v2:
-                        new_v1 = v2
-                        v2 = v1
-                        v1 = new_v1
+                    if value > 2000:
+                        dt = random.randint(4, 10)
+                    else:
+                        dt = random.choice([5, 10, 20, 50])
                     predicate = (
-                        f"{pred_alias}.{column}>{v1} AND {pred_alias}.{column}<{v2}"
+                        f"{pred_alias}.{column}>{value} "
+                        f"AND {pred_alias}.{column}<{value + dt}"
                     )
             else:
                 # For other columns, use equality predicates
-                value = random.randint(col_min, col_max)
+                if "heavy_hitter" in tables[pred_table]["columns"][column]:
+                    heavy_hitter = tables[pred_table]["columns"][column]["heavy_hitter"]
+                    value = random.choice(heavy_hitter)
+                else:
+                    value = random.randint(col_min, col_max)
                 predicate = f"{pred_alias}.{column}={value}"
             where_conditions.append(predicate)
         # Build the query
@@ -198,7 +280,7 @@ name = "job-ext"
 with open(f"{sql_path}/{name}_{query_cnt}.txt", "w") as f:
     f.write("\n".join(queries))
 
-os.makedirs(f"{sql_path}/{name}", exist_ok=True)
-for qid, q in enumerate(queries):
-    with open(f"{sql_path}/{name}/{qid}.sql", "w") as f:
-        f.write(q)
+# os.makedirs(f"{sql_path}/{name}", exist_ok=True)
+# for qid, q in enumerate(queries):
+#     with open(f"{sql_path}/{name}/{qid}.sql", "w") as f:
+#         f.write(q)
