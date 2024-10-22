@@ -1,3 +1,4 @@
+import os
 import random
 from typing import Dict, List
 
@@ -280,7 +281,7 @@ name = "job-ext"
 with open(f"{sql_path}/{name}_{query_cnt}.txt", "w") as f:
     f.write("\n".join(queries))
 
-# os.makedirs(f"{sql_path}/{name}", exist_ok=True)
-# for qid, q in enumerate(queries):
-#     with open(f"{sql_path}/{name}/{qid}.sql", "w") as f:
-#         f.write(q)
+os.makedirs(f"{sql_path}/{name}", exist_ok=True)
+for qid, q in enumerate(queries):
+    with open(f"{sql_path}/{name}/{qid}.sql", "w") as f:
+        f.write(q)
