@@ -218,8 +218,8 @@ def generate_queries(query_cnt: int) -> List[str]:
         # Generate column predicates
 
         # 3 -> 2, 3, 4; 4 -> 3, 4
-        num_predicates = random.randint(num_tables - 2, min(4, num_tables))
-        for qi in range(num_predicates):
+        num_predicates = random.randint(2, 3)
+        for _ in range(num_predicates):
             # Randomly select a table
             pred_table = random.choice(path)
             pred_alias = table_aliases[pred_table]
