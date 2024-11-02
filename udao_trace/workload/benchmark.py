@@ -42,6 +42,8 @@ class Benchmark:
                 "98 99".split()
                 if t not in ["61"]  # to be dropped due to parsing issue
             ]
+        elif benchmark_type == BenchmarkType.TPCDS:
+            return [str(i) for i in range(101, 1101)]
         elif benchmark_type == BenchmarkType.TPCXBB:
             return [str(i) for i in range(1, 31)]
         elif benchmark_type == BenchmarkType.JOB_TRAIN:

@@ -16,6 +16,7 @@ class ScaleTypes(Enum):
 class BenchmarkType(Enum):
     TPCH = "tpch"
     TPCDS = "tpcds"
+    TPCDS_EXT = "tpcds-ext"
     TPCXBB = "tpcxbb"
     JOB_LIGHT = "job-light"
     JOB_SYNTHETIC = "job-synthetic"
