@@ -566,7 +566,7 @@ class GraphTransformerSKMLPParams(UdaoParams):
         ).encode("utf-8")
         sha256_hash = hashlib.sha256(attributes_tuple)
         hex12 = sha256_hash.hexdigest()[:12]
-        return f"graph_{self.attention_layer_name.lower()}_sk_mlp" + hex12
+        return f"graph_no_lpe_{self.attention_layer_name.lower()}_sk_mlp" + hex12
 
 
 def get_graph_transformer_sk_mlp(params: GraphTransformerSKMLPParams) -> UdaoModel:
