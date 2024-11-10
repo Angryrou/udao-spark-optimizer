@@ -39,7 +39,14 @@ from ..data.utils import checkpoint_model_structure
 from ..utils.collaborators import PathWatcher, TypeAdvisor
 from ..utils.logging import logger
 from ..utils.params import ExtractParams, QType, UdaoParams
-from .embedders import GraphAverager, GraphTransformer, QPPNet, TreeCNN, TreeLSTM
+from .embedders import (
+    GAT_Transformer,
+    GraphAverager,
+    GraphTransformer,
+    QPPNet,
+    TreeCNN,
+    TreeLSTM,
+)
 from .regressors.basic_mlp import BasicMLP
 from .regressors.qppnet_out import QPPNetOut
 from .regressors.sk_mlp import SkipConnectionMLP
@@ -572,6 +579,40 @@ class GraphTransformerSKMLPParams(UdaoParams):
 def get_graph_transformer_sk_mlp(params: GraphTransformerSKMLPParams) -> UdaoModel:
     model = UdaoModel.from_config(
         embedder_cls=GraphTransformer,
+        regressor_cls=SkipConnectionMLP,
+        iterator_shape=params.iterator_shape,
+        embedder_params={
+            "output_size": params.output_size,  # 128
+            "pos_encoding_dim": params.pos_encoding_dim,  # 8
+            "n_layers": params.gtn_n_layers,  # 2
+            "n_heads": params.gtn_n_heads,  # 2
+            "hidden_dim": params.output_size,  # same as out_size
+            "readout": params.readout,  # "mean"
+            "op_groups": params.op_groups,  # all types
+            "type_embedding_dim": params.type_embedding_dim,  # 8
+            "hist_embedding_dim": params.hist_embedding_dim,  # 32
+            "bitmap_embedding_dim": params.bitmap_embedding_dim,  # 32
+            "embedding_normalizer": params.embedding_normalizer,  # None
+            "attention_layer_name": params.attention_layer_name,  # "GTN"
+            "dropout": params.gtn_dropout,
+            "max_dist": params.max_dist,  # None
+            "max_height": params.max_height,  # None
+            "non_siblings_map": params.non_siblings_map,  # None
+        },
+        regressor_params={
+            "n_layers": params.n_layers,  # 3
+            "hidden_dim": params.hidden_dim,  # 512
+            "dropout": params.dropout,  # 0.1
+            "use_batchnorm": params.use_batchnorm,  # True
+            "activation": params.activate,  # "relu"
+        },
+    )
+    return model
+
+
+def get_gat_sk_mlp(params: GraphTransformerSKMLPParams) -> UdaoModel:
+    model = UdaoModel.from_config(
+        embedder_cls=GAT_Transformer,
         regressor_cls=SkipConnectionMLP,
         iterator_shape=params.iterator_shape,
         embedder_params={

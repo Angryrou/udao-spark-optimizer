@@ -1,4 +1,5 @@
 from .base_graph_embedder import BaseGraphEmbedder
+from .gat import GAT_Transformer
 from .graph_averager import GraphAverager
 from .graph_transformer import GraphTransformer
 from .qppnet import QPPNet
@@ -12,4 +13,5 @@ __all__ = [
     "QPPNet",
     "TreeCNN",
     "TreeLSTM",
+    "GAT_Transformer",
 ]
