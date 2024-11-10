@@ -121,8 +121,8 @@ class GraphTransformer(BaseGraphEmbedder):
             )
             h = h + h_height
         elif self.attention_layer_name in ["RAAL", "GTN"]:
-            self.embedding_lap_pos_enc(g.ndata["pos_enc"])
-            # h = h + h_lap_pos_enc
+            h_lap_pos_enc = self.embedding_lap_pos_enc(g.ndata["pos_enc"])
+            h = h + h_lap_pos_enc
         else:
             raise ValueError(self.attention_layer_name)
 
