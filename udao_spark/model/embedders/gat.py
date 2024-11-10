@@ -120,7 +120,7 @@ class GAT_Transformer(BaseGraphEmbedder):
                 th.zeros_like(super_node_indices)
             )
             h = h + h_height
-        elif self.attention_layer_name in ["RAAL", "GTN"]:
+        elif self.attention_layer_name in ["RAAL", "GTN", "GAT"]:
             h_lap_pos_enc = self.embedding_lap_pos_enc(g.ndata["pos_enc"])
             h = h + h_lap_pos_enc
         else:
