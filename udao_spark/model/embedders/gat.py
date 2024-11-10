@@ -79,6 +79,8 @@ class GAT_Transformer(BaseGraphEmbedder):
                 raise ValueError("non_siblings_map is required for RAAL")
         elif self.attention_layer_name == "GTN":
             pass
+        elif self.attention_layer_name == "GAT":
+            pass
         else:
             raise ValueError(self.attention_layer_name)
 
