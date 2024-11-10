@@ -14,9 +14,7 @@ from udao_spark.model.utils import (
     MyLearningParams,
     add_dist_to_graph,
     add_height_to_graph,
-    add_new_rows_for_df,
-    add_new_rows_for_series,
-    get_graph_transformer_sk_mlp,
+    get_graph_transformer_height_encoding_sk_mlp,
     param_init,
     train_and_dump,
     update_dgl_graphs,
@@ -71,23 +69,23 @@ if __name__ == "__main__":
 
     for k, v in split_iterators.items():
         split_iterators[k].query_structure_container.template_plans = template_plans
-        operation_types = split_iterators[k].query_structure_container.operation_types
-        graph_features = split_iterators[k].query_structure_container.graph_features
-        other_graph_features = split_iterators[k].other_graph_features
-
-        operation_types = add_new_rows_for_series(operation_types, supper_gid)
-        graph_features = add_new_rows_for_df(
-            graph_features, [0] * len(graph_features.columns)
-        )
-        other_graph_features["op_enc"].data = add_new_rows_for_df(
-            other_graph_features["op_enc"].data,
-            [0] * len(other_graph_features["op_enc"].data.columns),
-        )
-
-        split_iterators[k].query_structure_container.operation_types = operation_types
-        split_iterators[k].query_structure_container.graph_features = graph_features
-        split_iterators[k].other_graph_features = other_graph_features
-
+    # operation_types = split_iterators[k].query_structure_container.operation_types
+    # graph_features = split_iterators[k].query_structure_container.graph_features
+    # other_graph_features = split_iterators[k].other_graph_features
+    #
+    # operation_types = add_new_rows_for_series(operation_types, supper_gid)
+    # graph_features = add_new_rows_for_df(
+    #     graph_features, [0] * len(graph_features.columns)
+    # )
+    # other_graph_features["op_enc"].data = add_new_rows_for_df(
+    #     other_graph_features["op_enc"].data,
+    #     [0] * len(other_graph_features["op_enc"].data.columns),
+    # )
+    #
+    # split_iterators[k].query_structure_container.operation_types = operation_types
+    # split_iterators[k].query_structure_container.graph_features = graph_features
+    # split_iterators[k].other_graph_features = other_graph_features
+    #
     # Model definition and training
     model_params = GraphTransformerSKMLPParams.from_dict(
         {
@@ -132,7 +130,7 @@ if __name__ == "__main__":
         }
     )
 
-    model = get_graph_transformer_sk_mlp(model_params)
+    model = get_graph_transformer_height_encoding_sk_mlp(model_params)
 
     train_and_dump(
         ta=ta,
