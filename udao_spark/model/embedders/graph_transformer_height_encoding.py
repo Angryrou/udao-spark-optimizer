@@ -73,7 +73,7 @@ class GraphTransformerHeightEncoding(BaseGraphEmbedder):
             max_dist = net_params.max_dist
             max_height = net_params.max_height
             self.attention_bias = nn.Parameter(th.zeros(max_dist))
-            self.height_embedding = nn.Embedding(max_height + 1, net_params.hidden_dim)
+            self.height_embedding = nn.Embedding(max_height, net_params.hidden_dim)
             self.super_node_embedding = nn.Embedding(1, net_params.hidden_dim)
 
         elif self.attention_layer_name == "RAAL":
