@@ -85,6 +85,7 @@ class GatConvLayer(nn.Module):
             out_dim // n_heads,
             n_heads,
             bias=use_bias,
+            allow_zero_in_degree=True,
         )
 
         self.O = nn.Linear(out_dim, out_dim)
