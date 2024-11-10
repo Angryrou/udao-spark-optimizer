@@ -63,6 +63,7 @@ if __name__ == "__main__":
             "hist_embedding_dim": params.hist_embedding_dim,
             "bitmap_embedding_dim": params.bitmap_embedding_dim,
             "embedding_normalizer": params.embedding_normalizer,
+            "attention_layer_name": "GAT",
             "gtn_dropout": params.gtn_dropout,
             "n_layers": params.n_layers,
             "hidden_dim": params.hidden_dim,
