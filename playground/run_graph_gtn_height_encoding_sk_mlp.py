@@ -16,7 +16,6 @@ from udao_spark.model.utils import (
     add_height_to_graph,
     add_new_rows_for_df,
     add_new_rows_for_series,
-    add_super_node_to_graph,
     get_graph_transformer_sk_mlp,
     param_init,
     train_and_dump,
@@ -60,7 +59,7 @@ if __name__ == "__main__":
     template_plans = dp.feature_extractors["query_structure"].template_plans
     template_plans = update_dgl_graphs(
         template_plans,
-        funcs=[add_super_node_to_graph, add_height_to_graph, add_dist_to_graph],
+        funcs=[add_height_to_graph, add_dist_to_graph],
     )
     max_height = max(
         [g.graph.ndata["height"].max() for g in template_plans.values()]
