@@ -5,6 +5,7 @@ from typing import cast
 import torch as th
 from udao.data import QueryPlanIterator
 from udao.data.handler.data_processor import DataProcessor
+from udao.data.utils.query_plan import random_flip_positional_encoding
 from udao.model.utils.utils import set_deterministic_torch
 from udao.utils.logging import logger
 
@@ -51,6 +52,9 @@ if __name__ == "__main__":
     ta, pw = param_init(Path(__file__).parent, params)
     split_iterators = get_split_iterators(pw=pw, ta=ta, tensor_dtypes=tensor_dtypes)
     train_iterator = cast(QueryPlanIterator, split_iterators["train"])
+    split_iterators["train"].set_augmentations(
+        [train_iterator.make_graph_augmentation(random_flip_positional_encoding)]
+    )
 
     dp = PickleHandler.load(pw.cc_extract_prefix, "data_processor.pkl")
     if not isinstance(dp, DataProcessor):
@@ -75,6 +79,14 @@ if __name__ == "__main__":
         other_graph_features["op_enc"].data = add_new_rows_for_df(
             other_graph_features["op_enc"].data,
             [0] * len(other_graph_features["op_enc"].data.columns),
+        )
+        other_graph_features["hist"].data = add_new_rows_for_df(
+            other_graph_features["hist"].data,
+            [0] * len(other_graph_features["hist"].data.columns),
+        )
+        other_graph_features["bitmap"].data = add_new_rows_for_df(
+            other_graph_features["bitmap"].data,
+            [0] * len(other_graph_features["bitmap"].data.columns),
         )
 
         split_iterators[k].query_structure_container.operation_types = operation_types
