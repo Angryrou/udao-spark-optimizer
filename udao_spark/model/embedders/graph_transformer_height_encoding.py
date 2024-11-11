@@ -12,7 +12,7 @@ from .base_graph_embedder import BaseGraphEmbedder
 ReadoutType = Literal["sum", "max", "mean"]
 
 
-class GraphTransformerHeightEncoding(BaseGraphEmbedder):
+class GraphTransformerHeightEncodingSuperNode(BaseGraphEmbedder):
     """Graph Transformer Network
     Computes graph embedding using attention mechanism
     (either QF, RAAL, or GTN)
@@ -75,7 +75,8 @@ class GraphTransformerHeightEncoding(BaseGraphEmbedder):
             self.attention_bias = nn.Parameter(th.zeros(max_dist))
             self.height_embedding = nn.Embedding(max_height + 1, net_params.hidden_dim)
             self.super_node_embedding = nn.Embedding(1, net_params.hidden_dim)
-
+        elif self.attention_layer_name == "GTN_SUPER_NODE":
+            self.super_node_embedding = nn.Embedding(1, net_params.hidden_dim)
         elif self.attention_layer_name == "RAAL":
             if net_params.non_siblings_map is None:
                 raise ValueError("non_siblings_map is required for RAAL")
@@ -128,6 +129,11 @@ class GraphTransformerHeightEncoding(BaseGraphEmbedder):
         elif self.attention_layer_name == "GTN_HE":
             h_height = self.height_embedding(g.ndata["height"])
             h = h + h_height
+        elif self.attention_layer_name == "GTN_SUPER_NODE":
+            super_node_indices = th.where(g.out_degrees() == 0)[0]
+            h[super_node_indices] = self.super_node_embedding(
+                th.zeros_like(super_node_indices)
+            )
         else:
             raise ValueError(self.attention_layer_name)
 
@@ -135,7 +141,7 @@ class GraphTransformerHeightEncoding(BaseGraphEmbedder):
             h = layer.forward(g, h)
         g.ndata["h"] = h
 
-        if self.attention_layer_name == "QF":
+        if self.attention_layer_name in ["QF", "GTN_SUPER_NODE"]:
             super_node_indices = th.where(g.out_degrees() == 0)[0]
             hg = h[super_node_indices]
         else:

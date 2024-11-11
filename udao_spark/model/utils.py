@@ -43,7 +43,7 @@ from .embedders import (
     GAT_Transformer,
     GraphAverager,
     GraphTransformer,
-    GraphTransformerHeightEncoding,
+    GraphTransformerHeightEncodingSuperNode,
     QPPNet,
     TreeCNN,
     TreeLSTM,
@@ -611,11 +611,11 @@ def get_graph_transformer_sk_mlp(params: GraphTransformerSKMLPParams) -> UdaoMod
     return model
 
 
-def get_graph_transformer_height_encoding_sk_mlp(
+def get_graph_transformer_height_encoding_super_node_sk_mlp(
     params: GraphTransformerSKMLPParams,
 ) -> UdaoModel:
     model = UdaoModel.from_config(
-        embedder_cls=GraphTransformerHeightEncoding,
+        embedder_cls=GraphTransformerHeightEncodingSuperNode,
         regressor_cls=SkipConnectionMLP,
         iterator_shape=params.iterator_shape,
         embedder_params={

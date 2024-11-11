@@ -12,8 +12,9 @@ from udao_spark.data.utils import get_split_iterators
 from udao_spark.model.utils import (
     GraphTransformerSKMLPParams,
     MyLearningParams,
-    add_dist_to_graph,
-    add_height_to_graph,
+    add_new_rows_for_df,
+    add_new_rows_for_series,
+    add_super_node_to_graph,
     get_graph_transformer_height_encoding_super_node_sk_mlp,
     param_init,
     train_and_dump,
@@ -57,35 +58,29 @@ if __name__ == "__main__":
     template_plans = dp.feature_extractors["query_structure"].template_plans
     template_plans = update_dgl_graphs(
         template_plans,
-        funcs=[add_height_to_graph, add_dist_to_graph],
-    )
-    max_height = max(
-        [g.graph.ndata["height"].max() for g in template_plans.values()]
-    ).item()
-    max_dist = max(
-        [g.graph.edata["dist"].max().item() for g in template_plans.values()]
+        funcs=[add_super_node_to_graph],
     )
     supper_gid = len(dp.feature_extractors["query_structure"].operation_types)
 
     for k, v in split_iterators.items():
         split_iterators[k].query_structure_container.template_plans = template_plans
-    # operation_types = split_iterators[k].query_structure_container.operation_types
-    # graph_features = split_iterators[k].query_structure_container.graph_features
-    # other_graph_features = split_iterators[k].other_graph_features
-    #
-    # operation_types = add_new_rows_for_series(operation_types, supper_gid)
-    # graph_features = add_new_rows_for_df(
-    #     graph_features, [0] * len(graph_features.columns)
-    # )
-    # other_graph_features["op_enc"].data = add_new_rows_for_df(
-    #     other_graph_features["op_enc"].data,
-    #     [0] * len(other_graph_features["op_enc"].data.columns),
-    # )
-    #
-    # split_iterators[k].query_structure_container.operation_types = operation_types
-    # split_iterators[k].query_structure_container.graph_features = graph_features
-    # split_iterators[k].other_graph_features = other_graph_features
-    #
+        operation_types = split_iterators[k].query_structure_container.operation_types
+        graph_features = split_iterators[k].query_structure_container.graph_features
+        other_graph_features = split_iterators[k].other_graph_features
+
+        operation_types = add_new_rows_for_series(operation_types, supper_gid)
+        graph_features = add_new_rows_for_df(
+            graph_features, [0] * len(graph_features.columns)
+        )
+        other_graph_features["op_enc"].data = add_new_rows_for_df(
+            other_graph_features["op_enc"].data,
+            [0] * len(other_graph_features["op_enc"].data.columns),
+        )
+
+        split_iterators[k].query_structure_container.operation_types = operation_types
+        split_iterators[k].query_structure_container.graph_features = graph_features
+        split_iterators[k].other_graph_features = other_graph_features
+
     # Model definition and training
     model_params = GraphTransformerSKMLPParams.from_dict(
         {
@@ -104,11 +99,9 @@ if __name__ == "__main__":
             "n_layers": params.n_layers,
             "hidden_dim": params.hidden_dim,
             "dropout": params.dropout,
-            "attention_layer_name": "GTN_HE",
+            "attention_layer_name": "GTN_SUPER_NODE",
             "use_batchnorm": params.use_batchnorm,
             "activate": params.activate,
-            "max_dist": max_dist,
-            "max_height": max_height,
         }
     )
 
