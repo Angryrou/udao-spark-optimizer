@@ -18,6 +18,7 @@ class Benchmark:
             BenchmarkType.JOB_TRAIN,
             BenchmarkType.JOB_SYNTHETIC,
             BenchmarkType.JOB_LIGHT,
+            BenchmarkType.JOB_EXT,
         ]:
             return self.get_name()
         else:
@@ -41,6 +42,8 @@ class Benchmark:
                 "98 99".split()
                 if t not in ["61"]  # to be dropped due to parsing issue
             ]
+        elif benchmark_type == BenchmarkType.TPCDS_EXT:
+            return [str(i) for i in range(101, 1101)]
         elif benchmark_type == BenchmarkType.TPCXBB:
             return [str(i) for i in range(1, 31)]
         elif benchmark_type == BenchmarkType.JOB_TRAIN:
@@ -49,6 +52,8 @@ class Benchmark:
             return [str(i) for i in range(5000)]
         elif benchmark_type == BenchmarkType.JOB_LIGHT:
             return [str(i) for i in range(70)]
+        elif benchmark_type == BenchmarkType.JOB_EXT:
+            return [str(i) for i in range(40000)]
         elif benchmark_type == BenchmarkType.JOB:
             return (
                 ["TRAIN" + str(i) for i in range(100000)]
