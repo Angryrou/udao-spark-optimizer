@@ -1419,6 +1419,10 @@ def add_height_to_graph(g: dgl.DGLGraph) -> dgl.DGLGraph:
     return g
 
 
+def to_undirected(g: dgl.DGLGraph) -> dgl.DGLGraph:
+    return dgl.to_bidirected(g)
+
+
 def extend_edges_to_graph(g: dgl.DGLGraph) -> dgl.DGLGraph:
     if "height" not in g.ndata:
         g = add_height_to_graph(g)
