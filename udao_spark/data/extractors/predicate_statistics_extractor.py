@@ -29,9 +29,24 @@ def get_table_metadata(pred_str: str) -> Dict[str, str]:
 
 
 def get_pred_triplets_with_meta(pred: str, col2rel: Dict[str, str]) -> str:
+    """
+    Extract triplets for hist/bitmaps encoding.
+    Rules:
+        0. extract any <col, op, constant> triplets.
+        1. join predicate will not be matched.
+        2. predicates joined by AND is supported.
+        3. a predicate with OR is not supported. (*)
+        4. a predicated with CASE WHEN is not supported. (*)
+
+    (*) easy to extract but adapting to the hist/bitmaps encoder can be complex.
+        We consider a postponed improvement in the future.
+    """
     if "CASE WHEN" in pred or "OR" in pred:
         return ""
-    pattern = r"(\w+#\d+)\s*([<>=!]{1,2})\s*(\d{4}-\d{2}-\d{2}|\d+\.\d+|\d+)"
+    pattern = (
+        r"(\w+#\d+)\s*([<>=!]{1,2})\s*(\d{4}-\d{2}-\d{2}|[-]?\d+\.\d+"
+        r"|[A-Za-z0-9\s_.?!+-]+(?!\S*#\d+\b))"
+    )
     matches = re.finditer(pattern, pred)  # type: ignore
     triplets = [match.groups() for match in matches]
     triplets = [triplet for triplet in triplets if triplet[0] in col2rel]
@@ -85,8 +100,11 @@ def extract_operations_with_table_names(
 def date_format_match(val_str: str) -> bool:
     if re.match(r"^\d{4}-\d{2}-\d{2}$", val_str):
         return True
-    else:
+    try:
+        float(val_str)
         return False
+    except Exception:
+        return True
 
 
 def days_since_epoch(date_str: str) -> int:
