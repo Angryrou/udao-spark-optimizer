@@ -1423,6 +1423,10 @@ def to_undirected(g: dgl.DGLGraph) -> dgl.DGLGraph:
     return dgl.to_bidirected(g, copy_ndata=True)
 
 
+def with_self_loops(g: dgl.DGLGraph) -> dgl.DGLGraph:
+    return dgl.add_self_loop(dgl.remove_self_loop(g))
+
+
 def extend_edges_to_graph(g: dgl.DGLGraph) -> dgl.DGLGraph:
     if "height" not in g.ndata:
         g = add_height_to_graph(g)

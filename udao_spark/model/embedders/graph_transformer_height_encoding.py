@@ -80,7 +80,7 @@ class GraphTransformerHeightEncodingSuperNode(BaseGraphEmbedder):
         elif self.attention_layer_name == "RAAL":
             if net_params.non_siblings_map is None:
                 raise ValueError("non_siblings_map is required for RAAL")
-        elif self.attention_layer_name in ["GTN", "GTN_UNDIRECTED"]:
+        elif self.attention_layer_name in ["GTN", "GTN_UNDIRECTED", "GTN_SELF_LOOP"]:
             pass
         else:
             raise ValueError(self.attention_layer_name)
@@ -123,7 +123,12 @@ class GraphTransformerHeightEncodingSuperNode(BaseGraphEmbedder):
                 th.zeros_like(super_node_indices)
             )
             h = h + h_height
-        elif self.attention_layer_name in ["RAAL", "GTN", "GTN_UNDIRECTED"]:
+        elif self.attention_layer_name in [
+            "RAAL",
+            "GTN",
+            "GTN_UNDIRECTED",
+            "GTN_SELF_LOOP",
+        ]:
             h_lap_pos_enc = self.embedding_lap_pos_enc(g.ndata["pos_enc"])
             h = h + h_lap_pos_enc
         elif self.attention_layer_name == "GTN_HE":
