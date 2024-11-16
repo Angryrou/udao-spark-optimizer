@@ -330,6 +330,10 @@ def job_setup(pw: PathWatcher, seed: int) -> None:
         logger.warning(f"Failed to load df_q_compile_* from cache: {e}")
         df_dict = {}
         sc = SparkConf(str(pw.base_dir / "assets/spark_configuration_aqe_on.json"))
+        if pw.benchmark_ext == BenchmarkType.JOB_EXT.value:
+            df_raw_dict["EXT"] = pd.read_csv(
+                f"{header}/ext_q_16000x1.csv", low_memory=pw.debug
+            )
         for k, df_raw in df_raw_dict.items():
             if not isinstance(df_raw["template"].iloc[0], str):
                 df_raw["template"] = k + df_raw["template"].astype(int).astype(str)
@@ -351,6 +355,12 @@ def job_setup(pw: PathWatcher, seed: int) -> None:
             "test": df_dict["SYNTHETIC"].appid.tolist()
             + df_dict["LIGHT"].appid.tolist(),
         }
+        if pw.benchmark_ext:
+            df_train_ext, df_val_ext = train_test_split(
+                df_dict["EXT"], test_size=0.1, stratify=None, random_state=seed
+            )
+            index_splits_q_compile["train_ext"] = df_train_ext.appid.to_list()
+            index_splits_q_compile["val_ext"] = df_val_ext.appid.to_list()
         save_and_log_index(index_splits_q_compile, pw, "index_splits_q_compile.pkl")
 
 
@@ -438,6 +448,8 @@ def extract_and_save_iterators(
 ) -> Dict[DatasetType, BaseIterator]:
     if "job" in pw.benchmark and ta.q_type != "q_compile":
         raise NotImplementedError("job benchmark only supports q_compile")
+    if "+" in pw.benchmark and pw.benchmark_ext:
+        raise Exception("haven't tested using both mixed benchmark with synthetic data")
 
     params = pw.extract_params
     if Path(f"{pw.cc_extract_prefix}/{cache_file}").exists():
@@ -454,6 +466,16 @@ def extract_and_save_iterators(
             for k, v in index_splits.items()
         }
         df = df.loc[list(itertools.chain.from_iterable(index_splits.values()))]
+    benchmark_ext = pw.benchmark_ext
+    if benchmark_ext is not None:
+        index_splits["train"] += index_splits["train_ext"][: pw.ext_data_amount]  # type: ignore
+        index_splits["val"] += index_splits["val_ext"][: pw.ext_data_amount]  # type: ignore
+        del index_splits["train_ext"]  # type: ignore
+        del index_splits["val_ext"]  # type: ignore
+        logger.info(
+            f"extended data for train and val, getting # {len(index_splits['train'])} "
+            f"for training and # {len(index_splits['val'])} for validation"
+        )
 
     cache_file_dp = "data_processor.pkl"
     if Path(f"{pw.cc_extract_prefix}/{cache_file_dp}").exists():

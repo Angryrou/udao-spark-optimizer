@@ -3,7 +3,7 @@ from typing import Dict, List, Optional
 
 import numpy as np
 
-from udao_trace.utils import JsonHandler
+from udao_trace.utils import BenchmarkType, JsonHandler
 
 from .constants import (
     ALPHA,
@@ -44,12 +44,16 @@ class PathWatcher:
         extract_params: ExtractParams,
         fold: Optional[int],
         data_percentage: Optional[int] = None,
+        benchmark_ext: Optional[str] = None,
+        ext_data_amount: Optional[int] = None,
     ):
         self.base_dir = base_dir
         self.benchmark = benchmark
         self.debug = debug
         self.fold = fold
         self.data_percentage = data_percentage
+        self.benchmark_ext = benchmark_ext
+        self.ext_data_amount = ext_data_amount
 
         if benchmark == "job" and fold is not None:
             raise ValueError("fold is not supported for job benchmark")
@@ -66,6 +70,15 @@ class PathWatcher:
             if data_percentage not in list(range(101)):
                 raise ValueError("data_percentage must be in [0, 1, ..., 100]")
             cc_extract_prefix += f"_{data_percentage}"
+        if self.benchmark_ext:
+            if self.ext_data_amount:
+                if self.ext_data_amount > 16000:
+                    raise ValueError("ext_data_amount must be less than 16000")
+                cc_extract_prefix += f"_ext_{self.ext_data_amount}"
+            else:
+                raise Exception(
+                    "when benchmark_ext is specified, " "explicitly specific the amount"
+                )
         self.data_sign = data_sign
         self.data_prefix = data_prefix
         self.cc_prefix = cc_prefix
@@ -86,7 +99,13 @@ class PathWatcher:
             logger.info(f"found {self.cc_extract_prefix}/{json_name}")
 
     def _get_data_sign(self) -> str:
-        return get_data_sign(self.benchmark, self.debug)
+        data_sign = get_data_sign(self.benchmark, self.debug)
+        if self.benchmark_ext:
+            if self.benchmark_ext == BenchmarkType.JOB_EXT.value:
+                data_sign += "+ext_16000x1"
+            else:
+                raise ValueError(f"invalid {self.benchmark_ext}")
+        return data_sign
 
     def get_data_header(self, q_type: str) -> str:
         return f"{self.data_prefix}/{q_type}_{self.data_sign}.csv"

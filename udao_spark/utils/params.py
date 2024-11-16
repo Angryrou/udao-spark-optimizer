@@ -64,6 +64,10 @@ def get_base_parser() -> ArgumentParser:
                         help="Fold number, from 0 to 9")
     parser.add_argument("--data_percentage", type=int, default=None,
                         help="Portion number, from 0 to 100")
+    parser.add_argument("--benchmark_ext", type=str, default=None,
+                        help="Benchmark extended")
+    parser.add_argument("--ext_data_amount", type=int, default=None,
+                        help="number of sqls to extend")
     # fmt: on
     return parser
 
