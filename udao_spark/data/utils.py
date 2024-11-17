@@ -335,6 +335,7 @@ def job_setup(pw: PathWatcher, seed: int) -> None:
             df_raw_dict["EXT"] = pd.read_csv(
                 f"{header}/ext_q_27371x1.csv", low_memory=pw.debug
             )
+            logger.info(f"Loaded EXT data #: {len(df_raw_dict['EXT'])}")
         for k, df_raw in df_raw_dict.items():
             if not isinstance(df_raw["template"].iloc[0], str):
                 df_raw["template"] = k + df_raw["template"].astype(int).astype(str)
@@ -357,11 +358,15 @@ def job_setup(pw: PathWatcher, seed: int) -> None:
             + df_dict["LIGHT"].appid.tolist(),
         }
         if pw.benchmark_ext:
+            logger.info(f"EXT data for compile #: {len(df_dict['EXT'])}")
             df_train_ext, df_val_ext = train_test_split(
                 df_dict["EXT"], test_size=0.1, stratify=None, random_state=seed
             )
             index_splits_q_compile["train_ext"] = df_train_ext.appid.to_list()
             index_splits_q_compile["val_ext"] = df_val_ext.appid.to_list()
+            n_ext_tr = len(df_train_ext)
+            n_ext_val = len(df_val_ext)
+            logger.info(f"Split data for EXT: train/val = {n_ext_tr}/{n_ext_val}")
         save_and_log_index(index_splits_q_compile, pw, "index_splits_q_compile.pkl")
 
 
