@@ -77,8 +77,8 @@ class PathWatcher:
             cc_extract_prefix += f"_{data_percentage}"
         if self.benchmark_ext:
             if self.ext_data_amount:
-                if self.ext_data_amount > 16000:
-                    raise ValueError("ext_data_amount must be less than 16000")
+                if self.ext_data_amount > 27371:
+                    raise ValueError("ext_data_amount must be less than 27371")
                 cc_extract_prefix += f"_ext_{self.ext_data_amount}"
             else:
                 raise Exception(

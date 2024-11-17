@@ -479,12 +479,22 @@ def extract_and_save_iterators(
             raise ValueError(
                 "ext_data_amount must be specified when benchmark_ext is specified"
             )
+        else:
+            if ext_data_amount > 27371:
+                raise ValueError("ext_data_amount must be less than 27371")
+            else:
+                logger.info(
+                    f"ext_data_amount = {ext_data_amount},"
+                    f"ttl_ext_tr = {len(index_splits['train_ext'])},"  # type: ignore
+                    f"ttl_ext_val = {len(index_splits['val_ext'])}"
+                )  # type: ignore
         logger.info(
             f"Before extending data, tr/val = "
             f"{len(index_splits['train'])}/{len(index_splits['val'])}"
         )
         val_amount = int(np.ceil(ext_data_amount * 0.1))
         train_amount = ext_data_amount - val_amount
+        logger.info("Target extended data, tr/val = " f"{train_amount}/{val_amount}")
         train_ext_list = index_splits["train_ext"][:train_amount]  # type: ignore
         val_ext_list = index_splits["val_ext"][:val_amount]  # type: ignore
         logger.info(
