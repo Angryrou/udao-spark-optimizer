@@ -468,7 +468,9 @@ def extract_and_save_iterators(
     data_percentage = pw.data_percentage
     if data_percentage is not None:
         index_splits = {
-            k: v if k == "test" else v[: int(np.ceil(len(v) * data_percentage / 100))]
+            k: v[: int(np.ceil(len(v) * data_percentage / 100))]
+            if k in ["train", "val"]
+            else v
             for k, v in index_splits.items()
         }
         df = df.loc[list(itertools.chain.from_iterable(index_splits.values()))]
@@ -486,8 +488,8 @@ def extract_and_save_iterators(
                 logger.info(
                     f"ext_data_amount = {ext_data_amount},"
                     f"ttl_ext_tr = {len(index_splits['train_ext'])},"  # type: ignore
-                    f"ttl_ext_val = {len(index_splits['val_ext'])}"
-                )  # type: ignore
+                    f"ttl_ext_val = {len(index_splits['val_ext'])}"  # type: ignore
+                )
         logger.info(
             f"Before extending data, tr/val = "
             f"{len(index_splits['train'])}/{len(index_splits['val'])}"
@@ -508,6 +510,7 @@ def extract_and_save_iterators(
             "After extending data, tr/val = "
             f"{len(index_splits['train'])}/{len(index_splits['val'])}"
         )
+        df = df.loc[list(itertools.chain.from_iterable(index_splits.values()))]
 
     cache_file_dp = "data_processor.pkl"
     if Path(f"{pw.cc_extract_prefix}/{cache_file_dp}").exists():
