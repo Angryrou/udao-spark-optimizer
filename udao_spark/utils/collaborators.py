@@ -53,6 +53,11 @@ class PathWatcher:
         self.fold = fold
         self.data_percentage = data_percentage
         self.benchmark_ext = benchmark_ext
+
+        if benchmark_ext and not ext_data_amount:
+            raise ValueError(
+                "ext_data_amount must be specified when benchmark_ext is specified"
+            )
         self.ext_data_amount = ext_data_amount
 
         if benchmark == "job" and fold is not None:
@@ -102,7 +107,7 @@ class PathWatcher:
         data_sign = get_data_sign(self.benchmark, self.debug)
         if self.benchmark_ext:
             if self.benchmark_ext == BenchmarkType.JOB_EXT.value:
-                data_sign += "+ext_16000x1"
+                data_sign += "+ext_27371x1"
             else:
                 raise ValueError(f"invalid {self.benchmark_ext}")
         return data_sign

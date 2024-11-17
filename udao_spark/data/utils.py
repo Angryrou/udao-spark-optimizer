@@ -333,7 +333,7 @@ def job_setup(pw: PathWatcher, seed: int) -> None:
         sc = SparkConf(str(pw.base_dir / "assets/spark_configuration_aqe_on.json"))
         if pw.benchmark_ext == BenchmarkType.JOB_EXT.value:
             df_raw_dict["EXT"] = pd.read_csv(
-                f"{header}/ext_q_16000x1.csv", low_memory=pw.debug
+                f"{header}/ext_q_27371x1.csv", low_memory=pw.debug
             )
         for k, df_raw in df_raw_dict.items():
             if not isinstance(df_raw["template"].iloc[0], str):
@@ -469,13 +469,29 @@ def extract_and_save_iterators(
         df = df.loc[list(itertools.chain.from_iterable(index_splits.values()))]
     benchmark_ext = pw.benchmark_ext
     if benchmark_ext is not None:
-        index_splits["train"] += index_splits["train_ext"][: pw.ext_data_amount]  # type: ignore
-        index_splits["val"] += index_splits["val_ext"][: pw.ext_data_amount]  # type: ignore
+        ext_data_amount = pw.ext_data_amount
+        if ext_data_amount is None:
+            raise ValueError(
+                "ext_data_amount must be specified when benchmark_ext is specified"
+            )
+        logger.info(
+            f"Before extending data, tr/val = "
+            f"{len(index_splits['train'])}/{len(index_splits['val'])}"
+        )
+        val_amount = int(np.ceil(ext_data_amount * 0.1))
+        train_amount = ext_data_amount - val_amount
+        train_ext_list = index_splits["train_ext"][:train_amount]  # type: ignore
+        val_ext_list = index_splits["val_ext"][:val_amount]  # type: ignore
+        logger.info(
+            f"Get extended data, tr/val = {len(train_ext_list)}/{len(val_ext_list)}"
+        )
+        index_splits["train"] += train_ext_list
+        index_splits["val"] += val_ext_list
         del index_splits["train_ext"]  # type: ignore
         del index_splits["val_ext"]  # type: ignore
         logger.info(
-            f"extended data for train and val, getting # {len(index_splits['train'])} "
-            f"for training and # {len(index_splits['val'])} for validation"
+            "After extending data, tr/val = "
+            f"{len(index_splits['train'])}/{len(index_splits['val'])}"
         )
 
     cache_file_dp = "data_processor.pkl"
