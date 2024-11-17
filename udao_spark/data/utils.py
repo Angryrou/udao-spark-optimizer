@@ -97,9 +97,9 @@ def extract_partition_distribution(pd_raw: str) -> Tuple[float, float, float]:
 
 
 def prepare_data(
-    df: pd.DataFrame, sc: SparkConf, benchmark: str, q_type: str
+    df: pd.DataFrame, sc: SparkConf, benchmark: str, q_type: str, ext: Optional[str]
 ) -> pd.DataFrame:
-    bm = Benchmark(benchmark_type=BenchmarkType[benchmark.upper()])
+    bm = Benchmark(benchmark_type=BenchmarkType[benchmark.upper()], ext=ext)
     df.rename(columns={p: kid for p, kid in zip(THETA_RAW, sc.knob_ids)}, inplace=True)
     df["tid"] = df["template"].apply(lambda x: bm.get_template_id(str(x)))
     variable_names = sc.knob_ids
@@ -254,8 +254,9 @@ def magic_setup(pw: PathWatcher, seed: int) -> None:
     except Exception as e:
         logger.warning(f"Failed to load df_q_compile, df_q, df_qs from cache: {e}")
         sc = SparkConf(str(pw.base_dir / "assets/spark_configuration_aqe_on.json"))
-        df_q = prepare_data(df_q_raw, benchmark=benchmark, sc=sc, q_type="q")
-        df_qs = prepare_data(df_qs_raw, benchmark=benchmark, sc=sc, q_type="qs")
+        ext = pw.benchmark_ext
+        df_q = prepare_data(df_q_raw, sc, benchmark, q_type="q", ext=ext)
+        df_qs = prepare_data(df_qs_raw, sc, benchmark, q_type="qs", ext=ext)
         df_q_compile = df_q[df_q["lqp_id"] == 0].copy()  # for compile-time df
         df_rare = df_q_compile.groupby("tid").filter(lambda x: len(x) < 5)
         if df_rare.shape[0] > 0:
@@ -337,7 +338,7 @@ def job_setup(pw: PathWatcher, seed: int) -> None:
         for k, df_raw in df_raw_dict.items():
             if not isinstance(df_raw["template"].iloc[0], str):
                 df_raw["template"] = k + df_raw["template"].astype(int).astype(str)
-            df_q = prepare_data(df_raw, benchmark=pw.benchmark, sc=sc, q_type="q")
+            df_q = prepare_data(df_raw, sc, pw.benchmark, "q", ext=pw.benchmark_ext)
             df_q_compile_k = df_q[df_q["lqp_id"] == 0].copy()  # for compile-time df
             df_dict[k] = df_q_compile_k
         df_q_compile = pd.concat(df_dict.values())

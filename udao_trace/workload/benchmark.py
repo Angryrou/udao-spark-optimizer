@@ -1,13 +1,18 @@
-from typing import List
+from typing import List, Optional
 
 from ..utils import BenchmarkType
 
 
 class Benchmark:
-    def __init__(self, benchmark_type: BenchmarkType, scale_factor: int = 100):
+    def __init__(
+        self,
+        benchmark_type: BenchmarkType,
+        scale_factor: int = 100,
+        ext: Optional[str] = None,
+    ):
         self.benchmark_type = benchmark_type
         self.scale_factor = scale_factor
-        self.templates = self._get_templates(benchmark_type)
+        self.templates = self._get_templates(benchmark_type, ext)
         self.template2id = {t: i for i, t in enumerate(self.templates)}
 
     def get_name(self) -> str:
@@ -27,7 +32,11 @@ class Benchmark:
     def get_template_id(self, template: str) -> int:
         return self.template2id[template]
 
-    def _get_templates(self, benchmark_type: BenchmarkType) -> List[str]:
+    def _get_templates(
+        self, benchmark_type: BenchmarkType, ext: Optional[str]
+    ) -> List[str]:
+        if ext and benchmark_type != BenchmarkType.JOB:
+            raise ValueError(f"{BenchmarkType.JOB} does not support extension")
         if benchmark_type == BenchmarkType.TPCH:
             return [str(i) for i in range(1, 23)]
         elif benchmark_type == BenchmarkType.TPCDS:
@@ -55,10 +64,13 @@ class Benchmark:
         elif benchmark_type == BenchmarkType.JOB_EXT:
             return [str(i) for i in range(40000)]
         elif benchmark_type == BenchmarkType.JOB:
-            return (
+            res = (
                 ["TRAIN" + str(i) for i in range(100000)]
                 + ["SYNTHETIC" + str(i) for i in range(5000)]
                 + ["LIGHT" + str(i) for i in range(70)]
             )
+            if ext:
+                res += ["EXT" + str(i) for i in range(40000)]
+            return res
         else:
             raise ValueError(f"{benchmark_type} is not supported")
