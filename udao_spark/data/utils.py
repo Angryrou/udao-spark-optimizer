@@ -2,7 +2,7 @@ import itertools
 import os.path
 from itertools import chain
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -412,8 +412,9 @@ def extract_index_splits(
 
 def extract_index_splits_wrapper(
     pw: PathWatcher, seed: int, q_type: str
-) -> Tuple[pd.DataFrame, Dict[DatasetType, List[str]]]:
+) -> Tuple[pd.DataFrame, Union[Dict[str, Dict], Dict[str, List[str]]]]:
     if "+" in pw.benchmark:
+        benchmarks = pw.benchmark.split("+")
         dfs, index_splits_list = zip(
             *[
                 extract_index_splits(
@@ -427,45 +428,35 @@ def extract_index_splits_wrapper(
                     seed,
                     q_type,
                 )
-                for bm in pw.benchmark.split("+")
+                for bm in benchmarks
             ]
         )
         df = pd.concat(dfs)
         index_splits = {
-            split: list(
-                chain.from_iterable(
-                    [index_splits[split] for index_splits in index_splits_list]
-                )
-            )
-            for split in index_splits_list[0].keys()
+            bm: index_splits_
+            for bm, index_splits_ in zip(benchmarks, index_splits_list)
         }
+        #
+        # index_splits = {
+        #     split: list(
+        #         chain.from_iterable(
+        #             [index_splits[split] for index_splits in index_splits_list]
+        #         )
+        #     )
+        #     for split in index_splits_list[0].keys()
+        # }
         return df, index_splits
     else:
         return extract_index_splits(pw=pw, seed=seed, q_type=q_type)
 
 
-def extract_and_save_iterators(
-    pw: PathWatcher,
-    ta: TypeAdvisor,
-    tensor_dtypes: th.dtype,
-    cache_file: str = "split_iterators.pkl",
-    hists: Optional[Dict[Tuple[str, str], np.ndarray]] = None,
-    table_samples: Optional[Dict[str, pd.DataFrame]] = None,
-) -> Dict[DatasetType, BaseIterator]:
-    if "job" in pw.benchmark and ta.q_type != "q_compile":
-        raise NotImplementedError("job benchmark only supports q_compile")
-    if "+" in pw.benchmark and pw.benchmark_ext:
-        raise Exception("haven't tested using both mixed benchmark with synthetic data")
-
-    params = pw.extract_params
-    if Path(f"{pw.cc_extract_prefix}/{cache_file}").exists():
-        raise FileExistsError(f"{pw.cc_extract_prefix}/{cache_file} already exists.")
-    logger.info("start extracting split_iterators")
-    df, index_splits = extract_index_splits_wrapper(
-        pw=pw, seed=params.seed, q_type=ta.get_q_type_for_cache()
-    )
-
-    data_percentage = pw.data_percentage
+def extract_job_index_splits(
+    index_splits: Dict[str, List[str]],
+    data_percentage: Optional[int],
+    benchmark_ext: Optional[str],
+    ext_data_amount: Optional[int],
+) -> Dict[str, List[str]]:
+    # data_percentage = pw.data_percentage
     if data_percentage is not None:
         index_splits = {
             k: v[: int(np.ceil(len(v) * data_percentage / 100))]
@@ -473,10 +464,10 @@ def extract_and_save_iterators(
             else v
             for k, v in index_splits.items()
         }
-        df = df.loc[list(itertools.chain.from_iterable(index_splits.values()))]
-    benchmark_ext = pw.benchmark_ext
+        # df = df.loc[list(itertools.chain.from_iterable(index_splits.values()))]
+    # benchmark_ext = pw.benchmark_ext
     if benchmark_ext is not None:
-        ext_data_amount = pw.ext_data_amount
+        # ext_data_amount = pw.ext_data_amount
         if ext_data_amount is None:
             raise ValueError(
                 "ext_data_amount must be specified when benchmark_ext is specified"
@@ -510,7 +501,55 @@ def extract_and_save_iterators(
             "After extending data, tr/val = "
             f"{len(index_splits['train'])}/{len(index_splits['val'])}"
         )
-        df = df.loc[list(itertools.chain.from_iterable(index_splits.values()))]
+    return index_splits
+
+
+def extract_and_save_iterators(
+    pw: PathWatcher,
+    ta: TypeAdvisor,
+    tensor_dtypes: th.dtype,
+    cache_file: str = "split_iterators.pkl",
+    hists: Optional[Dict[Tuple[str, str], np.ndarray]] = None,
+    table_samples: Optional[Dict[str, pd.DataFrame]] = None,
+) -> Dict[DatasetType, BaseIterator]:
+    if "job" in pw.benchmark and ta.q_type != "q_compile":
+        raise NotImplementedError("job benchmark only supports q_compile")
+    if "+" in pw.benchmark and pw.benchmark_ext:
+        raise Exception("haven't tested using both mixed benchmark with synthetic data")
+
+    params = pw.extract_params
+    if Path(f"{pw.cc_extract_prefix}/{cache_file}").exists():
+        raise FileExistsError(f"{pw.cc_extract_prefix}/{cache_file} already exists.")
+    logger.info("start extracting split_iterators")
+    df, index_splits = extract_index_splits_wrapper(
+        pw=pw, seed=params.seed, q_type=ta.get_q_type_for_cache()
+    )
+    if pw.benchmark == "job":
+        if not index_splits:
+            raise ValueError(f"index_splits is empty: {index_splits}")
+        if not isinstance(list(index_splits.values())[0], List):
+            raise TypeError(f"index_splits is not a list: {index_splits} for job")
+        index_splits = extract_job_index_splits(
+            index_splits=index_splits,  #  type: ignore
+            data_percentage=pw.data_percentage,
+            benchmark_ext=pw.benchmark_ext,
+            ext_data_amount=pw.ext_data_amount,
+        )
+    elif pw.benchmark.endswith("+job"):
+        bm_tpc = pw.benchmark.split("+")[0]
+        index_splits_bm = index_splits[bm_tpc]
+        index_splits_job = extract_job_index_splits(
+            index_splits=index_splits["job"],  # type: ignore
+            data_percentage=pw.data_percentage,
+            benchmark_ext=pw.benchmark_ext,
+            ext_data_amount=pw.ext_data_amount,
+        )
+        index_splits = {
+            split: index_splits_bm[split] + index_splits_job[split]  # type: ignore
+            for split, index_splits_ in index_splits_job.items()
+        }
+
+    df = df.loc[list(itertools.chain.from_iterable(index_splits.values()))]
 
     cache_file_dp = "data_processor.pkl"
     if Path(f"{pw.cc_extract_prefix}/{cache_file_dp}").exists():
