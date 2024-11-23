@@ -514,8 +514,6 @@ def extract_and_save_iterators(
 ) -> Dict[DatasetType, BaseIterator]:
     if "job" in pw.benchmark and ta.q_type != "q_compile":
         raise NotImplementedError("job benchmark only supports q_compile")
-    if "+" in pw.benchmark and pw.benchmark_ext:
-        raise Exception("haven't tested using both mixed benchmark with synthetic data")
 
     params = pw.extract_params
     if Path(f"{pw.cc_extract_prefix}/{cache_file}").exists():
