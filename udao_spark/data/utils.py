@@ -423,7 +423,18 @@ def extract_index_splits_wrapper(
                         bm,
                         pw.debug,
                         pw.extract_params,
-                        None if bm == "job" else pw.fold,
+                        None,
+                        pw.data_percentage,
+                        pw.benchmark_ext,
+                        pw.ext_data_amount,
+                    )
+                    if bm == "job"
+                    else PathWatcher(
+                        pw.base_dir,
+                        bm,
+                        pw.debug,
+                        pw.extract_params,
+                        pw.fold,
                     ),
                     seed,
                     q_type,
