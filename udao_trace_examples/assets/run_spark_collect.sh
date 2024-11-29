@@ -41,14 +41,14 @@ read if_runtime runtime_host runtime_port <<< "$runtime"
 spath=/opt/hex_users/$USER/chenghao/spark-stage-tuning
 jpath=/opt/hex_users/$USER/spark-3.2.1-hadoop3.3.0/jdk1.8
 lpath=/opt/hex_users/$USER/chenghao/spark-stage-tuning/src/main/resources/log4j2.properties
-qpath=/opt/hex_users/$USER/chenghao/spark-stage-tuning/dataset-gen
+qpath=/opt/hex_users/$USER/chenghao/spark-stage-tuning/benchmark-res/dataset-gen
 
 benchmark=""
 sqlhead=""
 # Determine benchmark and name based on bm
 if [[ "$bm" == *-* ]]; then
     benchmark="${bm%%-*}"  # Extract part before the first "-"
-    sqlhead="spark-sql-${bm#*-}"  # Use the part after the first "-"
+    sqlhead="spark-sqls-${bm#*-}"  # Use the part after the first "-"
 else
     benchmark="$bm"  # Use the full value as the benchmark
     sqlhead="spark-sqls"  # Default name
