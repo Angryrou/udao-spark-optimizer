@@ -100,4 +100,4 @@ fi
 $spath/target/scala-2.12/spark-stage-tuning_2.12-1.0-SNAPSHOT.jar \
 -b $benchmark -t ${tid} -q ${qid} -s 100 -x ${xpath} \
 -u ${if_runtime} --runtimeSolverHost ${runtime_host} --runtimeSolverPort ${runtime_port} \
--l ${qpath}/${benchmark}-kit/${sqlhead}-v $verbose_mode
+-l ${qpath}/${benchmark}-kit/${sqlhead} -v $verbose_mode
