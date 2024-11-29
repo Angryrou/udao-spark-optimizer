@@ -17,6 +17,7 @@ class BenchmarkType(Enum):
     TPCH = "tpch"
     TPCDS = "tpcds"
     TPCDS_EXT = "tpcds-ext"
+    TPCDS_EXT_SELECTED = "tpcds-ext-selected"
     TPCXBB = "tpcxbb"
     JOB_LIGHT = "job-light"
     JOB_SYNTHETIC = "job-synthetic"

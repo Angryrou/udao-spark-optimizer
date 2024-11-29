@@ -2,7 +2,7 @@ import itertools
 import os.path
 from itertools import chain
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -97,9 +97,9 @@ def extract_partition_distribution(pd_raw: str) -> Tuple[float, float, float]:
 
 
 def prepare_data(
-    df: pd.DataFrame, sc: SparkConf, benchmark: str, q_type: str
+    df: pd.DataFrame, sc: SparkConf, benchmark: str, q_type: str, ext: Optional[str]
 ) -> pd.DataFrame:
-    bm = Benchmark(benchmark_type=BenchmarkType[benchmark.upper()])
+    bm = Benchmark(benchmark_type=BenchmarkType[benchmark.upper()], ext=ext)
     df.rename(columns={p: kid for p, kid in zip(THETA_RAW, sc.knob_ids)}, inplace=True)
     df["tid"] = df["template"].apply(lambda x: bm.get_template_id(str(x)))
     variable_names = sc.knob_ids
@@ -254,8 +254,9 @@ def magic_setup(pw: PathWatcher, seed: int) -> None:
     except Exception as e:
         logger.warning(f"Failed to load df_q_compile, df_q, df_qs from cache: {e}")
         sc = SparkConf(str(pw.base_dir / "assets/spark_configuration_aqe_on.json"))
-        df_q = prepare_data(df_q_raw, benchmark=benchmark, sc=sc, q_type="q")
-        df_qs = prepare_data(df_qs_raw, benchmark=benchmark, sc=sc, q_type="qs")
+        ext = pw.benchmark_ext
+        df_q = prepare_data(df_q_raw, sc, benchmark, q_type="q", ext=ext)
+        df_qs = prepare_data(df_qs_raw, sc, benchmark, q_type="qs", ext=ext)
         df_q_compile = df_q[df_q["lqp_id"] == 0].copy()  # for compile-time df
         df_rare = df_q_compile.groupby("tid").filter(lambda x: len(x) < 5)
         if df_rare.shape[0] > 0:
@@ -330,10 +331,15 @@ def job_setup(pw: PathWatcher, seed: int) -> None:
         logger.warning(f"Failed to load df_q_compile_* from cache: {e}")
         df_dict = {}
         sc = SparkConf(str(pw.base_dir / "assets/spark_configuration_aqe_on.json"))
+        if pw.benchmark_ext == BenchmarkType.JOB_EXT.value:
+            df_raw_dict["EXT"] = pd.read_csv(
+                f"{header}/ext_q_27371x1.csv", low_memory=pw.debug
+            )
+            logger.info(f"Loaded EXT data #: {len(df_raw_dict['EXT'])}")
         for k, df_raw in df_raw_dict.items():
             if not isinstance(df_raw["template"].iloc[0], str):
                 df_raw["template"] = k + df_raw["template"].astype(int).astype(str)
-            df_q = prepare_data(df_raw, benchmark=pw.benchmark, sc=sc, q_type="q")
+            df_q = prepare_data(df_raw, sc, pw.benchmark, "q", ext=pw.benchmark_ext)
             df_q_compile_k = df_q[df_q["lqp_id"] == 0].copy()  # for compile-time df
             df_dict[k] = df_q_compile_k
         df_q_compile = pd.concat(df_dict.values())
@@ -351,6 +357,16 @@ def job_setup(pw: PathWatcher, seed: int) -> None:
             "test": df_dict["SYNTHETIC"].appid.tolist()
             + df_dict["LIGHT"].appid.tolist(),
         }
+        if pw.benchmark_ext:
+            logger.info(f"EXT data for compile #: {len(df_dict['EXT'])}")
+            df_train_ext, df_val_ext = train_test_split(
+                df_dict["EXT"], test_size=0.1, stratify=None, random_state=seed
+            )
+            index_splits_q_compile["train_ext"] = df_train_ext.appid.to_list()
+            index_splits_q_compile["val_ext"] = df_val_ext.appid.to_list()
+            n_ext_tr = len(df_train_ext)
+            n_ext_val = len(df_val_ext)
+            logger.info(f"Split data for EXT: train/val = {n_ext_tr}/{n_ext_val}")
         save_and_log_index(index_splits_q_compile, pw, "index_splits_q_compile.pkl")
 
 
@@ -396,8 +412,9 @@ def extract_index_splits(
 
 def extract_index_splits_wrapper(
     pw: PathWatcher, seed: int, q_type: str
-) -> Tuple[pd.DataFrame, Dict[DatasetType, List[str]]]:
+) -> Tuple[pd.DataFrame, Union[Dict[str, Dict], Dict[str, List[str]]]]:
     if "+" in pw.benchmark:
+        benchmarks = pw.benchmark.split("+")
         dfs, index_splits_list = zip(
             *[
                 extract_index_splits(
@@ -406,26 +423,96 @@ def extract_index_splits_wrapper(
                         bm,
                         pw.debug,
                         pw.extract_params,
-                        None if bm == "job" else pw.fold,
+                        None,
+                        pw.data_percentage,
+                        pw.benchmark_ext,
+                        pw.ext_data_amount,
+                    )
+                    if bm == "job"
+                    else PathWatcher(
+                        pw.base_dir,
+                        bm,
+                        pw.debug,
+                        pw.extract_params,
+                        pw.fold,
                     ),
                     seed,
                     q_type,
                 )
-                for bm in pw.benchmark.split("+")
+                for bm in benchmarks
             ]
         )
         df = pd.concat(dfs)
         index_splits = {
-            split: list(
-                chain.from_iterable(
-                    [index_splits[split] for index_splits in index_splits_list]
-                )
-            )
-            for split in index_splits_list[0].keys()
+            bm: index_splits_
+            for bm, index_splits_ in zip(benchmarks, index_splits_list)
         }
+        #
+        # index_splits = {
+        #     split: list(
+        #         chain.from_iterable(
+        #             [index_splits[split] for index_splits in index_splits_list]
+        #         )
+        #     )
+        #     for split in index_splits_list[0].keys()
+        # }
         return df, index_splits
     else:
         return extract_index_splits(pw=pw, seed=seed, q_type=q_type)
+
+
+def extract_job_index_splits(
+    index_splits: Dict[str, List[str]],
+    data_percentage: Optional[int],
+    benchmark_ext: Optional[str],
+    ext_data_amount: Optional[int],
+) -> Dict[str, List[str]]:
+    # data_percentage = pw.data_percentage
+    if data_percentage is not None:
+        index_splits = {
+            k: v[: int(np.ceil(len(v) * data_percentage / 100))]
+            if k in ["train", "val"]
+            else v
+            for k, v in index_splits.items()
+        }
+        # df = df.loc[list(itertools.chain.from_iterable(index_splits.values()))]
+    # benchmark_ext = pw.benchmark_ext
+    if benchmark_ext is not None:
+        # ext_data_amount = pw.ext_data_amount
+        if ext_data_amount is None:
+            raise ValueError(
+                "ext_data_amount must be specified when benchmark_ext is specified"
+            )
+        else:
+            if ext_data_amount > 27371:
+                raise ValueError("ext_data_amount must be less than 27371")
+            else:
+                logger.info(
+                    f"ext_data_amount = {ext_data_amount},"
+                    f"ttl_ext_tr = {len(index_splits['train_ext'])},"  # type: ignore
+                    f"ttl_ext_val = {len(index_splits['val_ext'])}"  # type: ignore
+                )
+        logger.info(
+            f"Before extending data, tr/val = "
+            f"{len(index_splits['train'])}/{len(index_splits['val'])}"
+        )
+        val_amount = int(np.ceil(ext_data_amount * 0.1))
+        train_amount = ext_data_amount - val_amount
+        logger.info("Target extended data, tr/val = " f"{train_amount}/{val_amount}")
+        train_ext_list = index_splits["train_ext"][:train_amount]  # type: ignore
+        val_ext_list = index_splits["val_ext"][:val_amount]  # type: ignore
+        logger.info(
+            f"Get extended data, tr/val = {len(train_ext_list)}/{len(val_ext_list)}"
+        )
+        index_splits["train"] += train_ext_list
+        index_splits["val"] += val_ext_list
+        del index_splits["train_ext"]  # type: ignore
+        del index_splits["val_ext"]  # type: ignore
+        logger.info(
+            "After extending data, tr/val = "
+            f"{len(index_splits['train'])}/{len(index_splits['val'])}"
+        )
+    return index_splits
 
 
 def extract_and_save_iterators(
@@ -446,14 +533,32 @@ def extract_and_save_iterators(
     df, index_splits = extract_index_splits_wrapper(
         pw=pw, seed=params.seed, q_type=ta.get_q_type_for_cache()
     )
-
-    data_percentage = pw.data_percentage
-    if data_percentage is not None:
+    if pw.benchmark == "job":
+        if not index_splits:
+            raise ValueError(f"index_splits is empty: {index_splits}")
+        if not isinstance(list(index_splits.values())[0], List):
+            raise TypeError(f"index_splits is not a list: {index_splits} for job")
+        index_splits = extract_job_index_splits(
+            index_splits=index_splits,  #  type: ignore
+            data_percentage=pw.data_percentage,
+            benchmark_ext=pw.benchmark_ext,
+            ext_data_amount=pw.ext_data_amount,
+        )
+    elif pw.benchmark.endswith("+job"):
+        bm_tpc = pw.benchmark.split("+")[0]
+        index_splits_bm = index_splits[bm_tpc]
+        index_splits_job = extract_job_index_splits(
+            index_splits=index_splits["job"],  # type: ignore
+            data_percentage=pw.data_percentage,
+            benchmark_ext=pw.benchmark_ext,
+            ext_data_amount=pw.ext_data_amount,
+        )
         index_splits = {
-            k: v if k == "test" else v[: int(np.ceil(len(v) * data_percentage / 100))]
-            for k, v in index_splits.items()
+            split: index_splits_bm[split] + index_splits_job[split]  # type: ignore
+            for split, index_splits_ in index_splits_job.items()
         }
-        df = df.loc[list(itertools.chain.from_iterable(index_splits.values()))]
+
+    df = df.loc[list(itertools.chain.from_iterable(index_splits.values()))]
 
     cache_file_dp = "data_processor.pkl"
     if Path(f"{pw.cc_extract_prefix}/{cache_file_dp}").exists():
