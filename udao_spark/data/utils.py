@@ -309,6 +309,7 @@ def magic_setup(pw: PathWatcher, seed: int) -> None:
 
 def tpc_setup_compile_only(pw: PathWatcher, seed: int) -> None:
     def get_ext_df_q_compile() -> pd.DataFrame:
+        sc = SparkConf(str(pw.base_dir / "assets/spark_configuration_aqe_on.json"))
         df_raw = pd.read_csv(pw.get_ext_data_header("q"), low_memory=pw.debug)
         if pw.benchmark_ext is None:
             raise ValueError("benchmark_ext must be specified for EXT data")
@@ -323,7 +324,6 @@ def tpc_setup_compile_only(pw: PathWatcher, seed: int) -> None:
     except Exception as e:
         logger.warning(f"Failed to load df_q_compile from cache: {e}")
         df_dict = {}
-        sc = SparkConf(str(pw.base_dir / "assets/spark_configuration_aqe_on.json"))
         for k in ["ORI", "EXT"]:
             if k == "ORI":
                 df_q_compile_k = ParquetHandler.load(
