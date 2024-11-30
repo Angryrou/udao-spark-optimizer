@@ -1,9 +1,10 @@
+import os.path
 from pathlib import Path
 from typing import Dict, List, Optional
 
 import numpy as np
 
-from udao_trace.utils import BenchmarkType, JsonHandler
+from udao_trace.utils import JsonHandler
 
 from .constants import (
     ALPHA,
@@ -53,6 +54,7 @@ class PathWatcher:
         self.fold = fold
         self.data_percentage = data_percentage
         self.benchmark_ext = benchmark_ext
+        self.extract_params = extract_params
 
         if benchmark_ext and not ext_data_amount:
             raise ValueError(
@@ -63,9 +65,9 @@ class PathWatcher:
         if benchmark == "job" and fold is not None:
             raise ValueError("fold is not supported for job benchmark")
 
-        data_sign = self._get_data_sign()
-        data_prefix = f"{str(base_dir)}/data/{benchmark}"
-        cc_prefix = f"{str(base_dir)}/cache_and_ckp/{benchmark}_{data_sign}"
+        data_prefix = f"{str(self.base_dir)}/data/{self.benchmark}"
+
+        cc_prefix = self.get_cc_prefix(with_ext=True)
         cc_extract_prefix = f"{cc_prefix}/{extract_params.hash()}"
         if fold is not None:
             if fold not in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]:
@@ -77,19 +79,23 @@ class PathWatcher:
             cc_extract_prefix += f"_{data_percentage}"
         if self.benchmark_ext:
             if self.ext_data_amount:
-                if self.ext_data_amount > 27371:
+                if benchmark == "job" and self.ext_data_amount > 27371:
                     raise ValueError("ext_data_amount must be less than 27371")
                 cc_extract_prefix += f"_ext_{self.ext_data_amount}"
             else:
                 raise Exception(
-                    "when benchmark_ext is specified, " "explicitly specific the amount"
+                    "when benchmark_ext is specified, explicitly specific the amount"
                 )
-        self.data_sign = data_sign
+
         self.data_prefix = data_prefix
         self.cc_prefix = cc_prefix
         self.cc_extract_prefix = cc_extract_prefix
-        self.extract_params = extract_params
         self._checkpoint_split()
+
+    def get_cc_prefix(self, with_ext: bool) -> str:
+        data_sign = self.get_data_sign(with_ext)
+        cc_prefix = f"{str(self.base_dir)}/cache_and_ckp/{self.benchmark}_{data_sign}"
+        return cc_prefix
 
     def _checkpoint_split(self) -> None:
         json_name = "extract_param.json"
@@ -103,17 +109,32 @@ class PathWatcher:
         else:
             logger.info(f"found {self.cc_extract_prefix}/{json_name}")
 
-    def _get_data_sign(self) -> str:
-        data_sign = get_data_sign(self.benchmark, self.debug)
-        if self.benchmark_ext:
-            if self.benchmark_ext == BenchmarkType.JOB_EXT.value:
+    def get_data_sign(self, with_ext: bool = True) -> str:
+        benchmark = self.benchmark
+        data_sign = get_data_sign(benchmark, self.debug)
+        benchmark_ext = self.benchmark_ext
+        if benchmark_ext and with_ext:
+            if benchmark == "job" and benchmark_ext == "job-ext":
                 data_sign += "+ext_27371x1"
+            elif benchmark == "tpcds" and benchmark_ext == "tpcds-ext-selected":
+                data_sign += "+ext_selected_174x50"
             else:
-                raise ValueError(f"invalid {self.benchmark_ext}")
+                raise ValueError(f"invalid {benchmark_ext}")
         return data_sign
 
-    def get_data_header(self, q_type: str) -> str:
-        return f"{self.data_prefix}/{q_type}_{self.data_sign}.csv"
+    def get_ori_data_header(self, q_type: str) -> str:
+        data_sign = self.get_data_sign(with_ext=False)
+        return f"{self.data_prefix}/{q_type}_{data_sign}.csv"
+
+    def get_ext_data_header(self, q_type: str) -> str:
+        if self.benchmark_ext is None:
+            raise ValueError("benchmark_ext must be specified")
+        data_prefix = os.path.dirname(self.data_prefix) + "/" + self.benchmark_ext
+        if self.benchmark_ext == "tpcds-ext-selected":
+            data_sign = "174x50"
+        else:
+            raise ValueError(f"invalid {self.benchmark_ext}")
+        return f"{data_prefix}/{q_type}_{data_sign}.csv"
 
 
 class TypeAdvisor:

@@ -99,7 +99,7 @@ def extract_partition_distribution(pd_raw: str) -> Tuple[float, float, float]:
 def prepare_data(
     df: pd.DataFrame, sc: SparkConf, benchmark: str, q_type: str, ext: Optional[str]
 ) -> pd.DataFrame:
-    bm = Benchmark(benchmark_type=BenchmarkType[benchmark.upper()], ext=ext)
+    bm = Benchmark(benchmark_type=BenchmarkType(benchmark), ext=ext)
     df.rename(columns={p: kid for p, kid in zip(THETA_RAW, sc.knob_ids)}, inplace=True)
     df["tid"] = df["template"].apply(lambda x: bm.get_template_id(str(x)))
     variable_names = sc.knob_ids
@@ -237,11 +237,6 @@ def magic_setup(pw: PathWatcher, seed: int) -> None:
     1. data has been properly processed and effectively saved.
     2. data split to make sure q_compile/q/qs share the same appid for tr/val/te.
     """
-    df_q_raw = pd.read_csv(pw.get_data_header("q"), low_memory=pw.debug)
-    df_qs_raw = pd.read_csv(pw.get_data_header("qs"), low_memory=pw.debug)
-    logger.info(f"raw df_q shape: {df_q_raw.shape}")
-    logger.info(f"raw df_qs shape: {df_qs_raw.shape}")
-
     benchmark = pw.benchmark
     debug = pw.debug
 
@@ -253,6 +248,10 @@ def magic_setup(pw: PathWatcher, seed: int) -> None:
         logger.info("Loaded df_q_compile, df_q, df_qs from cache")
     except Exception as e:
         logger.warning(f"Failed to load df_q_compile, df_q, df_qs from cache: {e}")
+        df_q_raw = pd.read_csv(pw.get_ori_data_header("q"), low_memory=pw.debug)
+        df_qs_raw = pd.read_csv(pw.get_ori_data_header("qs"), low_memory=pw.debug)
+        logger.info(f"raw df_q shape: {df_q_raw.shape}")
+        logger.info(f"raw df_qs shape: {df_qs_raw.shape}")
         sc = SparkConf(str(pw.base_dir / "assets/spark_configuration_aqe_on.json"))
         ext = pw.benchmark_ext
         df_q = prepare_data(df_q_raw, sc, benchmark, q_type="q", ext=ext)
@@ -285,9 +284,6 @@ def magic_setup(pw: PathWatcher, seed: int) -> None:
             groupby_col="tid",
             fold=pw.fold,
             n_folds=10,
-            # hard-coded to be 0.1 because we have in total of 10 folds.
-            # val_frac=0.2 if debug else 0.1,
-            # test_frac=0.2 if debug else 0.1,
             random_state=seed,
         )
 
@@ -303,16 +299,62 @@ def magic_setup(pw: PathWatcher, seed: int) -> None:
         for split, appid_list in index_splits_q_compile.items()
     }
     # Save the index_splits
-    if pw.fold is None:
-        save_and_log_index(index_splits_q_compile, pw, "index_splits_q_compile.pkl")
-        save_and_log_index(index_splits_q, pw, "index_splits_q_all.pkl")
-        save_and_log_index(index_splits_qs, pw, "index_splits_qs.pkl")
-    else:
-        save_and_log_index(
-            index_splits_q_compile, pw, f"index_splits_q_compile-{pw.fold}.pkl"
+    suffix = "" if pw.fold is None else f"-{pw.fold}"
+    save_and_log_index(
+        index_splits_q_compile, pw, f"index_splits_q_compile{suffix}.pkl"
+    )
+    save_and_log_index(index_splits_q, pw, f"index_splits_q_all{suffix}.pkl")
+    save_and_log_index(index_splits_qs, pw, f"index_splits_qs{suffix}.pkl")
+
+
+def tpc_setup_compile_only(pw: PathWatcher, seed: int) -> None:
+    # prepare data
+    try:
+        df_q_compile = ParquetHandler.load(pw.cc_prefix, "df_q_compile.parquet")
+    except Exception as e:
+        logger.warning(f"Failed to load df_q_compile from cache: {e}")
+        df_dict = {}
+        sc = SparkConf(str(pw.base_dir / "assets/spark_configuration_aqe_on.json"))
+        for k in ["ORI", "EXT"]:
+            if k == "ORI":
+                df_q_compile_k = ParquetHandler.load(
+                    pw.get_cc_prefix(False), "df_q_compile.parquet"
+                )
+            else:
+                df_raw = pd.read_csv(pw.get_ext_data_header("q"), low_memory=pw.debug)
+                if pw.benchmark_ext is None:
+                    raise ValueError("benchmark_ext must be specified for EXT data")
+                df_q = prepare_data(df_raw, sc, pw.benchmark_ext, "q", ext=None)
+                df_q_compile_k = df_q[df_q["lqp_id"] == 0].copy()
+                df_q_compile_k["template"] = df_q_compile_k["template"].astype(str)
+            df_dict[k] = df_q_compile_k
+        df_q_compile = pd.concat(df_dict.values())
+        save_and_log_df(df_q_compile, ["appid"], pw, "df_q_compile")
+        logger.info("Saved and loaded df_q_compile_* from cache")
+
+        suffix = "" if pw.fold is None else f"-{pw.fold}"
+        index_splits_name = f"index_splits_q_compile{suffix}.pkl"
+        index_splits_q_compile = PickleHandler.load(
+            pw.get_cc_prefix(False), index_splits_name
         )
-        save_and_log_index(index_splits_q, pw, f"index_splits_q_all-{pw.fold}.pkl")
-        save_and_log_index(index_splits_qs, pw, f"index_splits_qs-{pw.fold}.pkl")
+        if not isinstance(index_splits_q_compile, Dict):
+            raise TypeError(
+                f"index_splits_q_compile is not a dict: {index_splits_q_compile}"
+            )
+
+        logger.info(f"EXT data for compile #: {len(df_dict['EXT'])}")
+        df_train_ext, df_val_ext = train_test_split(
+            df_dict["EXT"],
+            test_size=0.1,
+            stratify=df_dict["EXT"]["tid"],
+            random_state=seed,
+        )
+        index_splits_q_compile["train_ext"] = df_train_ext.appid.to_list()
+        index_splits_q_compile["val_ext"] = df_val_ext.appid.to_list()
+        n_ext_tr = len(df_train_ext)
+        n_ext_val = len(df_val_ext)
+        logger.info(f"Split data for EXT: train/val = {n_ext_tr}/{n_ext_val}")
+        save_and_log_index(index_splits_q_compile, pw, "index_splits_q_compile.pkl")
 
 
 def job_setup(pw: PathWatcher, seed: int) -> None:
@@ -339,7 +381,7 @@ def job_setup(pw: PathWatcher, seed: int) -> None:
         for k, df_raw in df_raw_dict.items():
             if not isinstance(df_raw["template"].iloc[0], str):
                 df_raw["template"] = k + df_raw["template"].astype(int).astype(str)
-            df_q = prepare_data(df_raw, sc, pw.benchmark, "q", ext=pw.benchmark_ext)
+            df_q = prepare_data(df_raw, sc, pw.benchmark, "q", ext=None)
             df_q_compile_k = df_q[df_q["lqp_id"] == 0].copy()  # for compile-time df
             df_dict[k] = df_q_compile_k
         df_q_compile = pd.concat(df_dict.values())
@@ -377,11 +419,8 @@ def extract_index_splits(
     if pw.benchmark == "job" and q_type != "q_compile":
         raise NotImplementedError("job benchmark only supports q_compile")
 
-    index_splits_name = (
-        f"index_splits_{q_type}.pkl"
-        if pw.fold is None
-        else f"index_splits_{q_type}-{pw.fold}.pkl"
-    )
+    suffix = "" if pw.fold is None else f"-{pw.fold}"
+    index_splits_name = f"index_splits_{q_type}{suffix}.pkl"
     if (
         not Path(f"{pw.cc_prefix}/{index_splits_name}").exists()
         or not Path(f"{pw.cc_prefix}/df_{q_type}.parquet").exists()
@@ -391,7 +430,10 @@ def extract_index_splits(
             f"under {pw.cc_prefix}, start magic setup..."
         )
         if pw.benchmark != "job":
-            magic_setup(pw, seed)
+            if pw.benchmark_ext:
+                tpc_setup_compile_only(pw, seed)
+            else:
+                magic_setup(pw, seed)
         else:
             job_setup(pw, seed)
     else:
@@ -447,27 +489,17 @@ def extract_index_splits_wrapper(
             bm: index_splits_
             for bm, index_splits_ in zip(benchmarks, index_splits_list)
         }
-        #
-        # index_splits = {
-        #     split: list(
-        #         chain.from_iterable(
-        #             [index_splits[split] for index_splits in index_splits_list]
-        #         )
-        #     )
-        #     for split in index_splits_list[0].keys()
-        # }
         return df, index_splits
     else:
         return extract_index_splits(pw=pw, seed=seed, q_type=q_type)
 
 
-def extract_job_index_splits(
+def aggregate_index_splits(
     index_splits: Dict[str, List[str]],
     data_percentage: Optional[int],
     benchmark_ext: Optional[str],
     ext_data_amount: Optional[int],
 ) -> Dict[str, List[str]]:
-    # data_percentage = pw.data_percentage
     if data_percentage is not None:
         index_splits = {
             k: v[: int(np.ceil(len(v) * data_percentage / 100))]
@@ -475,16 +507,13 @@ def extract_job_index_splits(
             else v
             for k, v in index_splits.items()
         }
-        # df = df.loc[list(itertools.chain.from_iterable(index_splits.values()))]
-    # benchmark_ext = pw.benchmark_ext
     if benchmark_ext is not None:
-        # ext_data_amount = pw.ext_data_amount
         if ext_data_amount is None:
             raise ValueError(
                 "ext_data_amount must be specified when benchmark_ext is specified"
             )
         else:
-            if ext_data_amount > 27371:
+            if benchmark_ext == "job-ext" and ext_data_amount > 27371:
                 raise ValueError("ext_data_amount must be less than 27371")
             else:
                 logger.info(
@@ -533,21 +562,10 @@ def extract_and_save_iterators(
     df, index_splits = extract_index_splits_wrapper(
         pw=pw, seed=params.seed, q_type=ta.get_q_type_for_cache()
     )
-    if pw.benchmark == "job":
-        if not index_splits:
-            raise ValueError(f"index_splits is empty: {index_splits}")
-        if not isinstance(list(index_splits.values())[0], List):
-            raise TypeError(f"index_splits is not a list: {index_splits} for job")
-        index_splits = extract_job_index_splits(
-            index_splits=index_splits,  #  type: ignore
-            data_percentage=pw.data_percentage,
-            benchmark_ext=pw.benchmark_ext,
-            ext_data_amount=pw.ext_data_amount,
-        )
-    elif pw.benchmark.endswith("+job"):
+    if pw.benchmark.endswith("+job"):
         bm_tpc = pw.benchmark.split("+")[0]
         index_splits_bm = index_splits[bm_tpc]
-        index_splits_job = extract_job_index_splits(
+        index_splits_job = aggregate_index_splits(
             index_splits=index_splits["job"],  # type: ignore
             data_percentage=pw.data_percentage,
             benchmark_ext=pw.benchmark_ext,
@@ -557,6 +575,17 @@ def extract_and_save_iterators(
             split: index_splits_bm[split] + index_splits_job[split]  # type: ignore
             for split, index_splits_ in index_splits_job.items()
         }
+    else:
+        if not index_splits:
+            raise ValueError(f"index_splits is empty: {index_splits}")
+        if not isinstance(list(index_splits.values())[0], List):
+            raise TypeError(f"index_splits is not a list: {index_splits} for job")
+        index_splits = aggregate_index_splits(
+            index_splits=index_splits,  #  type: ignore
+            data_percentage=pw.data_percentage,
+            benchmark_ext=pw.benchmark_ext,
+            ext_data_amount=pw.ext_data_amount,
+        )
 
     df = df.loc[list(itertools.chain.from_iterable(index_splits.values()))]
 
