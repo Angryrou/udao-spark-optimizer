@@ -308,6 +308,15 @@ def magic_setup(pw: PathWatcher, seed: int) -> None:
 
 
 def tpc_setup_compile_only(pw: PathWatcher, seed: int) -> None:
+    def get_ext_df_q_compile() -> pd.DataFrame:
+        df_raw = pd.read_csv(pw.get_ext_data_header("q"), low_memory=pw.debug)
+        if pw.benchmark_ext is None:
+            raise ValueError("benchmark_ext must be specified for EXT data")
+        df_q = prepare_data(df_raw, sc, pw.benchmark_ext, "q", ext=None)
+        df_q_compile_k_ = df_q[df_q["lqp_id"] == 0].copy()
+        df_q_compile_k_["template"] = df_q_compile_k_["template"].astype(str)
+        return df_q_compile_k_
+
     # prepare data
     try:
         df_q_compile = ParquetHandler.load(pw.cc_prefix, "df_q_compile.parquet")
@@ -321,40 +330,36 @@ def tpc_setup_compile_only(pw: PathWatcher, seed: int) -> None:
                     pw.get_cc_prefix(False), "df_q_compile.parquet"
                 )
             else:
-                df_raw = pd.read_csv(pw.get_ext_data_header("q"), low_memory=pw.debug)
-                if pw.benchmark_ext is None:
-                    raise ValueError("benchmark_ext must be specified for EXT data")
-                df_q = prepare_data(df_raw, sc, pw.benchmark_ext, "q", ext=None)
-                df_q_compile_k = df_q[df_q["lqp_id"] == 0].copy()
-                df_q_compile_k["template"] = df_q_compile_k["template"].astype(str)
+                df_q_compile_k = get_ext_df_q_compile()
             df_dict[k] = df_q_compile_k
         df_q_compile = pd.concat(df_dict.values())
         save_and_log_df(df_q_compile, ["appid"], pw, "df_q_compile")
         logger.info("Saved and loaded df_q_compile_* from cache")
 
-        suffix = "" if pw.fold is None else f"-{pw.fold}"
-        index_splits_name = f"index_splits_q_compile{suffix}.pkl"
-        index_splits_q_compile = PickleHandler.load(
-            pw.get_cc_prefix(False), index_splits_name
+    suffix = "" if pw.fold is None else f"-{pw.fold}"
+    index_splits_name = f"index_splits_q_compile{suffix}.pkl"
+    index_splits_q_compile = PickleHandler.load(
+        pw.get_cc_prefix(False), index_splits_name
+    )
+    if not isinstance(index_splits_q_compile, Dict):
+        raise TypeError(
+            f"index_splits_q_compile is not a dict: {index_splits_q_compile}"
         )
-        if not isinstance(index_splits_q_compile, Dict):
-            raise TypeError(
-                f"index_splits_q_compile is not a dict: {index_splits_q_compile}"
-            )
 
-        logger.info(f"EXT data for compile #: {len(df_dict['EXT'])}")
-        df_train_ext, df_val_ext = train_test_split(
-            df_dict["EXT"],
-            test_size=0.1,
-            stratify=df_dict["EXT"]["tid"],
-            random_state=seed,
-        )
-        index_splits_q_compile["train_ext"] = df_train_ext.appid.to_list()
-        index_splits_q_compile["val_ext"] = df_val_ext.appid.to_list()
-        n_ext_tr = len(df_train_ext)
-        n_ext_val = len(df_val_ext)
-        logger.info(f"Split data for EXT: train/val = {n_ext_tr}/{n_ext_val}")
-        save_and_log_index(index_splits_q_compile, pw, index_splits_name)
+    df_q_compile_ext = get_ext_df_q_compile()
+    logger.info(f"EXT data for compile #: {len(df_q_compile_ext)}")
+    df_train_ext, df_val_ext = train_test_split(
+        df_q_compile_ext,
+        test_size=0.1,
+        stratify=df_q_compile_ext["tid"],
+        random_state=seed,
+    )
+    index_splits_q_compile["train_ext"] = df_train_ext.appid.to_list()
+    index_splits_q_compile["val_ext"] = df_val_ext.appid.to_list()
+    n_ext_tr = len(df_train_ext)
+    n_ext_val = len(df_val_ext)
+    logger.info(f"Split data for EXT: train/val = {n_ext_tr}/{n_ext_val}")
+    save_and_log_index(index_splits_q_compile, pw, index_splits_name)
 
 
 def job_setup(pw: PathWatcher, seed: int) -> None:
