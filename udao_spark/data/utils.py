@@ -354,7 +354,7 @@ def tpc_setup_compile_only(pw: PathWatcher, seed: int) -> None:
         n_ext_tr = len(df_train_ext)
         n_ext_val = len(df_val_ext)
         logger.info(f"Split data for EXT: train/val = {n_ext_tr}/{n_ext_val}")
-        save_and_log_index(index_splits_q_compile, pw, "index_splits_q_compile.pkl")
+        save_and_log_index(index_splits_q_compile, pw, index_splits_name)
 
 
 def job_setup(pw: PathWatcher, seed: int) -> None:
