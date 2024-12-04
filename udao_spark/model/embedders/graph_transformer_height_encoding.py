@@ -139,6 +139,8 @@ class GraphTransformerHeightEncodingSuperNode(BaseGraphEmbedder):
             h[super_node_indices] = self.super_node_embedding(
                 th.zeros_like(super_node_indices)
             )
+        elif self.attention_layer_name == "GTN_NO_PE":
+            pass
         else:
             raise ValueError(self.attention_layer_name)
 
