@@ -80,7 +80,12 @@ class GraphTransformerHeightEncodingSuperNode(BaseGraphEmbedder):
         elif self.attention_layer_name == "RAAL":
             if net_params.non_siblings_map is None:
                 raise ValueError("non_siblings_map is required for RAAL")
-        elif self.attention_layer_name in ["GTN", "GTN_UNDIRECTED", "GTN_SELF_LOOP"]:
+        elif self.attention_layer_name in [
+            "GTN",
+            "GTN_UNDIRECTED",
+            "GTN_SELF_LOOP",
+            "GTN_NO_PE",
+        ]:
             pass
         else:
             raise ValueError(self.attention_layer_name)
