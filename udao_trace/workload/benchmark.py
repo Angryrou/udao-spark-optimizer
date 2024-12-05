@@ -35,8 +35,8 @@ class Benchmark:
     def _get_templates(
         self, benchmark_type: BenchmarkType, ext: Optional[str]
     ) -> List[str]:
-        if ext and benchmark_type != BenchmarkType.JOB:
-            raise ValueError(f"{BenchmarkType.JOB} does not support extension")
+        if ext and benchmark_type not in (BenchmarkType.JOB, BenchmarkType.TPCDS):
+            raise ValueError(f"{benchmark_type} does not support extension")
         if benchmark_type == BenchmarkType.TPCH:
             return [str(i) for i in range(1, 23)]
         elif benchmark_type == BenchmarkType.TPCDS:
