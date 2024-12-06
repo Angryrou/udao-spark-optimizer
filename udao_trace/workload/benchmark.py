@@ -73,6 +73,19 @@ class Benchmark:
                     "997 133 1081 205 827 546 277"
                 ).split()
             ]
+        elif benchmark_type == BenchmarkType.TPCDS_EXT_STAR_JOINS:
+            templates = []
+            for sign, num_per_sign in [
+                ("ss", 511),
+                ("sr", 1000),
+                ("cs", 1000),
+                ("cr", 1000),
+                ("ws", 1000),
+                ("wr", 1000),
+                ("inv", 7),
+            ]:
+                templates += [f"{sign}{i}" for i in range(num_per_sign)]
+            return templates
         elif benchmark_type == BenchmarkType.TPCXBB:
             return [str(i) for i in range(1, 31)]
         elif benchmark_type == BenchmarkType.JOB_TRAIN:
