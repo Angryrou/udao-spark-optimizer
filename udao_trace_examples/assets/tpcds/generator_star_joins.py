@@ -961,7 +961,7 @@ def generate_star_join_with_fact(
     num_dims = len(fks)
     ttl = 0
     for num_dim in range(1, num_dims + 1):
-        if ttl > num_signs:
+        if ttl >= num_signs:
             break
         for combo in itertools.combinations(
             zip(alias_list, from_clauses_precomputed, join_clauses_precomputed), num_dim
@@ -1016,9 +1016,9 @@ def generate_star_join_with_fact(
                     else f"{query_prefix} AND {' AND '.join(filter_clause)}"
                 )
                 gen_queries[f"{fact_alias}{ttl}"][i] = query
-                print(query)
+                # print(query)
             ttl += 1
-            if ttl > num_signs:
+            if ttl >= num_signs:
                 break
     return gen_queries
 
@@ -1056,17 +1056,17 @@ def generate_star_join(
 
 if __name__ == "__main__":
     tables, fact_tables = get_table_info()
-    gen_queries = generate_star_join(tables, fact_tables, 10, 2, 0)
+
+    gen_queries = generate_star_join(tables, fact_tables, 1000, 10, 0)
 
     sql_path = "spark-sqls"
-    name = "tpcds-ext-star"
-    JsonHandler.dump_to_file(gen_queries, f"{sql_path}/{name}.json")
+    JsonHandler.dump_to_file(gen_queries, f"{sql_path}/collection.json", indent=2)
 
     num_queries = sum([len(v) for v in gen_queries.values()])
     print(f"Generated {len(gen_queries)} queries")
 
     for sign, queries in gen_queries.items():
-        os.makedirs(f"{sql_path}/{name}/{sign}", exist_ok=True)
+        os.makedirs(f"{sql_path}/{sign}", exist_ok=True)
         for vid, query in queries.items():
-            with open(f"{sql_path}/{name}/{sign}/{sign}-{vid}.sql", "w") as f:
+            with open(f"{sql_path}/{sign}/{sign}-{vid}.sql", "w") as f:
                 f.write(query)
