@@ -1051,6 +1051,7 @@ def generate_star_join(
             tables, fact, num_signs, num_per_sign, seed
         )
         gen_queries.update(gen_queries_fact)
+        print(tables[fact]["alias"], len(gen_queries_fact))
     return gen_queries
 
 
@@ -1068,5 +1069,5 @@ if __name__ == "__main__":
     for sign, queries in gen_queries.items():
         os.makedirs(f"{sql_path}/{sign}", exist_ok=True)
         for vid, query in queries.items():
-            with open(f"{sql_path}/{sign}/{sign}-{vid}.sql", "w") as f:
+            with open(f"{sql_path}/{sign}/{sign}-{vid + 1}.sql", "w") as f:
                 f.write(query)
