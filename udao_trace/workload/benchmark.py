@@ -1,13 +1,18 @@
-from typing import List
+from typing import List, Optional
 
 from ..utils import BenchmarkType
 
 
 class Benchmark:
-    def __init__(self, benchmark_type: BenchmarkType, scale_factor: int = 100):
+    def __init__(
+        self,
+        benchmark_type: BenchmarkType,
+        scale_factor: int = 100,
+        ext: Optional[str] = None,
+    ):
         self.benchmark_type = benchmark_type
         self.scale_factor = scale_factor
-        self.templates = self._get_templates(benchmark_type)
+        self.templates = self._get_templates(benchmark_type, ext)
         self.template2id = {t: i for i, t in enumerate(self.templates)}
 
     def get_name(self) -> str:
@@ -27,7 +32,11 @@ class Benchmark:
     def get_template_id(self, template: str) -> int:
         return self.template2id[template]
 
-    def _get_templates(self, benchmark_type: BenchmarkType) -> List[str]:
+    def _get_templates(
+        self, benchmark_type: BenchmarkType, ext: Optional[str]
+    ) -> List[str]:
+        if ext and benchmark_type not in (BenchmarkType.JOB, BenchmarkType.TPCDS):
+            raise ValueError(f"{benchmark_type} does not support extension")
         if benchmark_type == BenchmarkType.TPCH:
             return [str(i) for i in range(1, 23)]
         elif benchmark_type == BenchmarkType.TPCDS:
@@ -44,6 +53,26 @@ class Benchmark:
             ]
         elif benchmark_type == BenchmarkType.TPCDS_EXT:
             return [str(i) for i in range(101, 1101)]
+        elif benchmark_type == BenchmarkType.TPCDS_EXT_SELECTED:
+            return [
+                t
+                for t in (
+                    "341 650 454 698 406 1071 729 1011 419 466 274 165 "
+                    "927 486 1069 1089 429 799 239 489 1024 1009 501 897 "
+                    "1021 982 597 356 310 763 987 104 101 600 721 340 1049 "
+                    "335 1084 725 992 1031 1079 989 912 269 952 330 174 326 "
+                    "607 816 400 665 1019 167 868 118 302 114 261 1099 142 "
+                    "626 757 199 266 1059 153 789 194 352 1091 534 1054 678 "
+                    "112 999 107 937 436 301 857 877 778 669 195 977 1094 "
+                    "979 617 577 206 932 687 967 560 229 470 661 592 1029 "
+                    "384 1044 1034 809 398 553 639 612 132 411 887 334 695 "
+                    "892 283 1074 1039 947 962 797 540 1041 1001 1051 922 "
+                    "508 1014 949 565 734 259 1061 847 785 155 869 703 629 "
+                    "441 819 102 717 376 959 806 972 837 957 185 369 969 296 "
+                    "360 939 904 929 1064 1004 917 942 919 901 744 529 145 "
+                    "997 133 1081 205 827 546 277"
+                ).split()
+            ]
         elif benchmark_type == BenchmarkType.TPCXBB:
             return [str(i) for i in range(1, 31)]
         elif benchmark_type == BenchmarkType.JOB_TRAIN:
@@ -55,10 +84,13 @@ class Benchmark:
         elif benchmark_type == BenchmarkType.JOB_EXT:
             return [str(i) for i in range(40000)]
         elif benchmark_type == BenchmarkType.JOB:
-            return (
+            res = (
                 ["TRAIN" + str(i) for i in range(100000)]
                 + ["SYNTHETIC" + str(i) for i in range(5000)]
                 + ["LIGHT" + str(i) for i in range(70)]
             )
+            if ext:
+                res += ["EXT" + str(i) for i in range(40000)]
+            return res
         else:
             raise ValueError(f"{benchmark_type} is not supported")

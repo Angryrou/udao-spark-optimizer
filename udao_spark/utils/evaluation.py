@@ -212,7 +212,8 @@ def get_ag_data(
             )
         else:
             header = header.replace(
-                f"{bm}_{pw_model.data_sign}", f"{bm_target}_{pw_data.data_sign}"
+                f"{bm}_{pw_model.get_data_sign()}",
+                f"{bm_target}_{pw_data.get_data_sign()}",
             )
             split_iterators = PickleHandler.load(header, "split_iterators.pkl")
             if not isinstance(split_iterators, Dict):
@@ -503,7 +504,7 @@ def get_mlp_pred_objs(
         )
     else:
         header = header.replace(
-            f"{bm}_{pw_model.data_sign}", f"{bm_target}_{pw_data.data_sign}"
+            f"{bm}_{pw_model.get_data_sign()}", f"{bm_target}_{pw_data.get_data_sign()}"
         )
         split_iterators = PickleHandler.load(header, "split_iterators.pkl")
         if not isinstance(split_iterators, Dict):

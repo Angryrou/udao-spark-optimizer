@@ -13,7 +13,7 @@ usage() {
   echo "Usage: $0 -q <query> -c <conf> -b <benchmark> -n <name> -r <runtime> -x <xpath> [-v]"
   echo "  -q <query>: Specify template id (tid) and query variant id (qid)."
   echo "  -c <conf>: Specify context parameters from k1 to k8 + s1 to s11"
-  echo "  -b <benchmark>: Specify the benchmark of running TPC-query, e.g., tpch, tpcds"
+  echo "  -b <bm>: Specify the benchmark of running TPC-query, e.g., tpch, tpcds"
   echo "  -n <name>: Specify the name of spark app"
   echo "  -r <runtime>: Specify the runtime optimizer"
   echo "  -x <xpath>: Specify the path for the extracted traces"
@@ -26,7 +26,7 @@ while getopts "q:c:b:n:r:x:v" opt; do
   case "$opt" in
     q) query="$OPTARG";;
     c) conf="$OPTARG";;
-    b) benchmark="$OPTARG";;
+    b) bm="$OPTARG";;
     n) name="$OPTARG";;
     r) runtime="$OPTARG";;
     x) xpath="$OPTARG";;
@@ -41,7 +41,18 @@ read if_runtime runtime_host runtime_port <<< "$runtime"
 spath=/opt/hex_users/$USER/chenghao/spark-stage-tuning
 jpath=/opt/hex_users/$USER/spark-3.2.1-hadoop3.3.0/jdk1.8
 lpath=/opt/hex_users/$USER/chenghao/spark-stage-tuning/src/main/resources/log4j2.properties
-qpath=/opt/hex_users/$USER/chenghao/UDAO2022
+qpath=/opt/hex_users/$USER/chenghao/spark-stage-tuning/benchmark-res/dataset-gen
+
+benchmark=""
+sqlhead=""
+# Determine benchmark and name based on bm
+if [[ "$bm" == *-* ]]; then
+    benchmark="${bm%%-*}"  # Extract part before the first "-"
+    sqlhead="spark-sqls-${bm#*-}"  # Use the part after the first "-"
+else
+    benchmark="$bm"  # Use the full value as the benchmark
+    sqlhead="spark-sqls"  # Default name
+fi
 
 ~/spark/bin/spark-submit \
 --class edu.polytechnique.cedar.spark.benchmark.RunTemplateQueryForRuntime \
@@ -89,4 +100,4 @@ qpath=/opt/hex_users/$USER/chenghao/UDAO2022
 $spath/target/scala-2.12/spark-stage-tuning_2.12-1.0-SNAPSHOT.jar \
 -b $benchmark -t ${tid} -q ${qid} -s 100 -x ${xpath} \
 -u ${if_runtime} --runtimeSolverHost ${runtime_host} --runtimeSolverPort ${runtime_port} \
--l ${qpath}/resources/${benchmark}-kit/spark-sqls -v $verbose_mode
+-l ${qpath}/${benchmark}-kit/${sqlhead} -v $verbose_mode

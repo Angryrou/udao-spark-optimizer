@@ -793,6 +793,8 @@ def param_init(base_dir: Path, params: Namespace) -> Tuple[TypeAdvisor, PathWatc
         extract_params,
         params.fold,
         params.data_percentage,
+        params.benchmark_ext,
+        params.ext_data_amount,
     )
     return ta, pw
 
